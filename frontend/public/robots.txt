@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://vinyl-ochre.vercel.app/sitemap.xml

@@ -176,6 +176,7 @@ export default function HomePage() {
           )}
         </>
       )}
+      <a href="/gangnam">강남 종량제봉투 판매처 보기</a>
     </main>
   );
 }
