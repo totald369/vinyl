@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css");
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply font-sans bg-bg-canvas text-text-primary;
+}
+
+.card {
+  @apply rounded-xl border border-border-subtle bg-bg-surface p-4 shadow-elevation-1;
+}
+
+/* Map list: ~4px scrollbar, hidden until .is-scrolling (see BottomSheetList) */
+.scrollbar-map-list {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.scrollbar-map-list.is-scrolling {
+  scrollbar-color: #cccccc transparent;
+}
+
+.scrollbar-map-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollbar-map-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-map-list::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 999px;
+}
+
+.scrollbar-map-list.is-scrolling::-webkit-scrollbar-thumb {
+  background-color: #cccccc;
+}
