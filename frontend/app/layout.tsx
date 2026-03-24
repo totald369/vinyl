@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   keywords: ["종량제봉투", "불연성마대", "폐기물 스티커", "판매처", "쓰레기봉투"],
 
   verification: {
-    google: "sLUNDaRp2dzRT9qid7DV_IDcnXHANrcuz1ULL",
+    google: "bzqaOAyJOVuUHnFTeNbX13oFIddTUa_6pLJvMWo1UWI",
   },
 
   icons: {
