@@ -31,3 +31,8 @@ export default function RootLayout({
     </html>
   );
 }
+export const metadata = {
+  verification: {
+    google: "sLuNDaRp2dzRT9qid7DV_IDcnXHANrcuz1ULL", // content 값만 넣기
+  },
+};
