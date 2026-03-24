@@ -42,8 +42,8 @@ export default function HomeSearchOverlay({
 
   return (
     <div className="absolute inset-0 z-[45] flex flex-col bg-white">
-      {/* 피그마 754:573 — 검색 행, pt 8px, 하단과 gap 8px은 본문 영역에서 처리 */}
-      <div className="flex shrink-0 flex-col gap-2 pt-2">
+      {/* 홈 검색바와 동일: 상단 16px + safe-area */}
+      <div className="flex shrink-0 flex-col gap-2 pt-[calc(16px+env(safe-area-inset-top,0px))]">
         <div className="flex items-start justify-center pr-4">
           <button
             type="button"

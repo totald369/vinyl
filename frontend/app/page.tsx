@@ -103,7 +103,7 @@ export default function HomePage() {
             onSelectStore={handleSelectStore}
             userMarkerPosition={permission === "granted" && userLocation ? userLocation : null}
           />
-          <section className="absolute left-[15px] right-[15px] top-[51px] z-sheet flex flex-col gap-4">
+          <section className="absolute left-[15px] right-[15px] top-[calc(16px+env(safe-area-inset-top,0px))] z-sheet flex flex-col gap-4">
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
