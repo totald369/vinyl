@@ -1,4 +1,5 @@
-export const GA_MEASUREMENT_ID = "G-GBHBG0TJWB" as const;
+export const GA_MEASUREMENT_IDS = ["G-GBHBG0TJWB", "G-80ZYJJ27G5"] as const;
+export const GA_MEASUREMENT_ID = GA_MEASUREMENT_IDS[0];
 
 declare global {
   interface Window {
@@ -9,5 +10,7 @@ declare global {
 
 export function sendGtagPageView(path: string) {
   if (typeof window === "undefined" || !window.gtag) return;
-  window.gtag("config", GA_MEASUREMENT_ID, { page_path: path });
+  for (const id of GA_MEASUREMENT_IDS) {
+    window.gtag("config", id, { page_path: path });
+  }
 }

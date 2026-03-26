@@ -2,7 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import Script from "next/script";
 import { GoogleAnalytics } from "@/components/GoogleAnalytics";
-import { GA_MEASUREMENT_ID } from "@/lib/gtag";
+import { GA_MEASUREMENT_ID, GA_MEASUREMENT_IDS } from "@/lib/gtag";
 import { SITE_URL } from "@/lib/site";
 
 const OG_IMAGE = `${SITE_URL}/og-image.png`;
@@ -72,7 +72,7 @@ export default function RootLayout({
                 window.dataLayer = window.dataLayer || [];
                 function gtag(){dataLayer.push(arguments);}
                 gtag('js', new Date());
-                gtag('config', '${GA_MEASUREMENT_ID}');
+                ${GA_MEASUREMENT_IDS.map((id) => `gtag('config', '${id}');`).join("\n                ")}
               `}
             </Script>
           </>
