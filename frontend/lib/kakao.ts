@@ -47,7 +47,8 @@ export type KakaoMarker = {
   setMap: (map: KakaoMap | null) => void;
   setPosition: (pos: { getLat: () => number; getLng: () => number }) => void;
   getPosition: () => { getLat: () => number; getLng: () => number };
-  setZIndex?: (z: number) => void;
+  setImage: (image: unknown) => void;
+  setZIndex: (z: number) => void;
 };
 
 export {};
