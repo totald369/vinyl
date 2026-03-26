@@ -14,9 +14,9 @@ export function filterStoresForSearch(
 
   return stores
     .filter((s) => {
-      if (filter === "largeSticker") return s.largeWasteStickerYn === "Y";
-      if (filter === "nonBurnable") return s.storeCategory === "nonBurnable";
-      return s.storeCategory === "payBag";
+      if (filter === "largeSticker") return s.hasLargeWasteSticker;
+      if (filter === "nonBurnable") return s.hasSpecialBag;
+      return s.hasTrashBag;
     })
     .filter((s) => {
       const name = (s.name || "").toLowerCase();

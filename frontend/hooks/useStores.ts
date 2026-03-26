@@ -5,7 +5,6 @@ import { pickDataReferenceDateFromRow } from "@/lib/datasetDate";
 import { DEFAULT_REGION, LatLng } from "@/lib/types";
 const LIST_RADIUS_KM = 2;
 
-export type StoreCategory = "payBag" | "nonBurnable";
 export type StoreListFilter = "payBag" | "largeSticker" | "nonBurnable";
 
 export type StoreData = {
@@ -14,14 +13,12 @@ export type StoreData = {
   lat: number;
   lng: number;
   roadAddress?: string;
-  /** `data/stores.json` 등 roadAddress 대신 쓰는 소스 */
   address?: string;
   businessStatus?: string;
-  largeWasteStickerYn?: "Y" | "N";
-  storeCategory?: StoreCategory;
-  /** 관리자가 판매 여부를 확인한 경우에만 true (JSON `adminVerified` 또는 Supabase 연동 시 사용) */
+  hasTrashBag: boolean;
+  hasSpecialBag: boolean;
+  hasLargeWasteSticker: boolean;
   adminVerified?: boolean;
-  /** 공공데이터 데이터기준일자 등 (행 단위 또는 env `NEXT_PUBLIC_STORE_DATA_REFERENCE_DATE`) */
   dataReferenceDate?: string;
   distance?: number;
 };
@@ -44,15 +41,50 @@ function haversineKm(from: LatLng, to: LatLng) {
   return earthRadiusKm * c;
 }
 
-function normalizeCategory(row: StoreData): StoreCategory {
-  if (row.storeCategory === "nonBurnable" || row.storeCategory === "payBag") {
-    return row.storeCategory;
-  }
-  const sid = Number.parseInt(String(row.id), 10);
-  if (Number.isFinite(sid)) {
-    return sid % 2 === 1 ? "payBag" : "nonBurnable";
-  }
-  return "payBag";
+type RawStoreRow = {
+  id?: string;
+  name?: string;
+  lat?: number;
+  lng?: number;
+  roadAddress?: string;
+  address?: string;
+  businessStatus?: string;
+  largeWasteStickerYn?: string;
+  storeCategory?: string;
+  adminVerified?: boolean;
+  dataReferenceDate?: string;
+  hasTrashBag?: boolean;
+  hasSpecialBag?: boolean;
+  hasLargeWasteSticker?: boolean;
+} & Record<string, unknown>;
+
+function normalizeRow(raw: RawStoreRow): StoreData {
+  const hasTrashBag =
+    raw.hasTrashBag === true || raw.storeCategory === "payBag";
+  const hasSpecialBag =
+    raw.hasSpecialBag === true || raw.storeCategory === "nonBurnable";
+  const hasLargeWasteSticker =
+    raw.hasLargeWasteSticker === true || raw.largeWasteStickerYn === "Y";
+
+  const fromJson =
+    typeof raw.dataReferenceDate === "string" && raw.dataReferenceDate.trim()
+      ? raw.dataReferenceDate.trim()
+      : "";
+
+  return {
+    id: String(raw.id ?? ""),
+    name: String(raw.name ?? ""),
+    lat: Number(raw.lat),
+    lng: Number(raw.lng),
+    roadAddress: raw.roadAddress ?? raw.address ?? "",
+    address: raw.address ?? "",
+    businessStatus: raw.businessStatus,
+    hasTrashBag,
+    hasSpecialBag,
+    hasLargeWasteSticker,
+    adminVerified: raw.adminVerified === true,
+    dataReferenceDate: fromJson || pickDataReferenceDateFromRow(raw)
+  };
 }
 
 export function useStores(
@@ -76,27 +108,11 @@ export function useStores(
         }
         return res.json();
       })
-      .then((rows: StoreData[]) => {
+      .then((rows: RawStoreRow[]) => {
         if (!mounted) return;
 
         const cleaned = rows
-          .map((row) => {
-            const r = row as StoreData & Record<string, unknown>;
-            const fromJson =
-              typeof row.dataReferenceDate === "string" && row.dataReferenceDate.trim()
-                ? row.dataReferenceDate.trim()
-                : "";
-            return {
-              ...row,
-              roadAddress: row.roadAddress ?? row.address ?? "",
-              lat: Number(row.lat),
-              lng: Number(row.lng),
-              largeWasteStickerYn: row.largeWasteStickerYn === "Y" ? ("Y" as const) : ("N" as const),
-              storeCategory: normalizeCategory(row),
-              adminVerified: row.adminVerified === true,
-              dataReferenceDate: fromJson || pickDataReferenceDateFromRow(r)
-            };
-          })
+          .map(normalizeRow)
           .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng));
 
         setStores(cleaned);
@@ -129,13 +145,9 @@ export function useStores(
         distance: haversineKm(referencePoint, { lat: store.lat, lng: store.lng })
       }))
       .filter((store) => {
-        if (filter === "largeSticker") {
-          return store.largeWasteStickerYn === "Y";
-        }
-        if (filter === "nonBurnable") {
-          return store.storeCategory === "nonBurnable";
-        }
-        return store.storeCategory === "payBag";
+        if (filter === "largeSticker") return store.hasLargeWasteSticker;
+        if (filter === "nonBurnable") return store.hasSpecialBag;
+        return store.hasTrashBag;
       })
       .filter((store) => (store.distance ?? Infinity) <= LIST_RADIUS_KM)
       .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
