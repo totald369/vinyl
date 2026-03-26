@@ -10,9 +10,15 @@ const nextConfig = {
   webpack: (config, { dev }) => {
     if (dev && process.env.NEXT_DEV_POLL === "1") {
       config.watchOptions = {
-        ...config.watchOptions,
         poll: 1000,
-        aggregateTimeout: 300
+        aggregateTimeout: 300,
+        ignored: [
+          "**/node_modules/**",
+          "**/.git/**",
+          "**/.next/**",
+          "**/data/stores.json",
+          "**/terminals/**"
+        ]
       };
     }
     return config;

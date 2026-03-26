@@ -6,7 +6,7 @@ import { DEFAULT_REGION, LatLng } from "@/lib/types";
 const LIST_RADIUS_KM = 2;
 
 export type StoreCategory = "payBag" | "nonBurnable";
-export type StoreListFilter = "payBag" | "largeSticker";
+export type StoreListFilter = "payBag" | "largeSticker" | "nonBurnable";
 
 export type StoreData = {
   id: string;
@@ -131,6 +131,9 @@ export function useStores(
       .filter((store) => {
         if (filter === "largeSticker") {
           return store.largeWasteStickerYn === "Y";
+        }
+        if (filter === "nonBurnable") {
+          return store.storeCategory === "nonBurnable";
         }
         return store.storeCategory === "payBag";
       })

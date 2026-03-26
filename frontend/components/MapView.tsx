@@ -1,30 +1,46 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { StoreData } from "@/hooks/useStores";
+import { useCallback, useEffect, useRef } from "react";
+import { StoreData, StoreListFilter } from "@/hooks/useStores";
 import type { KakaoMap, KakaoMarker } from "@/lib/kakao";
 import { LatLng } from "@/lib/types";
 
 type Props = {
   center: LatLng;
+  centerVersion?: number;
   stores: StoreData[];
+  activeFilter: StoreListFilter;
   selectedStoreId?: string | null;
   onSelectStore: (store: StoreData) => void;
-  /** 실제 GPS 허용 시에만 전달 — 강남 fallback 좌표는 넣지 않음 */
   userMarkerPosition?: LatLng | null;
 };
 
 const USER_MARKER_SRC = "/Img/Icon/User_marker.svg";
 const USER_MARKER_SIZE = 64;
 
-/** 종량제 봉투 판매처 매장 마커 */
-const STORE_MARKER_SRC = "/Img/Icon/trash_bag_80.svg";
-const STORE_MARKER_SELECTED_SRC = "/Img/Icon/trash_bag_80_selected.svg";
-const STORE_MARKER_SIZE = 80;
+const FILTER_MARKER_MAP: Record<StoreListFilter, { src: string; selectedSrc: string; size: number }> = {
+  payBag: {
+    src: "/Img/Icon/trash_bag_80.svg",
+    selectedSrc: "/Img/Icon/trash_bag_80_selected.svg",
+    size: 80
+  },
+  largeSticker: {
+    src: "/Img/Icon/sticker_80.svg",
+    selectedSrc: "/Img/Icon/sticker_80_selected.svg",
+    size: 80
+  },
+  nonBurnable: {
+    src: "/Img/Icon/non-fire_80.svg",
+    selectedSrc: "/Img/Icon/non-fire_80_selected.svg",
+    size: 80
+  }
+};
 
 export default function MapView({
   center,
+  centerVersion = 0,
   stores,
+  activeFilter,
   selectedStoreId,
   onSelectStore,
   userMarkerPosition = null
@@ -33,25 +49,53 @@ export default function MapView({
   const mapRef = useRef<KakaoMap | null>(null);
   const markerMapRef = useRef<Map<string, KakaoMarker>>(new Map());
   const userMarkerRef = useRef<KakaoMarker | null>(null);
+  const prevCenterRef = useRef<{ lat: number; lng: number } | null>(null);
+  const prevCenterVersionRef = useRef(0);
+  const prevSelectedIdRef = useRef<string | null>(null);
+  const activeFilterRef = useRef<StoreListFilter>(activeFilter);
+  activeFilterRef.current = activeFilter;
+
+  const onSelectStoreRef = useRef(onSelectStore);
+  onSelectStoreRef.current = onSelectStore;
 
   useEffect(() => {
-    if (!containerRef.current) return;
-    if (typeof window === "undefined") return;
-    if (!window.kakao?.maps) return;
-
+    if (!containerRef.current || typeof window === "undefined" || !window.kakao?.maps) return;
     if (!mapRef.current) {
       mapRef.current = new window.kakao.maps.Map(containerRef.current, {
         center: new window.kakao.maps.LatLng(Number(center.lat), Number(center.lng)),
         level: 5
       });
+      prevCenterRef.current = { lat: Number(center.lat), lng: Number(center.lng) };
     }
   }, [center.lat, center.lng]);
 
   useEffect(() => {
     if (!mapRef.current || !window.kakao?.maps) return;
+    const lat = Number(center.lat);
+    const lng = Number(center.lng);
+    if (
+      centerVersion === prevCenterVersionRef.current &&
+      prevCenterRef.current &&
+      prevCenterRef.current.lat === lat &&
+      prevCenterRef.current.lng === lng
+    ) {
+      return;
+    }
+    prevCenterRef.current = { lat, lng };
+    prevCenterVersionRef.current = centerVersion;
+    mapRef.current.setCenter(new window.kakao.maps.LatLng(lat, lng));
+  }, [center.lat, center.lng, centerVersion]);
 
-    mapRef.current.setCenter(new window.kakao.maps.LatLng(Number(center.lat), Number(center.lng)));
-  }, [center.lat, center.lng]);
+  const buildMarkerImages = useCallback((filter: StoreListFilter) => {
+    const kakao = window.kakao.maps;
+    const meta = FILTER_MARKER_MAP[filter];
+    const size = new kakao.Size(meta.size, meta.size);
+    const offset = new kakao.Point(meta.size / 2, meta.size / 2);
+    return {
+      normal: new kakao.MarkerImage(meta.src, size, { offset }),
+      selected: new kakao.MarkerImage(meta.selectedSrc, size, { offset })
+    };
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -59,14 +103,10 @@ export default function MapView({
 
     markerMapRef.current.forEach((marker) => marker.setMap(null));
     markerMapRef.current.clear();
+    prevSelectedIdRef.current = null;
 
     const kakao = window.kakao.maps;
-    const storeSize = new kakao.Size(STORE_MARKER_SIZE, STORE_MARKER_SIZE);
-    const storeOffset = new kakao.Point(STORE_MARKER_SIZE / 2, STORE_MARKER_SIZE / 2);
-    const storeImageNormal = new kakao.MarkerImage(STORE_MARKER_SRC, storeSize, { offset: storeOffset });
-    const storeImageSelected = new kakao.MarkerImage(STORE_MARKER_SELECTED_SRC, storeSize, {
-      offset: storeOffset
-    });
+    const images = buildMarkerImages(activeFilter);
 
     stores.forEach((store) => {
       const lat = Number(store.lat);
@@ -77,26 +117,54 @@ export default function MapView({
       const marker = new kakao.Marker({
         map,
         position: new kakao.LatLng(lat, lng),
-        image: isSelected ? storeImageSelected : storeImageNormal,
+        image: isSelected ? images.selected : images.normal,
         zIndex: isSelected ? 100 : 1
       });
       markerMapRef.current.set(store.id, marker);
 
-      window.kakao.maps.event.addListener(marker, "click", () => {
-        onSelectStore(store);
+      if (isSelected) {
+        prevSelectedIdRef.current = store.id;
+      }
+
+      kakao.event.addListener(marker, "click", () => {
+        console.debug("[MapView] marker clicked, store id:", store.id);
+        onSelectStoreRef.current(store);
       });
     });
-  }, [stores, onSelectStore, selectedStoreId]);
+    // selectedStoreId is intentionally excluded — selection visual is handled separately below
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFilter, stores, buildMarkerImages]);
 
   useEffect(() => {
-    if (!selectedStoreId) return;
-    if (!mapRef.current || !window.kakao?.maps) return;
+    if (!window.kakao?.maps) return;
 
-    const selectedMarker = markerMapRef.current.get(selectedStoreId);
-    if (selectedMarker && typeof selectedMarker.getPosition === "function") {
-      mapRef.current.panTo(selectedMarker.getPosition());
+    const prevId = prevSelectedIdRef.current;
+    const newId = selectedStoreId ?? null;
+
+    if (prevId === newId) return;
+
+    console.debug("[MapView] selection changed:", prevId, "→", newId, "(NO map movement)");
+
+    const images = buildMarkerImages(activeFilterRef.current);
+
+    if (prevId) {
+      const prevMarker = markerMapRef.current.get(prevId);
+      if (prevMarker) {
+        prevMarker.setImage(images.normal);
+        prevMarker.setZIndex(1);
+      }
     }
-  }, [selectedStoreId]);
+
+    if (newId) {
+      const newMarker = markerMapRef.current.get(newId);
+      if (newMarker) {
+        newMarker.setImage(images.selected);
+        newMarker.setZIndex(100);
+      }
+    }
+
+    prevSelectedIdRef.current = newId;
+  }, [selectedStoreId, buildMarkerImages]);
 
   useEffect(() => {
     if (!mapRef.current || !window.kakao?.maps) return;

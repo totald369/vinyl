@@ -2,17 +2,15 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StoreProductChips } from "@/components/StoreProductChips";
-import { StoreData } from "@/hooks/useStores";
+import { StoreData, StoreListFilter } from "@/hooks/useStores";
 import { shortRegion } from "@/lib/shortAddress";
-
-type HomeFilter = "payBag" | "largeSticker";
 
 type Props = {
   stores: StoreData[];
   selectedStoreId?: string | null;
   onSelectStore: (store: StoreData) => void;
-  activeFilter: HomeFilter;
-  onChangeFilter: (value: HomeFilter) => void;
+  activeFilter: StoreListFilter;
+  onChangeFilter: (value: StoreListFilter) => void;
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
 };
@@ -102,6 +100,18 @@ export default function BottomSheetList({
           >
             <img src="/Img/Icon/sticker_24.svg" alt="" width={24} height={24} className="h-6 w-6 shrink-0" />
             <span className="whitespace-nowrap">대형폐기물스티커</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onChangeFilter("nonBurnable")}
+            className={`flex shrink-0 items-center gap-0.5 rounded-[8px] py-2 pl-2 pr-3 text-[14px] font-semibold leading-normal tracking-[0.1px] ${
+              activeFilter === "nonBurnable"
+                ? "border-0 bg-[#171717] text-white"
+                : "border border-[#EEEEEE] bg-white text-[#333333]"
+            }`}
+          >
+            <img src="/Img/Icon/non-fire_24.svg" alt="" width={24} height={24} className="h-6 w-6 shrink-0" />
+            <span className="whitespace-nowrap">불연성마대</span>
           </button>
         </div>
 

@@ -6,6 +6,7 @@ import BottomSheetList from "@/components/BottomSheetList";
 import HomeSearchOverlay from "@/components/HomeSearchOverlay";
 import MapView from "@/components/MapView";
 import StoreDetailSheet from "@/components/StoreDetailSheet";
+import type { StoreListFilter } from "@/hooks/useStores";
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
 import { filterStoresForSearch } from "@/lib/storeSearch";
 import { DEFAULT_REGION } from "@/lib/types";
@@ -13,12 +14,10 @@ import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
 import { StoreData, useStores } from "@/hooks/useStores";
 import { useUserLocation } from "@/hooks/useUserLocation";
 
-type HomeFilter = "payBag" | "largeSticker";
-
 export default function HomeClient() {
   const { isLoading, error } = useKakaoMapLoader();
   const { userLocation, permission } = useUserLocation();
-  const [activeFilter, setActiveFilter] = useState<HomeFilter>("payBag");
+  const [activeFilter, setActiveFilter] = useState<StoreListFilter>("payBag");
   const [bottomSheetExpanded, setBottomSheetExpanded] = useState(false);
   const [sheetView, setSheetView] = useState<"list" | "detail">("list");
   const { selectedStore, setSelectedStore, sortedStores, stores, defaultCenter, loading } = useStores(
@@ -43,6 +42,7 @@ export default function HomeClient() {
   const storesById = useMemo(() => new Map(stores.map((s) => [s.id, s])), [stores]);
 
   const [manualCenter, setManualCenter] = useState(defaultCenter);
+  const [centerVersion, setCenterVersion] = useState(0);
   const mapStores = useMemo(() => {
     if (!selectedStore) return sortedStores;
     const existsInMap = sortedStores.some((store) => store.id === selectedStore.id);
@@ -51,25 +51,22 @@ export default function HomeClient() {
     return [selectedStore, ...sortedStores];
   }, [selectedStore, sortedStores]);
   const center = useMemo(
-    () =>
-      selectedStore
-        ? { lat: Number(selectedStore.lat), lng: Number(selectedStore.lng) }
-        : userLocation ?? manualCenter,
-    [manualCenter, selectedStore, userLocation]
+    () => userLocation ?? manualCenter,
+    [manualCenter, userLocation]
   );
 
   const handleSelectStore = (store: StoreData) => {
     const resolved = storesById.get(store.id) ?? store;
-    console.debug("[home/search-select] clicked result id:", store.id);
-    console.debug("[home/search-select] resolved store from full dataset:", storesById.has(store.id));
+    setSelectedStore(resolved);
+    setSheetView("detail");
+  };
+
+  const handleSelectStoreWithPan = (store: StoreData) => {
+    const resolved = storesById.get(store.id) ?? store;
     setSelectedStore(resolved);
     setManualCenter({ lat: Number(resolved.lat), lng: Number(resolved.lng) });
+    setCenterVersion((v) => v + 1);
     setSheetView("detail");
-    console.debug("[home/search-select] detail open:", true);
-    console.debug("[home/search-select] map center target:", {
-      lat: Number(resolved.lat),
-      lng: Number(resolved.lng)
-    });
   };
 
   const handleMoveToLocation = () => {
@@ -77,9 +74,10 @@ export default function HomeClient() {
     setSheetView("list");
     if (userLocation) {
       setManualCenter(userLocation);
-      return;
+    } else {
+      setManualCenter({ lat: DEFAULT_REGION.lat, lng: DEFAULT_REGION.lng });
     }
-    setManualCenter({ lat: DEFAULT_REGION.lat, lng: DEFAULT_REGION.lng });
+    setCenterVersion((v) => v + 1);
   };
 
   useEffect(() => {
@@ -123,7 +121,9 @@ export default function HomeClient() {
         <>
           <MapView
             center={center}
+            centerVersion={centerVersion}
             stores={loading ? [] : mapStores}
+            activeFilter={activeFilter}
             selectedStoreId={selectedStore?.id}
             onSelectStore={handleSelectStore}
             userMarkerPosition={permission === "granted" && userLocation ? userLocation : null}
@@ -176,7 +176,7 @@ export default function HomeClient() {
             onActiveFilterChange={setActiveFilter}
             results={searchResults}
             onSelectStore={(store) => {
-              handleSelectStore(store);
+              handleSelectStoreWithPan(store);
               setSearchOpen(false);
             }}
           />
@@ -192,7 +192,7 @@ export default function HomeClient() {
             <BottomSheetList
               stores={loading ? [] : sortedStores}
               selectedStoreId={selectedStore?.id}
-              onSelectStore={handleSelectStore}
+              onSelectStore={handleSelectStoreWithPan}
               activeFilter={activeFilter}
               onChangeFilter={setActiveFilter}
               expanded={bottomSheetExpanded}

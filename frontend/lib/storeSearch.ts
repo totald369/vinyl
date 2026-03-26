@@ -15,6 +15,7 @@ export function filterStoresForSearch(
   return stores
     .filter((s) => {
       if (filter === "largeSticker") return s.largeWasteStickerYn === "Y";
+      if (filter === "nonBurnable") return s.storeCategory === "nonBurnable";
       return s.storeCategory === "payBag";
     })
     .filter((s) => {
