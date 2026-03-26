@@ -164,8 +164,7 @@ function EditRequestContent() {
 
   return (
     <main className="mx-auto flex h-screen max-w-md flex-col overflow-hidden bg-white">
-      <div className="h-[44px] w-full shrink-0 bg-white" />
-      <header className="z-[6] flex h-12 w-full shrink-0 items-center gap-1 overflow-hidden bg-white px-2">
+      <header className="z-[6] flex h-14 w-full shrink-0 items-center gap-1 overflow-hidden bg-white px-2">
         <div className="size-12 opacity-0" aria-hidden />
         <h1 className="min-w-0 flex-1 text-center text-[16px] font-bold leading-6 text-[#171717]">정보 수정 요청</h1>
         <Link href="/" className="flex size-12 items-center justify-center" aria-label="닫기">

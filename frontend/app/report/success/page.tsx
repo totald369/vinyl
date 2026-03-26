@@ -4,8 +4,7 @@ import CheckLottie from "@/components/CheckLottie";
 export default function ReportSuccessPage() {
   return (
     <main className="mx-auto flex h-screen max-w-md flex-col overflow-hidden bg-white">
-      <div className="h-[44px] w-full shrink-0 bg-white" />
-      <header className="flex h-12 w-full shrink-0 items-center justify-end bg-white px-2">
+      <header className="flex h-14 w-full shrink-0 items-center justify-end bg-white px-2">
         <Link href="/" className="flex size-12 items-center justify-center" aria-label="닫기">
           <img src="/Img/Icon/close_32.svg" alt="" width={32} height={32} className="size-8" />
         </Link>
