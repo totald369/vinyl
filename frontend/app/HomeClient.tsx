@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import BottomSheetList from "@/components/BottomSheetList";
 import HomeSearchOverlay from "@/components/HomeSearchOverlay";
+import LocationPermissionModal from "@/components/LocationPermissionModal";
 import MapView from "@/components/MapView";
 import StoreDetailSheet from "@/components/StoreDetailSheet";
 import type { StoreListFilter } from "@/hooks/useStores";
@@ -16,7 +17,8 @@ import { useUserLocation } from "@/hooks/useUserLocation";
 
 export default function HomeClient() {
   const { isLoading, error } = useKakaoMapLoader();
-  const { userLocation, permission } = useUserLocation();
+  const { userLocation, permission, requestLocation } = useUserLocation();
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<StoreListFilter>("payBag");
   const [bottomSheetExpanded, setBottomSheetExpanded] = useState(false);
   const [sheetView, setSheetView] = useState<"list" | "detail">("list");
@@ -70,6 +72,10 @@ export default function HomeClient() {
   };
 
   const handleMoveToLocation = () => {
+    if (permission !== "granted") {
+      setLocationModalOpen(true);
+      return;
+    }
     setSelectedStore(null);
     setSheetView("list");
     if (userLocation) {
@@ -79,6 +85,18 @@ export default function HomeClient() {
     }
     setCenterVersion((v) => v + 1);
   };
+
+  const handleLocationPermissionAllow = () => {
+    setLocationModalOpen(false);
+    requestLocation();
+  };
+
+  useEffect(() => {
+    if (permission === "granted" && userLocation) {
+      setManualCenter(userLocation);
+      setCenterVersion((v) => v + 1);
+    }
+  }, [permission, userLocation]);
 
   useEffect(() => {
     if (!selectedStore) return;
@@ -166,6 +184,12 @@ export default function HomeClient() {
               <span>제보하기</span>
             </Link>
           ) : null}
+
+          <LocationPermissionModal
+            open={locationModalOpen}
+            onClose={() => setLocationModalOpen(false)}
+            onAllow={handleLocationPermissionAllow}
+          />
 
           <HomeSearchOverlay
             open={searchOpen}
