@@ -8,11 +8,21 @@ import { DEFAULT_REGION, LatLng } from "@/lib/types";
 type Props = {
   value: LatLng;
   onChange: (value: LatLng) => void;
+  selectedMarkerPosition?: LatLng | null;
+  className?: string;
+  mapClassName?: string;
 };
 
-export default function LocationPickerMap({ value, onChange }: Props) {
+export default function LocationPickerMap({
+  value,
+  onChange,
+  selectedMarkerPosition = null,
+  className,
+  mapClassName
+}: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<import("@/lib/kakao").KakaoMap | null>(null);
+  const selectedMarkerRef = useRef<import("@/lib/kakao").KakaoMarker | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { isLoading, isReady, error: loaderError } = useKakaoMapLoader();
 
@@ -49,21 +59,63 @@ export default function LocationPickerMap({ value, onChange }: Props) {
     setError(loaderError);
   }, [loaderError]);
 
+  useEffect(() => {
+    if (!mapRef.current || !window.kakao?.maps) return;
+
+    const map = mapRef.current;
+    const kakao = window.kakao.maps;
+
+    if (!selectedMarkerPosition) {
+      if (selectedMarkerRef.current) {
+        selectedMarkerRef.current.setMap(null);
+        selectedMarkerRef.current = null;
+      }
+      return;
+    }
+
+    const lat = Number(selectedMarkerPosition.lat);
+    const lng = Number(selectedMarkerPosition.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    const markerPosition = new kakao.LatLng(lat, lng);
+    const markerImage = new kakao.MarkerImage(
+      "/Img/Icon/store_Pin_80.svg",
+      new kakao.Size(80, 80),
+      { offset: new kakao.Point(40, 60) }
+    );
+
+    if (!selectedMarkerRef.current) {
+      selectedMarkerRef.current = new kakao.Marker({
+        map,
+        position: markerPosition,
+        image: markerImage,
+        zIndex: 200
+      });
+    } else {
+      selectedMarkerRef.current.setPosition(markerPosition);
+    }
+  }, [selectedMarkerPosition]);
+
   return (
-    <div className="relative">
+    <div className={className ?? "relative h-56"}>
       {error ? (
-        <div className="flex h-56 items-center justify-center rounded-xl bg-danger-50 text-body-sm text-danger-700">
+        <div className="flex h-full items-center justify-center bg-danger-50 text-body-sm text-danger-700">
           {error}
         </div>
       ) : isLoading ? (
-        <div className="flex h-56 items-center justify-center rounded-xl bg-bg-muted text-body-sm text-text-secondary">
+        <div className="flex h-full items-center justify-center bg-bg-muted text-body-sm text-text-secondary">
           지도를 불러오는 중입니다...
         </div>
       ) : (
         <>
-          <div ref={containerRef} className="h-56 w-full rounded-xl border border-border-subtle" />
+          <div
+            ref={containerRef}
+            className={mapClassName ?? "h-full w-full rounded-xl border border-border-subtle"}
+          />
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <div className="h-4 w-4 rounded-full border-2 border-bg-surface bg-brand-500 shadow-elevation-2" />
+            <div className="flex size-12 items-center justify-center rounded-full bg-[#171717]">
+              <div className="size-4 rounded-full bg-[#d4fe1c]" />
+            </div>
           </div>
         </>
       )}

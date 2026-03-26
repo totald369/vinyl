@@ -110,7 +110,7 @@ export default function StoreDetailSheet({
           <div className="flex gap-1 pb-2">
             {SHOW_STORE_EDIT_REQUEST_BUTTON ? (
               <Link
-                href={`/edit-request?storeId=${encodeURIComponent(store.id)}`}
+                href={`/edit-request?storeId=${encodeURIComponent(store.id)}&storeName=${encodeURIComponent(store.name)}&storeAddress=${encodeURIComponent(addressLine)}`}
                 className="flex h-12 min-w-[60px] flex-1 items-center justify-center rounded-[8px] border border-[#DDDDDD] px-4 py-2 text-center text-[16px] font-bold leading-[1.5] text-[#171717]"
               >
                 정보 수정 요청

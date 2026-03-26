@@ -40,8 +40,16 @@ export default function HomeClient() {
         : filterStoresForSearch(stores, searchQuery, activeFilter, searchReference),
     [activeFilter, loading, searchQuery, searchReference, stores]
   );
+  const storesById = useMemo(() => new Map(stores.map((s) => [s.id, s])), [stores]);
 
   const [manualCenter, setManualCenter] = useState(defaultCenter);
+  const mapStores = useMemo(() => {
+    if (!selectedStore) return sortedStores;
+    const existsInMap = sortedStores.some((store) => store.id === selectedStore.id);
+    if (existsInMap) return sortedStores;
+    // 원거리 검색 결과도 맵에서 선택 상태를 유지할 수 있게 selectedStore를 합쳐 렌더
+    return [selectedStore, ...sortedStores];
+  }, [selectedStore, sortedStores]);
   const center = useMemo(
     () =>
       selectedStore
@@ -51,9 +59,17 @@ export default function HomeClient() {
   );
 
   const handleSelectStore = (store: StoreData) => {
-    setSelectedStore(store);
-    setManualCenter({ lat: Number(store.lat), lng: Number(store.lng) });
+    const resolved = storesById.get(store.id) ?? store;
+    console.debug("[home/search-select] clicked result id:", store.id);
+    console.debug("[home/search-select] resolved store from full dataset:", storesById.has(store.id));
+    setSelectedStore(resolved);
+    setManualCenter({ lat: Number(resolved.lat), lng: Number(resolved.lng) });
     setSheetView("detail");
+    console.debug("[home/search-select] detail open:", true);
+    console.debug("[home/search-select] map center target:", {
+      lat: Number(resolved.lat),
+      lng: Number(resolved.lng)
+    });
   };
 
   const handleMoveToLocation = () => {
@@ -68,11 +84,20 @@ export default function HomeClient() {
 
   useEffect(() => {
     if (!selectedStore) return;
-    const exists = sortedStores.some((store) => store.id === selectedStore.id);
+    // 상세 뷰는 현재 근거리 목록(sortedStores)이 아니라 전체 stores 기준으로 유지해야 함
+    const exists = stores.some((store) => store.id === selectedStore.id);
+    console.debug("[home/select-guard] selectedStore id:", selectedStore.id);
+    console.debug("[home/select-guard] exists in full dataset:", exists);
     if (!exists) {
       setSelectedStore(null);
     }
-  }, [selectedStore, setSelectedStore, sortedStores]);
+  }, [selectedStore, setSelectedStore, stores]);
+
+  useEffect(() => {
+    if (!selectedStore) return;
+    console.debug("[home/selected] selectedStore id:", selectedStore.id);
+    console.debug("[home/selected] sheetView:", sheetView);
+  }, [selectedStore, sheetView]);
 
   useEffect(() => {
     if (!selectedStore) {
@@ -98,7 +123,7 @@ export default function HomeClient() {
         <>
           <MapView
             center={center}
-            stores={loading ? [] : sortedStores}
+            stores={loading ? [] : mapStores}
             selectedStoreId={selectedStore?.id}
             onSelectStore={handleSelectStore}
             userMarkerPosition={permission === "granted" && userLocation ? userLocation : null}

@@ -61,7 +61,7 @@ export default function StoreDetailPage({ params }: Props) {
         >
           {SHOW_STORE_EDIT_REQUEST_BUTTON ? (
             <Link
-              href="/edit-request"
+              href={`/edit-request?storeId=${encodeURIComponent(store.id)}&storeName=${encodeURIComponent(store.name)}&storeAddress=${encodeURIComponent(store.address)}`}
               className="rounded-xl border border-slate-300 px-3 py-3 text-center text-sm"
             >
               정보 수정 요청
