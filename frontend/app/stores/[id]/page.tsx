@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SHOW_STORE_EDIT_REQUEST_BUTTON } from "@/lib/featureFlags";
 import { mockStores } from "@/lib/mock";
@@ -7,6 +8,25 @@ import { FILTER_LABELS } from "@/lib/types";
 type Props = {
   params: { id: string };
 };
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const store = mockStores.find((item) => item.id === params.id);
+  if (!store) {
+    return {};
+  }
+  const path = `/stores/${params.id}`;
+  return {
+    alternates: { canonical: path },
+    title: store.name,
+    description: `${store.address} — ${store.description} 종량제봉투·마대·스티커 판매 정보.`,
+    openGraph: {
+      title: `${store.name} | 판매처 상세`,
+      description: store.description,
+      url: path
+    },
+    robots: { index: true, follow: true }
+  };
+}
 
 export default function StoreDetailPage({ params }: Props) {
   const store = mockStores.find((item) => item.id === params.id);
@@ -57,6 +77,14 @@ export default function StoreDetailPage({ params }: Props) {
           </a>
         </div>
       </section>
+
+      <nav className="mt-6 text-sm text-slate-600" aria-label="관련 페이지">
+        <Link href="/stores">판매처 목록</Link>
+        {" · "}
+        <Link href="/gangnam">강남 종량제봉투 안내</Link>
+        {" · "}
+        <Link href="/">지도 홈</Link>
+      </nav>
     </main>
   );
 }

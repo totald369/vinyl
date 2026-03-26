@@ -1,14 +1,30 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/gangnam" },
   title: "강남 종량제봉투 판매처 안내",
   description:
-    "강남 지역 종량제봉투, 불연성마대, 폐기물 스티커 판매처 정보. 지도 서비스에서 내 주변 매장을 확인하세요."
+    "강남 종량제봉투 파는곳, 불연성마대 판매처, 폐기물 스티커 구매 정보를 정리했습니다. 지도 홈·판매처 목록과 연계해 내 주변 매장을 찾아보세요.",
+  openGraph: {
+    title: "강남 종량제봉투 판매처 안내",
+    description: "강남권 종량제봉투·마대·스티커 판매 안내와 지도 연결 방법을 안내합니다.",
+    url: "/gangnam"
+  },
+  twitter: {
+    title: "강남 종량제봉투 판매처 안내",
+    description: "강남권 종량제봉투·마대·스티커 판매 안내를 확인하세요."
+  }
 };
 
 export default function GangnamPage() {
   return (
     <main>
+      <nav aria-label="관련 페이지">
+        <Link href="/">지도 홈</Link>
+        {" · "}
+        <Link href="/stores">판매처 목록</Link>
+      </nav>
       <h1>강남 종량제봉투 판매처 안내</h1>
       <p>
         강남 지역에서 종량제봉투를 구매할 수 있는 판매처를 찾고 계신가요? 종량제봉투는 생활쓰레기를 버릴 때

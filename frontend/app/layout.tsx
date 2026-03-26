@@ -1,12 +1,20 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import Script from "next/script";
+import { GoogleAnalytics } from "@/components/GoogleAnalytics";
+import { GA_MEASUREMENT_ID } from "@/lib/gtag";
+import { SITE_URL } from "@/lib/site";
 
-const OG_IMAGE = "https://vinyl-ochre.vercel.app/og-image.png";
+const OG_IMAGE = `${SITE_URL}/og-image.png`;
 
 export const metadata: Metadata = {
-  title: "우리동네 종량제봉투 판매처 찾기 | 위치 기반 지도",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "우리동네 종량제봉투 판매처 찾기 | 위치 기반 지도",
+    template: "%s | 종량제봉투 지도"
+  },
   description:
-    "내 주변 종량제봉투, 불연성마대, 폐기물 스티커 판매처를 지도에서 바로 확인하세요.",
+    "내 주변 종량제봉투·불연성마대·폐기물 스티커 판매처를 지도에서 검색하고 바로 확인하세요.",
   keywords: ["종량제봉투", "불연성마대", "폐기물 스티커", "판매처", "쓰레기봉투"],
 
   verification: {
@@ -21,7 +29,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "우리동네 종량제봉투 판매처 찾기",
     description: "내 주변 쓰레기봉투 판매처를 지도에서 빠르게 확인하세요.",
-    url: "https://vinyl-ochre.vercel.app",
+    url: "/",
     siteName: "종량제봉투 지도",
     locale: "ko_KR",
     type: "website",
@@ -48,9 +56,30 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const isProd = process.env.NODE_ENV === "production";
+
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        {isProd ? (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+              strategy="afterInteractive"
+            />
+            <Script id="google-analytics-init" strategy="afterInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', '${GA_MEASUREMENT_ID}');
+              `}
+            </Script>
+          </>
+        ) : null}
+        <GoogleAnalytics />
+        {children}
+      </body>
     </html>
   );
 }
