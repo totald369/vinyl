@@ -1,59 +1,30 @@
 /**
- * 바텀시트 3단 스냅 (translateY 기준: 0 = 최대 펼침, max = 접힘 peek)
+ * 바텀시트 2단 스냅 (translateY 기준: 0 = 최대 펼침, max = 접힘 peek)
  */
 
-export type BottomSheetSnap = "expanded" | "half" | "collapsed";
-
-/** collapsed ↔ expanded 사이 half 위치 (0~1, maxTy 에 곱함) */
-export const BOTTOM_SHEET_HALF_RATIO = 0.5;
+export type BottomSheetSnap = "expanded" | "collapsed";
 
 export type SnapGeometry = {
   maxTy: number;
-  /** 스냅 지점 translateY, 오름차순 [expanded, half, collapsed] */
-  points: [number, number, number];
+  /** 스냅 지점 translateY, 오름차순 [expanded, collapsed] */
+  points: readonly [number, number];
 };
 
 export function getBottomSheetSnapGeometry(maxTy: number): SnapGeometry {
   const safeMax = Math.max(0, maxTy);
-  let half = Math.round(safeMax * BOTTOM_SHEET_HALF_RATIO);
-  if (safeMax >= 3) {
-    half = Math.max(1, Math.min(safeMax - 1, half));
-  } else {
-    half = Math.floor(safeMax / 2);
-  }
   return {
     maxTy: safeMax,
-    points: [0, half, safeMax]
+    points: [0, safeMax] as const
   };
 }
 
 export function snapToTy(snap: BottomSheetSnap, geom: SnapGeometry): number {
-  const { points } = geom;
-  switch (snap) {
-    case "expanded":
-      return points[0];
-    case "half":
-      return points[1];
-    case "collapsed":
-      return points[2];
-    default:
-      return points[2];
-  }
+  return snap === "expanded" ? geom.points[0] : geom.points[1];
 }
 
 export function tyToSnap(ty: number, geom: SnapGeometry): BottomSheetSnap {
-  const { points } = geom;
-  let best: BottomSheetSnap = "collapsed";
-  let bestD = Infinity;
-  const labels: BottomSheetSnap[] = ["expanded", "half", "collapsed"];
-  for (let i = 0; i < 3; i++) {
-    const d = Math.abs(ty - points[i]);
-    if (d < bestD) {
-      bestD = d;
-      best = labels[i];
-    }
-  }
-  return best;
+  const [p0, p1] = geom.points;
+  return Math.abs(ty - p0) <= Math.abs(ty - p1) ? "expanded" : "collapsed";
 }
 
 const VY_STRONG = 0.5;
@@ -72,7 +43,7 @@ export function resolveSnapTyFromRelease(
   hasMeaningfulDrag: boolean
 ): number {
   const { points } = geom;
-  const [p0, , p2] = points;
+  const [p0, p2] = points;
   const EPS = 4;
 
   if (!hasMeaningfulDrag) {
@@ -114,17 +85,16 @@ function nearestPoint(y: number, points: readonly number[]): number {
 
 export function tyToSnapExact(targetTy: number, geom: SnapGeometry): BottomSheetSnap {
   const { points } = geom;
-  for (let i = 0; i < 3; i++) {
+  const labels: BottomSheetSnap[] = ["expanded", "collapsed"];
+  for (let i = 0; i < 2; i++) {
     if (Math.abs(targetTy - points[i]) < 2) {
-      return (["expanded", "half", "collapsed"] as const)[i];
+      return labels[i];
     }
   }
   return tyToSnap(targetTy, geom);
 }
 
-/** 핸들 탭 시 collapsed → half → expanded → collapsed */
+/** 핸들 탭 시 collapsed ↔ expanded */
 export function cycleBottomSheetSnap(current: BottomSheetSnap): BottomSheetSnap {
-  if (current === "collapsed") return "half";
-  if (current === "half") return "expanded";
-  return "collapsed";
+  return current === "collapsed" ? "expanded" : "collapsed";
 }

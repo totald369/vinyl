@@ -48,18 +48,24 @@ function maxTranslateY(): number {
   return Math.max(0, fullH - peekH);
 }
 
+/** 시트가 최대로 펼쳐진 것으로 보는 translateY 상한 (이하일 때만 리스트 스크롤 허용) */
+const SHEET_FULLY_OPEN_EPS = 6;
+/** 접힘/중간 상태에서 작은 스와이프로 시트가 먼저 반응 (리스트 스크롤보다 우선) */
+const LIST_SHEET_NUDGE_PX = 4;
+/** 완전 확장 상태에서 시트 접기 시작 임계값 */
 const LIST_DRAG_THRESHOLD_PX = 14;
 const LIST_FLICK_UP = -0.52;
 const LIST_FLICK_DOWN = 0.52;
 
+/** 펼침 높이(translateY=0) 이상으로는 올라가지 않음; 아래로만 살짝 고무줄 */
 function rubberClampTy(ty: number, maxTy: number, rubber: boolean): number {
   if (!rubber) return Math.min(maxTy, Math.max(0, ty));
-  if (ty < 0) return ty * 0.32;
+  if (ty < 0) return 0;
   if (ty > maxTy) return maxTy + (ty - maxTy) * 0.32;
   return ty;
 }
 
-const SNAP_ORDER: BottomSheetSnap[] = ["expanded", "half", "collapsed"];
+const SNAP_ORDER: BottomSheetSnap[] = ["expanded", "collapsed"];
 
 export default function BottomSheetList({
   stores,
@@ -284,6 +290,7 @@ export default function BottomSheetList({
       const gSnap = getBottomSheetSnapGeometry(maxTranslateY());
       const currentTy = dragTy ?? snapToTy(snap, gSnap);
       const EPS = 6;
+      const sheetFullyOpen = currentTy <= SHEET_FULLY_OPEN_EPS;
 
       if (g.sheetDragStarted) {
         const d = dragRef.current;
@@ -296,18 +303,21 @@ export default function BottomSheetList({
         return;
       }
 
-      if (ul.scrollTop > 0) return;
-
       const dy = e.clientY - g.startY;
       const canOpenMore = currentTy > EPS;
       const canCloseMore = currentTy < gSnap.maxTy - EPS;
 
-      if (dy < -LIST_DRAG_THRESHOLD_PX && canOpenMore) {
-        /* 위로: 더 펼침 */
-      } else if (dy > LIST_DRAG_THRESHOLD_PX && canCloseMore) {
-        /* 아래로: 더 접음 */
+      /*
+       * 시트가 완전히 펼쳐지기 전: 리스트는 스크롤되지 않음(overflow/touch-none).
+       * 작은 수직 움직임으로 시트만 따라옴.
+       */
+      if (!sheetFullyOpen) {
+        if (Math.abs(dy) < LIST_SHEET_NUDGE_PX) return;
+        if (dy < 0 && !canOpenMore) return;
+        if (dy > 0 && !canCloseMore) return;
       } else {
-        return;
+        if (ul.scrollTop > 0) return;
+        if (!(dy > LIST_DRAG_THRESHOLD_PX && canCloseMore)) return;
       }
 
       g.sheetDragStarted = true;
@@ -326,7 +336,7 @@ export default function BottomSheetList({
         startTy: currentTy,
         lastY: e.clientY,
         lastT: performance.now(),
-        moved: true
+        moved: Math.abs(dy) >= (sheetFullyOpen ? LIST_DRAG_THRESHOLD_PX : LIST_SHEET_NUDGE_PX)
       };
       setDragging(true);
       applyPointerTy(e.clientY, g.startY, currentTy, true);
@@ -414,6 +424,13 @@ export default function BottomSheetList({
 
   const fullH = sheetFullHeightPx();
   const translateY = resolveTranslateY();
+  const listScrollEnabled = translateY <= SHEET_FULLY_OPEN_EPS;
+
+  useEffect(() => {
+    const el = listUlRef.current;
+    if (!el || listScrollEnabled) return;
+    el.scrollTop = 0;
+  }, [listScrollEnabled, snap]);
 
   useEffect(() => {
     if (isDragging) return;
@@ -438,11 +455,7 @@ export default function BottomSheetList({
   }, [selectedStoreId]);
 
   const handleLabel =
-    snap === "expanded"
-      ? "목록 · 아래로 내려 접기"
-      : snap === "half"
-        ? "목록 · 위아래로 높이 조절"
-        : "목록 · 위로 올려 펼치기";
+    snap === "expanded" ? "목록 · 아래로 내려 접기" : "목록 · 위로 올려 펼치기";
 
   return (
     <section
@@ -532,9 +545,11 @@ export default function BottomSheetList({
           onPointerUp={onListPointerUp}
           onPointerCancel={onListPointerCancel}
           onClickCapture={onListClickCapture}
-          className={`scrollbar-map-list flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pb-4 ${
-            listScrolling ? "is-scrolling" : ""
-          } ${isDragging ? "touch-none" : ""}`}
+          className={`scrollbar-map-list flex min-h-0 flex-1 flex-col gap-1 overscroll-y-contain px-2 pb-4 ${
+            listScrollEnabled ? "overflow-y-auto" : "overflow-y-hidden"
+          } ${listScrolling ? "is-scrolling" : ""} ${
+            isDragging || !listScrollEnabled ? "touch-none" : ""
+          }`}
         >
           {stores.length === 0 ? (
             <li className="px-4 py-6 text-center text-[14px] leading-normal tracking-[0.1px] text-[#999999]">
