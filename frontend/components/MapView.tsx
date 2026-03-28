@@ -8,6 +8,8 @@ import { LatLng } from "@/lib/types";
 type Props = {
   center: LatLng;
   centerVersion?: number;
+  /** 탐색 모드 등에서 지도 확대 단계(1~14, 숫자가 클수록 더 넓게). center 이동 시 한 번 적용 */
+  preferredMapLevel?: number | null;
   stores: StoreData[];
   activeFilter: StoreListFilter;
   selectedStoreId?: string | null;
@@ -39,6 +41,7 @@ const FILTER_MARKER_MAP: Record<StoreListFilter, { src: string; selectedSrc: str
 export default function MapView({
   center,
   centerVersion = 0,
+  preferredMapLevel = null,
   stores,
   activeFilter,
   selectedStoreId,
@@ -84,7 +87,10 @@ export default function MapView({
     prevCenterRef.current = { lat, lng };
     prevCenterVersionRef.current = centerVersion;
     mapRef.current.setCenter(new window.kakao.maps.LatLng(lat, lng));
-  }, [center.lat, center.lng, centerVersion]);
+    if (preferredMapLevel != null && Number.isFinite(preferredMapLevel)) {
+      mapRef.current.setLevel(Math.max(1, Math.min(14, Math.round(preferredMapLevel))));
+    }
+  }, [center.lat, center.lng, centerVersion, preferredMapLevel]);
 
   const buildMarkerImages = useCallback((filter: StoreListFilter) => {
     const kakao = window.kakao.maps;

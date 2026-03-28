@@ -51,7 +51,7 @@ export default function BottomSheetList({
 
   const sheetLayoutClass = useMemo(
     () =>
-      expanded ? "top-[108px] bottom-0" : "top-auto bottom-0 h-[378px]",
+      expanded ? "top-[108px] bottom-0" : "top-auto bottom-0 h-[35vh]",
     [expanded]
   );
 

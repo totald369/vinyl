@@ -89,7 +89,7 @@ function normalizeRow(raw: RawStoreRow): StoreData {
 
 export function useStores(
   userLocation: LatLng | null,
-  options?: { activeFilter: StoreListFilter }
+  options?: { activeFilter: StoreListFilter; listReference?: LatLng | null }
 ) {
   const [stores, setStores] = useState<StoreData[]>([]);
   const [selectedStore, setSelectedStore] = useState<StoreData | null>(null);
@@ -132,10 +132,12 @@ export function useStores(
   const sortedStores = useMemo(() => {
     if (!stores.length) return [];
 
-    const referencePoint = userLocation ?? {
-      lat: DEFAULT_REGION.lat,
-      lng: DEFAULT_REGION.lng
-    };
+    const referencePoint =
+      options?.listReference ??
+      userLocation ?? {
+        lat: DEFAULT_REGION.lat,
+        lng: DEFAULT_REGION.lng
+      };
 
     const filter = options?.activeFilter ?? "payBag";
 
@@ -151,7 +153,7 @@ export function useStores(
       })
       .filter((store) => (store.distance ?? Infinity) <= LIST_RADIUS_KM)
       .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
-  }, [options?.activeFilter, stores, userLocation]);
+  }, [options?.activeFilter, options?.listReference, stores, userLocation]);
 
   const defaultCenter = useMemo(
     () => ({ lat: DEFAULT_REGION.lat, lng: DEFAULT_REGION.lng }),

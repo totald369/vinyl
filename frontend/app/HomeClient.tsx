@@ -10,7 +10,7 @@ import StoreDetailSheet from "@/components/StoreDetailSheet";
 import type { StoreListFilter } from "@/hooks/useStores";
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
 import { filterStoresForSearch } from "@/lib/storeSearch";
-import { DEFAULT_REGION } from "@/lib/types";
+import { DEFAULT_REGION, type LatLng } from "@/lib/types";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
 import { StoreData, useStores } from "@/hooks/useStores";
 import { useUserLocation } from "@/hooks/useUserLocation";
@@ -22,9 +22,14 @@ export default function HomeClient() {
   const [activeFilter, setActiveFilter] = useState<StoreListFilter>("payBag");
   const [bottomSheetExpanded, setBottomSheetExpanded] = useState(false);
   const [sheetView, setSheetView] = useState<"list" | "detail">("list");
+  /** 검색으로 상점을 고른 뒤: 목록·지도 기준점을 해당 매장으로 두고 반경 2km(기존 LIST_RADIUS) 표시 */
+  const [exploreAnchor, setExploreAnchor] = useState<LatLng | null>(null);
+  /** 위치 권한이 있어도 검색/목록에서 선택한 지점으로 지도 중심 이동 */
+  const [mapCenterOverride, setMapCenterOverride] = useState<LatLng | null>(null);
+
   const { selectedStore, setSelectedStore, sortedStores, stores, defaultCenter, loading } = useStores(
     userLocation,
-    { activeFilter }
+    { activeFilter, listReference: exploreAnchor }
   );
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -53,8 +58,8 @@ export default function HomeClient() {
     return [selectedStore, ...sortedStores];
   }, [selectedStore, sortedStores]);
   const center = useMemo(
-    () => userLocation ?? manualCenter,
-    [manualCenter, userLocation]
+    () => mapCenterOverride ?? userLocation ?? manualCenter,
+    [mapCenterOverride, manualCenter, userLocation]
   );
 
   const handleSelectStore = (store: StoreData) => {
@@ -65,10 +70,25 @@ export default function HomeClient() {
 
   const handleSelectStoreWithPan = (store: StoreData) => {
     const resolved = storesById.get(store.id) ?? store;
+    const pos = { lat: Number(resolved.lat), lng: Number(resolved.lng) };
     setSelectedStore(resolved);
-    setManualCenter({ lat: Number(resolved.lat), lng: Number(resolved.lng) });
+    setManualCenter(pos);
+    setMapCenterOverride(pos);
     setCenterVersion((v) => v + 1);
     setSheetView("detail");
+    setExploreAnchor((prev) => (prev != null ? pos : prev));
+  };
+
+  const handleSearchSelectStore = (store: StoreData) => {
+    const resolved = storesById.get(store.id) ?? store;
+    const pos = { lat: Number(resolved.lat), lng: Number(resolved.lng) };
+    setSelectedStore(resolved);
+    setManualCenter(pos);
+    setMapCenterOverride(pos);
+    setExploreAnchor(pos);
+    setCenterVersion((v) => v + 1);
+    setSheetView("detail");
+    setSearchOpen(false);
   };
 
   const handleMoveToLocation = () => {
@@ -78,6 +98,8 @@ export default function HomeClient() {
     }
     setSelectedStore(null);
     setSheetView("list");
+    setExploreAnchor(null);
+    setMapCenterOverride(null);
     if (userLocation) {
       setManualCenter(userLocation);
     } else {
@@ -92,11 +114,11 @@ export default function HomeClient() {
   };
 
   useEffect(() => {
-    if (permission === "granted" && userLocation) {
+    if (permission === "granted" && userLocation && !mapCenterOverride) {
       setManualCenter(userLocation);
       setCenterVersion((v) => v + 1);
     }
-  }, [permission, userLocation]);
+  }, [permission, userLocation, mapCenterOverride]);
 
   useEffect(() => {
     if (!selectedStore) return;
@@ -140,6 +162,7 @@ export default function HomeClient() {
           <MapView
             center={center}
             centerVersion={centerVersion}
+            preferredMapLevel={exploreAnchor != null ? 6 : 5}
             stores={loading ? [] : mapStores}
             activeFilter={activeFilter}
             selectedStoreId={selectedStore?.id}
@@ -178,7 +201,7 @@ export default function HomeClient() {
           {SHOW_HOME_REPORT_BUTTON && !bottomSheetExpanded && sheetView === "list" ? (
             <Link
               href="/report"
-              className="absolute bottom-[386px] right-[15px] z-[35] flex items-center gap-0.5 rounded-full bg-[#d4fe1c] px-4 py-3 text-[16px] font-bold leading-normal tracking-[0.1px] text-[#171717] shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)]"
+              className="absolute bottom-[36vh] right-[15px] z-[35] flex items-center gap-0.5 rounded-full bg-[#d4fe1c] px-4 py-3 text-[16px] font-bold leading-normal tracking-[0.1px] text-[#171717] shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)]"
             >
               <img src="/Img/Icon/write_24.svg" alt="" width={24} height={24} className="shrink-0" />
               <span>제보하기</span>
@@ -199,10 +222,7 @@ export default function HomeClient() {
             activeFilter={activeFilter}
             onActiveFilterChange={setActiveFilter}
             results={searchResults}
-            onSelectStore={(store) => {
-              handleSelectStoreWithPan(store);
-              setSearchOpen(false);
-            }}
+            onSelectStore={handleSearchSelectStore}
           />
 
           {selectedStore && sheetView === "detail" ? (
