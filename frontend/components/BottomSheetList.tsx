@@ -247,7 +247,6 @@ export default function BottomSheetList({
       }
 
       const c = collapsedHeightPx();
-      const exp = expandedHeightPx();
       dragRef.current = {
         pointerId: e.pointerId,
         startY: g.startY,
