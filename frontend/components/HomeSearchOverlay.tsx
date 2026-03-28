@@ -14,7 +14,12 @@ type Props = {
   onQueryChange: (value: string) => void;
   activeFilter: StoreListFilter;
   onActiveFilterChange: (value: StoreListFilter) => void;
+  /** 필터·검색어 기준 전체 매칭 건수(표시용) */
+  totalMatchCount: number;
+  /** 현재 화면에 그릴 구간(무한 스크롤) */
   results: StoreData[];
+  hasMoreResults: boolean;
+  onLoadMoreResults: () => void;
   onSelectStore: (store: StoreData) => void;
 };
 
@@ -25,16 +30,37 @@ export default function HomeSearchOverlay({
   onQueryChange,
   activeFilter,
   onActiveFilterChange,
+  totalMatchCount,
   results,
+  hasMoreResults,
+  onLoadMoreResults,
   onSelectStore
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const sentinelRef = useRef<HTMLLIElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const t = window.setTimeout(() => inputRef.current?.focus(), 50);
     return () => window.clearTimeout(t);
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !hasMoreResults) return;
+    const root = listRef.current;
+    const target = sentinelRef.current;
+    if (!root || !target) return;
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) onLoadMoreResults();
+      },
+      { root, rootMargin: "120px", threshold: 0 }
+    );
+    obs.observe(target);
+    return () => obs.disconnect();
+  }, [open, hasMoreResults, onLoadMoreResults, results.length, totalMatchCount]);
 
   if (!open) return null;
 
@@ -131,12 +157,29 @@ export default function HomeSearchOverlay({
             </button>
           </div>
 
-          <ul className="scrollbar-map-list flex min-h-0 flex-1 list-none flex-col gap-1 overflow-y-auto px-2 pb-4">
+          {query.trim() ? (
+            <p
+              className="shrink-0 px-4 text-[13px] font-medium leading-normal tracking-[0.1px] text-[#666666]"
+              role="status"
+              aria-live="polite"
+            >
+              총{" "}
+              <span className="font-semibold text-[#171717]">
+                {totalMatchCount.toLocaleString("ko-KR")}
+              </span>
+              건의 판매처
+            </p>
+          ) : null}
+
+          <ul
+            ref={listRef}
+            className="scrollbar-map-list flex min-h-0 flex-1 list-none flex-col gap-1 overflow-y-auto px-2 pb-4"
+          >
             {!query.trim() ? (
               <li className="px-4 py-8 text-center text-[14px] font-normal leading-normal tracking-[0.1px] text-[#999999]">
                 검색어를 입력하면 결과가 표시됩니다.
               </li>
-            ) : results.length === 0 ? (
+            ) : totalMatchCount === 0 ? (
               <li className="flex flex-1 flex-col items-center justify-center px-4 pb-10 pt-4">
                 <div className="flex w-full max-w-[375px] flex-col items-center gap-4">
                   <div className="relative size-16 shrink-0 overflow-hidden" aria-hidden>
@@ -213,6 +256,15 @@ export default function HomeSearchOverlay({
                 </li>
               ))
             )}
+            {query.trim() && hasMoreResults ? (
+              <li
+                ref={sentinelRef}
+                className="flex min-h-[48px] shrink-0 items-center justify-center py-2 text-[12px] text-[#999999]"
+                aria-hidden
+              >
+                스크롤하면 더 불러옵니다…
+              </li>
+            ) : null}
           </ul>
         </div>
       </div>

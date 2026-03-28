@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { dedupeStoresByNameAndLocation } from "@/lib/dedupeStores";
 import { pickDataReferenceDateFromRow } from "@/lib/datasetDate";
 import { DEFAULT_REGION, LatLng } from "@/lib/types";
 const LIST_RADIUS_KM = 2;
@@ -111,9 +112,11 @@ export function useStores(
       .then((rows: RawStoreRow[]) => {
         if (!mounted) return;
 
-        const cleaned = rows
-          .map(normalizeRow)
-          .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng));
+        const cleaned = dedupeStoresByNameAndLocation(
+          rows
+            .map(normalizeRow)
+            .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng))
+        );
 
         setStores(cleaned);
         setLoading(false);

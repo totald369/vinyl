@@ -16,6 +16,8 @@ import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
 import { StoreData, useStores } from "@/hooks/useStores";
 import { useUserLocation } from "@/hooks/useUserLocation";
 
+const SEARCH_LIST_BATCH = 100;
+
 export default function HomeClient() {
   const { isLoading, error } = useKakaoMapLoader();
   const { userLocation, permission, requestLocation } = useUserLocation();
@@ -40,13 +42,37 @@ export default function HomeClient() {
     [userLocation]
   );
 
-  const searchResults = useMemo(
+  const searchResultsAll = useMemo(
     () =>
       loading || !searchQuery.trim()
         ? []
         : filterStoresForSearch(stores, searchQuery, activeFilter, searchReference),
     [activeFilter, loading, searchQuery, searchReference, stores]
   );
+
+  const [searchVisibleCount, setSearchVisibleCount] = useState(SEARCH_LIST_BATCH);
+
+  useEffect(() => {
+    setSearchVisibleCount(SEARCH_LIST_BATCH);
+  }, [
+    searchOpen,
+    searchQuery,
+    activeFilter,
+    searchReference.lat,
+    searchReference.lng,
+    loading
+  ]);
+
+  const searchResultsVisible = useMemo(
+    () => searchResultsAll.slice(0, searchVisibleCount),
+    [searchResultsAll, searchVisibleCount]
+  );
+
+  const searchHasMore = searchVisibleCount < searchResultsAll.length;
+
+  const loadMoreSearchResults = useCallback(() => {
+    setSearchVisibleCount((c) => Math.min(c + SEARCH_LIST_BATCH, searchResultsAll.length));
+  }, [searchResultsAll.length]);
   const storesById = useMemo(() => new Map(stores.map((s) => [s.id, s])), [stores]);
 
   const [manualCenter, setManualCenter] = useState(defaultCenter);
@@ -236,7 +262,10 @@ export default function HomeClient() {
             onQueryChange={setSearchQuery}
             activeFilter={activeFilter}
             onActiveFilterChange={handleFilterChange}
-            results={searchResults}
+            totalMatchCount={searchResultsAll.length}
+            results={searchResultsVisible}
+            hasMoreResults={searchHasMore}
+            onLoadMoreResults={loadMoreSearchResults}
             onSelectStore={handleSearchSelectStore}
           />
 
