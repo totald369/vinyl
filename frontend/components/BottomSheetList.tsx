@@ -15,27 +15,43 @@ type Props = {
   onExpandedChange: (expanded: boolean) => void;
 };
 
-/** 접힘 높이 비율, 펼침 시 상단 여백(px) — 지도 영역과 맞춤 */
-const COLLAPSED_HEIGHT_RATIO = 0.35;
+/** 맵이 보이도록 남기는 상단 여백(px) */
 const EXPANDED_TOP_OFFSET_PX = 108;
+/** 접힘 시 화면에 보이는 시트 높이 비율 */
+const COLLAPSED_HEIGHT_RATIO = 0.35;
 
 function readViewportHeight(): number {
   if (typeof window === "undefined") return 640;
   return window.visualViewport?.height ?? window.innerHeight;
 }
 
-function collapsedHeightPx(): number {
+function peekHeightPx(): number {
   return Math.max(140, Math.round(readViewportHeight() * COLLAPSED_HEIGHT_RATIO));
 }
 
-function expandedHeightPx(): number {
+/** 시트 DOM 높이(최대 펼침과 동일) */
+function sheetFullHeightPx(): number {
   return Math.max(200, Math.round(readViewportHeight() - EXPANDED_TOP_OFFSET_PX));
 }
 
-/** 리스트 맨 위에서 위로 당길 때 시트 확장을 시작하는 최소 이동(px, 음수 방향) */
+/** 아래로 밀어 숨길 거리: 전체 높이 − 말고 올라온(peek) 높이 */
+function maxTranslateY(): number {
+  const fullH = sheetFullHeightPx();
+  const peekH = peekHeightPx();
+  return Math.max(0, fullH - peekH);
+}
+
 const LIST_TO_SHEET_DRAG_PX = 14;
-/** 리스트에서 짧게 위로 플릭 시 확장으로 인정하는 속도(px/ms, 음수=위로) */
 const LIST_FLICK_VELOCITY = -0.55;
+const LIST_FLICK_DOWN_VELOCITY = 0.55;
+
+/** 드래그 중 경계 밖 살짝 당김(고무줄) */
+function rubberClampTy(ty: number, maxTy: number, rubber: boolean): number {
+  if (!rubber) return Math.min(maxTy, Math.max(0, ty));
+  if (ty < 0) return ty * 0.32;
+  if (ty > maxTy) return maxTy + (ty - maxTy) * 0.32;
+  return ty;
+}
 
 export default function BottomSheetList({
   stores,
@@ -49,19 +65,17 @@ export default function BottomSheetList({
   const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
   const scrollHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [listScrolling, setListScrolling] = useState(false);
-  /** 리스트에서 시트 드래그 후 li 클릭 오동작 방지 */
   const suppressListClickRef = useRef(false);
 
   const dragRef = useRef<{
     pointerId: number;
     startY: number;
-    startHeight: number;
+    startTy: number;
     lastY: number;
     lastT: number;
     moved: boolean;
   } | null>(null);
 
-  /** 리스트 영역에서 시트 드래그를 시작할 수 있는지 추적 */
   const listGestureRef = useRef<{
     pointerId: number;
     startY: number;
@@ -70,10 +84,9 @@ export default function BottomSheetList({
     sheetDragStarted: boolean;
   } | null>(null);
 
-  /** 드래그 중 픽셀 높이; null 이면 expanded 상태에 맞는 기본 높이 */
-  const [dragHeightPx, setDragHeightPx] = useState<number | null>(null);
+  /** 드래그 중 translateY(px). null이면 expanded에 맞춤 */
+  const [dragTy, setDragTy] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  /** 리스트에서 시트 드래그 시 모바일 touch 스크롤과 충돌 방지 */
   const [listSheetTouchLock, setListSheetTouchLock] = useState(false);
   const listUlRef = useRef<HTMLUListElement | null>(null);
 
@@ -100,10 +113,9 @@ export default function BottomSheetList({
 
   useEffect(() => {
     const onResize = () => {
-      if (dragHeightPx == null) return;
-      const c = collapsedHeightPx();
-      const e = expandedHeightPx();
-      setDragHeightPx((h) => (h == null ? h : Math.min(e, Math.max(c, h))));
+      if (dragTy == null) return;
+      const maxTy = maxTranslateY();
+      setDragTy((ty) => (ty == null ? ty : Math.min(maxTy, Math.max(0, ty))));
     };
     window.addEventListener("resize", onResize);
     window.visualViewport?.addEventListener("resize", onResize);
@@ -111,33 +123,58 @@ export default function BottomSheetList({
       window.removeEventListener("resize", onResize);
       window.visualViewport?.removeEventListener("resize", onResize);
     };
-  }, [dragHeightPx]);
+  }, [dragTy]);
 
-  const computeSheetHeightFromDrag = useCallback((clientY: number, dragStartY: number, startHeight: number) => {
-    const dy = clientY - dragStartY;
-    const c = collapsedHeightPx();
-    const exp = expandedHeightPx();
-    return Math.min(exp, Math.max(c, startHeight - dy));
+  const resolveTranslateY = useCallback(() => {
+    const maxTy = maxTranslateY();
+    if (dragTy != null) return dragTy;
+    return expanded ? 0 : maxTy;
+  }, [dragTy, expanded]);
+
+  const applyPointerTy = useCallback((clientY: number, startY: number, startTy: number, rubber: boolean) => {
+    const maxTy = maxTranslateY();
+    const next = startTy + (clientY - startY);
+    setDragTy(rubberClampTy(next, maxTy, rubber));
   }, []);
+
+  const snapFromTy = useCallback(
+    (hardTy: number, lastY: number, lastT: number, releaseY: number, moved: boolean) => {
+      const maxTy = maxTranslateY();
+      if (!moved) {
+        onExpandedChange(!expanded);
+        setDragTy(null);
+        return;
+      }
+      const mid = maxTy / 2;
+      let nextExpanded = hardTy < mid;
+      const dt = performance.now() - lastT;
+      if (dt > 0 && dt < 200) {
+        const vy = (releaseY - lastY) / dt;
+        if (vy < -0.35) nextExpanded = true;
+        else if (vy > 0.35) nextExpanded = false;
+      }
+      onExpandedChange(nextExpanded);
+      setDragTy(null);
+    },
+    [expanded, onExpandedChange]
+  );
 
   const onDragPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.button !== 0) return;
-      const target = e.currentTarget;
-      target.setPointerCapture(e.pointerId);
-      const c = collapsedHeightPx();
-      const exp = expandedHeightPx();
-      const startH = expanded ? exp : c;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      const maxTy = maxTranslateY();
+      const startTy = expanded ? 0 : maxTy;
       dragRef.current = {
         pointerId: e.pointerId,
         startY: e.clientY,
-        startHeight: startH,
+        startTy,
         lastY: e.clientY,
         lastT: performance.now(),
         moved: false
       };
       setIsDragging(true);
-      setDragHeightPx(startH);
+      setDragTy(startTy);
     },
     [expanded]
   );
@@ -150,9 +187,9 @@ export default function BottomSheetList({
       if (Math.abs(dy) > 6) d.moved = true;
       d.lastY = e.clientY;
       d.lastT = performance.now();
-      setDragHeightPx(computeSheetHeightFromDrag(e.clientY, d.startY, d.startHeight));
+      applyPointerTy(e.clientY, d.startY, d.startTy, true);
     },
-    [computeSheetHeightFromDrag]
+    [applyPointerTy]
   );
 
   const onDragPointerUp = useCallback(
@@ -162,12 +199,12 @@ export default function BottomSheetList({
       try {
         e.currentTarget.releasePointerCapture(e.pointerId);
       } catch {
-        /* already released */
+        /* ignore */
       }
 
-      const c = collapsedHeightPx();
-      const exp = expandedHeightPx();
-      const h = computeSheetHeightFromDrag(e.clientY, d.startY, d.startHeight);
+      const maxTy = maxTranslateY();
+      const raw = d.startTy + (e.clientY - d.startY);
+      const hardTy = Math.min(maxTy, Math.max(0, raw));
       const moved = d.moved;
       const lastY = d.lastY;
       const lastT = d.lastT;
@@ -175,66 +212,56 @@ export default function BottomSheetList({
       dragRef.current = null;
       setIsDragging(false);
 
-      if (!moved) {
-        onExpandedChange(!expanded);
-        setDragHeightPx(null);
-        return;
-      }
-
-      const mid = (c + exp) / 2;
-      let nextExpanded = h >= mid;
-      const now = performance.now();
-      const dt = now - lastT;
-      if (dt > 0 && dt < 180) {
-        const vy = (e.clientY - lastY) / dt;
-        if (vy < -0.35) nextExpanded = true;
-        else if (vy > 0.35) nextExpanded = false;
-      }
-
-      onExpandedChange(nextExpanded);
-      setDragHeightPx(null);
+      snapFromTy(hardTy, lastY, lastT, e.clientY, moved);
     },
-    [computeSheetHeightFromDrag, expanded, onExpandedChange]
+    [snapFromTy]
   );
 
-  const onListPointerDown = useCallback((e: React.PointerEvent<HTMLUListElement>) => {
-    if (e.button !== 0) return;
-    if (dragRef.current) return;
-    if (expanded) return;
-    listGestureRef.current = {
-      pointerId: e.pointerId,
-      startY: e.clientY,
-      lastY: e.clientY,
-      lastT: performance.now(),
-      sheetDragStarted: false
-    };
-  }, [expanded]);
+  const onListPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLUListElement>) => {
+      if (e.button !== 0) return;
+      if (dragRef.current) return;
+      listGestureRef.current = {
+        pointerId: e.pointerId,
+        startY: e.clientY,
+        lastY: e.clientY,
+        lastT: performance.now(),
+        sheetDragStarted: false
+      };
+    },
+    []
+  );
 
   const onListPointerMove = useCallback(
     (e: React.PointerEvent<HTMLUListElement>) => {
       const g = listGestureRef.current;
       if (!g || e.pointerId !== g.pointerId) return;
-      if (expanded) return;
 
       g.lastY = e.clientY;
       g.lastT = performance.now();
 
       const ul = e.currentTarget;
+
       if (g.sheetDragStarted) {
         const d = dragRef.current;
         if (!d) return;
         e.preventDefault();
-        setDragHeightPx(computeSheetHeightFromDrag(e.clientY, d.startY, d.startHeight));
+        applyPointerTy(e.clientY, d.startY, d.startTy, true);
         d.lastY = e.clientY;
         d.lastT = performance.now();
         if (Math.abs(e.clientY - d.startY) > 6) d.moved = true;
         return;
       }
 
-      if (ul.scrollTop > 0) return;
-
       const dy = e.clientY - g.startY;
-      if (dy > -LIST_TO_SHEET_DRAG_PX) return;
+
+      if (!expanded) {
+        if (ul.scrollTop > 0) return;
+        if (dy > -LIST_TO_SHEET_DRAG_PX) return;
+      } else {
+        if (ul.scrollTop > 0) return;
+        if (dy < LIST_TO_SHEET_DRAG_PX) return;
+      }
 
       g.sheetDragStarted = true;
       suppressListClickRef.current = true;
@@ -246,19 +273,20 @@ export default function BottomSheetList({
         /* ignore */
       }
 
-      const c = collapsedHeightPx();
+      const maxTy = maxTranslateY();
+      const startTy = expanded ? 0 : maxTy;
       dragRef.current = {
         pointerId: e.pointerId,
         startY: g.startY,
-        startHeight: c,
+        startTy,
         lastY: e.clientY,
         lastT: performance.now(),
         moved: true
       };
       setIsDragging(true);
-      setDragHeightPx(computeSheetHeightFromDrag(e.clientY, g.startY, c));
+      applyPointerTy(e.clientY, g.startY, startTy, true);
     },
-    [computeSheetHeightFromDrag, expanded]
+    [applyPointerTy, expanded]
   );
 
   const onListPointerUp = useCallback(
@@ -275,9 +303,9 @@ export default function BottomSheetList({
           /* ignore */
         }
         const d = dragRef.current;
-        const c = collapsedHeightPx();
-        const exp = expandedHeightPx();
-        const h = computeSheetHeightFromDrag(e.clientY, d.startY, d.startHeight);
+        const maxTy = maxTranslateY();
+        const raw = d.startTy + (e.clientY - d.startY);
+        const hardTy = Math.min(maxTy, Math.max(0, raw));
         const lastY = d.lastY;
         const lastT = d.lastT;
 
@@ -286,34 +314,27 @@ export default function BottomSheetList({
         setListSheetTouchLock(false);
         listGestureRef.current = null;
 
-        const mid = (c + exp) / 2;
-        let nextExpanded = h >= mid;
-        const dt = performance.now() - lastT;
-        if (dt > 0 && dt < 200) {
-          const vy = (e.clientY - lastY) / dt;
-          if (vy < -0.35) nextExpanded = true;
-          else if (vy > 0.35) nextExpanded = false;
-        }
-
-        onExpandedChange(nextExpanded);
-        setDragHeightPx(null);
+        snapFromTy(hardTy, lastY, lastT, e.clientY, d.moved);
         return;
       }
 
-      if (!expanded && ul.scrollTop === 0 && !g.sheetDragStarted) {
+      if (ul.scrollTop === 0 && !g.sheetDragStarted) {
         const dt = performance.now() - g.lastT;
         if (dt > 0 && dt < 220) {
           const vy = (e.clientY - g.lastY) / dt;
-          if (vy < LIST_FLICK_VELOCITY) {
+          if (!expanded && vy < LIST_FLICK_VELOCITY) {
             suppressListClickRef.current = true;
             onExpandedChange(true);
+          } else if (expanded && vy > LIST_FLICK_DOWN_VELOCITY) {
+            suppressListClickRef.current = true;
+            onExpandedChange(false);
           }
         }
       }
 
       listGestureRef.current = null;
     },
-    [computeSheetHeightFromDrag, expanded, onExpandedChange]
+    [expanded, onExpandedChange, snapFromTy]
   );
 
   const onListPointerCancel = useCallback((e: React.PointerEvent<HTMLUListElement>) => {
@@ -328,7 +349,7 @@ export default function BottomSheetList({
       dragRef.current = null;
       setIsDragging(false);
       setListSheetTouchLock(false);
-      setDragHeightPx(null);
+      setDragTy(null);
     }
     listGestureRef.current = null;
   }, []);
@@ -341,12 +362,12 @@ export default function BottomSheetList({
     }
   }, []);
 
-  const sheetHeightPx =
-    dragHeightPx ?? (expanded ? expandedHeightPx() : collapsedHeightPx());
+  const fullH = sheetFullHeightPx();
+  const translateY = resolveTranslateY();
 
   useEffect(() => {
     if (isDragging) return;
-    setDragHeightPx(null);
+    setDragTy(null);
   }, [expanded, isDragging]);
 
   useEffect(() => {
@@ -369,8 +390,12 @@ export default function BottomSheetList({
   return (
     <section
       style={{
-        height: sheetHeightPx,
-        transition: isDragging ? "none" : "height 280ms cubic-bezier(0.25, 0.8, 0.25, 1)"
+        height: fullH,
+        transform: `translate3d(0, ${translateY}px, 0)`,
+        transition: isDragging
+          ? "none"
+          : "transform 340ms cubic-bezier(0.32, 0.72, 0, 1)",
+        willChange: isDragging ? "transform" : "auto"
       }}
       className="absolute bottom-0 left-0 right-0 z-sheet flex min-h-0 flex-col rounded-t-[16px] border-t border-border-subtle bg-bg-surface shadow-floating"
     >
@@ -388,7 +413,7 @@ export default function BottomSheetList({
           }
         }}
         className="flex w-full shrink-0 cursor-grab touch-none select-none flex-col items-center pt-3 pb-4 active:cursor-grabbing"
-        aria-label={expanded ? "목록 접기 · 위아래로 밀어 높이 조절" : "목록 펼치기 · 위로 밀어 확장"}
+        aria-label={expanded ? "목록 접기 · 아래로 밀어 내리기" : "목록 펼치기 · 위로 밀어 올리기"}
       >
         <span className="pointer-events-none h-1 w-11 rounded-full bg-[rgba(17,17,17,0.15)]" />
       </div>
