@@ -12,3 +12,6 @@ frontend/.next/
 # Local env (secrets)
 .env.local
 frontend/.env.local
+
+# Geocode API cache (local)
+frontend/scripts/geocode-cache-songpa.json
