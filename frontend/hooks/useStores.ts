@@ -8,6 +8,14 @@ const LIST_RADIUS_KM = 2;
 
 export type StoreListFilter = "payBag" | "nonBurnable" | "largeSticker";
 
+/** 구 단위 SEO 페이지: 주소 키워드로 한정하고, 구 중심 기준 거리순(반경 제한 선택) */
+export type DistrictListScope = {
+  addressContains: string;
+  sortFrom: LatLng;
+  /** 미지정·null 이면 반경 제한 없음(전 구간) */
+  listRadiusKm?: number | null;
+};
+
 export type StoreData = {
   id: string;
   name: string;
@@ -90,7 +98,11 @@ function normalizeRow(raw: RawStoreRow): StoreData {
 
 export function useStores(
   userLocation: LatLng | null,
-  options?: { activeFilter: StoreListFilter; listReference?: LatLng | null }
+  options?: {
+    activeFilter: StoreListFilter;
+    listReference?: LatLng | null;
+    districtScope?: DistrictListScope | null;
+  }
 ) {
   const [stores, setStores] = useState<StoreData[]>([]);
   const [selectedStore, setSelectedStore] = useState<StoreData | null>(null);
@@ -137,12 +149,21 @@ export function useStores(
 
     const referencePoint =
       options?.listReference ??
-      userLocation ?? {
+      userLocation ??
+      options?.districtScope?.sortFrom ?? {
         lat: DEFAULT_REGION.lat,
         lng: DEFAULT_REGION.lng
       };
 
     const filter = options?.activeFilter ?? "payBag";
+    const ds = options?.districtScope;
+    const addrNeedle = ds?.addressContains.trim().toLowerCase() ?? "";
+    const maxRadiusKm =
+      ds != null
+        ? ds.listRadiusKm == null
+          ? Number.POSITIVE_INFINITY
+          : ds.listRadiusKm
+        : LIST_RADIUS_KM;
 
     return [...stores]
       .map((store) => ({
@@ -150,13 +171,24 @@ export function useStores(
         distance: haversineKm(referencePoint, { lat: store.lat, lng: store.lng })
       }))
       .filter((store) => {
+        if (!addrNeedle) return true;
+        const blob = `${store.roadAddress ?? ""} ${store.address ?? ""}`.toLowerCase();
+        return blob.includes(addrNeedle);
+      })
+      .filter((store) => {
         if (filter === "nonBurnable") return store.hasSpecialBag;
         if (filter === "largeSticker") return store.hasLargeWasteSticker;
         return store.hasTrashBag;
       })
-      .filter((store) => (store.distance ?? Infinity) <= LIST_RADIUS_KM)
+      .filter((store) => (store.distance ?? Infinity) <= maxRadiusKm)
       .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
-  }, [options?.activeFilter, options?.listReference, stores, userLocation]);
+  }, [
+    options?.activeFilter,
+    options?.districtScope,
+    options?.listReference,
+    stores,
+    userLocation
+  ]);
 
   const defaultCenter = useMemo(
     () => ({ lat: DEFAULT_REGION.lat, lng: DEFAULT_REGION.lng }),

@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { DISTRICT_TRASHBAG_PAGES } from "@/lib/districtTrashbagSeo";
 import { mockStores } from "@/lib/mock";
 import { SITE_URL } from "@/lib/site";
 
@@ -24,6 +25,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 0.85
     },
+    ...DISTRICT_TRASHBAG_PAGES.map((d) => ({
+      url: `${SITE_URL}/${d.slug}`,
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.9
+    })),
     {
       url: `${SITE_URL}/report`,
       lastModified: now,

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { StoreProductChips } from "@/components/StoreProductChips";
 import { StoreData, StoreListFilter } from "@/hooks/useStores";
 import { shortRegion } from "@/lib/shortAddress";
@@ -15,6 +15,23 @@ type Props = {
   onExpandedChange: (expanded: boolean) => void;
 };
 
+/** 접힘 높이 비율, 펼침 시 상단 여백(px) — 지도 영역과 맞춤 */
+const COLLAPSED_HEIGHT_RATIO = 0.35;
+const EXPANDED_TOP_OFFSET_PX = 108;
+
+function readViewportHeight(): number {
+  if (typeof window === "undefined") return 640;
+  return window.visualViewport?.height ?? window.innerHeight;
+}
+
+function collapsedHeightPx(): number {
+  return Math.max(140, Math.round(readViewportHeight() * COLLAPSED_HEIGHT_RATIO));
+}
+
+function expandedHeightPx(): number {
+  return Math.max(200, Math.round(readViewportHeight() - EXPANDED_TOP_OFFSET_PX));
+}
+
 export default function BottomSheetList({
   stores,
   selectedStoreId,
@@ -27,6 +44,19 @@ export default function BottomSheetList({
   const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
   const scrollHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [listScrolling, setListScrolling] = useState(false);
+
+  const dragRef = useRef<{
+    pointerId: number;
+    startY: number;
+    startHeight: number;
+    lastY: number;
+    lastT: number;
+    moved: boolean;
+  } | null>(null);
+
+  /** 드래그 중 픽셀 높이; null 이면 expanded 상태에 맞는 기본 높이 */
+  const [dragHeightPx, setDragHeightPx] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const SCROLLBAR_HIDE_MS = 700;
 
@@ -49,11 +79,105 @@ export default function BottomSheetList({
     };
   }, []);
 
-  const sheetLayoutClass = useMemo(
-    () =>
-      expanded ? "top-[108px] bottom-0" : "top-auto bottom-0 h-[35vh]",
+  useEffect(() => {
+    const onResize = () => {
+      if (dragHeightPx == null) return;
+      const c = collapsedHeightPx();
+      const e = expandedHeightPx();
+      setDragHeightPx((h) => (h == null ? h : Math.min(e, Math.max(c, h))));
+    };
+    window.addEventListener("resize", onResize);
+    window.visualViewport?.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.visualViewport?.removeEventListener("resize", onResize);
+    };
+  }, [dragHeightPx]);
+
+  const onDragPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      const target = e.currentTarget;
+      target.setPointerCapture(e.pointerId);
+      const c = collapsedHeightPx();
+      const exp = expandedHeightPx();
+      const startH = expanded ? exp : c;
+      dragRef.current = {
+        pointerId: e.pointerId,
+        startY: e.clientY,
+        startHeight: startH,
+        lastY: e.clientY,
+        lastT: performance.now(),
+        moved: false
+      };
+      setIsDragging(true);
+      setDragHeightPx(startH);
+    },
     [expanded]
   );
+
+  const onDragPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const d = dragRef.current;
+    if (!d || e.pointerId !== d.pointerId) return;
+    const dy = e.clientY - d.startY;
+    if (Math.abs(dy) > 6) d.moved = true;
+    d.lastY = e.clientY;
+    d.lastT = performance.now();
+    const c = collapsedHeightPx();
+    const exp = expandedHeightPx();
+    const next = Math.min(exp, Math.max(c, d.startHeight - dy));
+    setDragHeightPx(next);
+  }, []);
+
+  const onDragPointerUp = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const d = dragRef.current;
+      if (!d || e.pointerId !== d.pointerId) return;
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        /* already released */
+      }
+
+      const c = collapsedHeightPx();
+      const exp = expandedHeightPx();
+      const h = Math.min(exp, Math.max(c, d.startHeight - (e.clientY - d.startY)));
+      const moved = d.moved;
+      const lastY = d.lastY;
+      const lastT = d.lastT;
+
+      dragRef.current = null;
+      setIsDragging(false);
+
+      if (!moved) {
+        onExpandedChange(!expanded);
+        setDragHeightPx(null);
+        return;
+      }
+
+      const mid = (c + exp) / 2;
+      let nextExpanded = h >= mid;
+      const now = performance.now();
+      const dt = now - lastT;
+      if (dt > 0 && dt < 180) {
+        const vy = (e.clientY - lastY) / dt;
+        if (vy < -0.35) nextExpanded = true;
+        else if (vy > 0.35) nextExpanded = false;
+      }
+
+      onExpandedChange(nextExpanded);
+      setDragHeightPx(null);
+    },
+    [expanded, onExpandedChange]
+  );
+
+  const sheetHeightPx =
+    dragHeightPx ?? (expanded ? expandedHeightPx() : collapsedHeightPx());
+
+  useEffect(() => {
+    if (isDragging) return;
+    setDragHeightPx(null);
+  }, [expanded, isDragging]);
 
   useEffect(() => {
     if (!selectedStoreId) return;
@@ -64,16 +188,30 @@ export default function BottomSheetList({
 
   return (
     <section
-      className={`absolute bottom-0 left-0 right-0 z-sheet flex min-h-0 flex-col rounded-t-[16px] border-t border-border-subtle bg-bg-surface shadow-floating transition-[top,height,max-height] duration-300 ease-out ${sheetLayoutClass}`}
+      style={{
+        height: sheetHeightPx,
+        transition: isDragging ? "none" : "height 280ms cubic-bezier(0.25, 0.8, 0.25, 1)"
+      }}
+      className="absolute bottom-0 left-0 right-0 z-sheet flex min-h-0 flex-col rounded-t-[16px] border-t border-border-subtle bg-bg-surface shadow-floating"
     >
-      <button
-        type="button"
-        onClick={() => onExpandedChange(!expanded)}
-        className="flex w-full shrink-0 flex-col items-center pt-3 pb-4"
-        aria-label={expanded ? "목록 접기" : "목록 펼치기"}
+      <div
+        role="button"
+        tabIndex={0}
+        onPointerDown={onDragPointerDown}
+        onPointerMove={onDragPointerMove}
+        onPointerUp={onDragPointerUp}
+        onPointerCancel={onDragPointerUp}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onExpandedChange(!expanded);
+          }
+        }}
+        className="flex w-full shrink-0 cursor-grab touch-none select-none flex-col items-center pt-3 pb-4 active:cursor-grabbing"
+        aria-label={expanded ? "목록 접기 · 위아래로 밀어 높이 조절" : "목록 펼치기 · 위로 밀어 확장"}
       >
-        <span className="h-1 w-11 rounded-full bg-[rgba(17,17,17,0.15)]" />
-      </button>
+        <span className="pointer-events-none h-1 w-11 rounded-full bg-[rgba(17,17,17,0.15)]" />
+      </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="flex shrink-0 items-center gap-1 overflow-x-auto px-4 pb-4">

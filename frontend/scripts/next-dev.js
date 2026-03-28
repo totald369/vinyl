@@ -1,10 +1,11 @@
 /**
- * 1) (선택) production 빌드만 남은 .next 는 제거 — dev 가 요청하는 webpack.js / main-app.js 가 없어 404 나는 경우 방지
+ * 1) .next 정리 — 기본은 매번 삭제(Cannot find module './948.js' 등 깨진 webpack 청크 방지).
+ *    NEXT_DEV_KEEP_CACHE=1 일 때만 유지하되, prod 빌드만 남은 .next 는 감지 시 삭제.
  * 2) middleware-manifest 보정
- * 3) 지정 포트(기본 3000)를 점유 중인 LISTEN 프로세스 종료 → 예전에 죽은 next dev에 브라우저가 붙는 500 방지
+ * 3) 지정 포트(기본 3000) LISTEN 프로세스 종료
  * 4) next dev 실행
  *
- * 캐시 유지: NEXT_DEV_KEEP_CACHE=1 npm run dev
+ * 빠른 재시작(위험): npm run dev:fast — 청크 오류 나면 npm run dev 로 다시 실행.
  */
 const fs = require("fs");
 const path = require("path");
@@ -28,15 +29,16 @@ function nextDirLooksLikeProductionOnly(nextDir) {
 }
 
 const nextDir = path.join(root, ".next");
-if (
-  process.env.NEXT_DEV_KEEP_CACHE !== "1" &&
-  fs.existsSync(nextDir) &&
-  nextDirLooksLikeProductionOnly(nextDir)
-) {
+if (process.env.NEXT_DEV_KEEP_CACHE === "1") {
+  if (fs.existsSync(nextDir) && nextDirLooksLikeProductionOnly(nextDir)) {
+    fs.rmSync(nextDir, { recursive: true, force: true });
+    console.log(
+      "[next-dev] production 빌드(.next)만 남아 있어 삭제했습니다. dev 청크와 충돌 방지."
+    );
+  }
+} else if (fs.existsSync(nextDir)) {
   fs.rmSync(nextDir, { recursive: true, force: true });
-  console.log(
-    "[next-dev] production 빌드(.next)를 지웠습니다. dev 전용 청크와 충돌을 막기 위함입니다."
-  );
+  console.log("[next-dev] .next 캐시를 지웠습니다. (개발 서버 청크 불일치 방지)");
 }
 
 spawnSync(process.execPath, [path.join(__dirname, "ensure-middleware-manifest.js")], {

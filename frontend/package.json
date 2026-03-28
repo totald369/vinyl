@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node scripts/next-dev.js",
+    "dev": "rm -rf .next && node scripts/next-dev.js",
+    "dev:fast": "NEXT_DEV_KEEP_CACHE=1 node scripts/next-dev.js",
     "dev:clean": "rm -rf .next && node scripts/next-dev.js",
     "dev:poll": "rm -rf .next && NEXT_DEV_POLL=1 node scripts/next-dev.js",
     "build": "next build",
