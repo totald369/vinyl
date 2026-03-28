@@ -94,7 +94,7 @@ export default function HomeSearchOverlay({
               }`}
             >
               <img src="/Img/Icon/trash_bag_24.svg" alt="" width={24} height={24} className="size-6 shrink-0" />
-              <span className="whitespace-nowrap">종량제 봉투</span>
+              <span className="whitespace-nowrap">종량제봉투</span>
             </button>
             <button
               type="button"
@@ -106,7 +106,7 @@ export default function HomeSearchOverlay({
               }`}
             >
               <img src="/Img/Icon/sticker_24.svg" alt="" width={24} height={24} className="size-6 shrink-0" />
-              <span className="whitespace-nowrap">대형폐기물스티커</span>
+              <span className="whitespace-nowrap">폐기물 스티커</span>
             </button>
             <button
               type="button"
@@ -118,7 +118,16 @@ export default function HomeSearchOverlay({
               }`}
             >
               <img src="/Img/Icon/non-fire_24.svg" alt="" width={24} height={24} className="size-6 shrink-0" />
-              <span className="whitespace-nowrap">불연성마대</span>
+              <span className="flex flex-col items-start gap-0 leading-[1.15]">
+                <span className="whitespace-nowrap">불연성마대</span>
+                <span
+                  className={`whitespace-nowrap text-[11px] font-medium ${
+                    activeFilter === "nonBurnable" ? "text-white/85" : "text-[#555555]"
+                  }`}
+                >
+                  PP마대(건설마대)
+                </span>
+              </span>
             </button>
           </div>
 

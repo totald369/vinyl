@@ -35,6 +35,7 @@ declare global {
 
 export type KakaoMap = {
   setCenter: (latLng: { getLat: () => number; getLng: () => number }) => void;
+  setLevel: (level: number) => void;
   getCenter: () => { getLat: () => number; getLng: () => number };
   getBounds: () => {
     getSouthWest: () => { getLat: () => number; getLng: () => number };

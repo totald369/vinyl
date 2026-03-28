@@ -5,17 +5,31 @@ import { GoogleAnalytics } from "@/components/GoogleAnalytics";
 import { GA_MEASUREMENT_ID } from "@/lib/gtag";
 import { SITE_URL } from "@/lib/site";
 
-const OG_IMAGE = `${SITE_URL}/og-image.png`;
+const DEFAULT_TITLE =
+  "종량제봉투·불연성마대·PP마대·건설마대 판매처 찾기 | 위치 기반 지도";
+const DEFAULT_DESCRIPTION =
+  "종량제봉투, 불연성마대, PP마대(건설마대), 폐기물 스티커 판매처를 내 위치·주소·업체명으로 검색하고 지도에서 거리순으로 확인하세요. 전국 지정 판매처 안내.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "우리동네 종량제봉투 판매처 찾기 | 위치 기반 지도",
-    template: "%s | 종량제봉투 지도"
+    default: DEFAULT_TITLE,
+    template: "%s | trashbagmap"
   },
-  description:
-    "내 주변 종량제봉투·불연성마대·폐기물 스티커 판매처를 지도에서 검색하고 바로 확인하세요.",
-  keywords: ["종량제봉투", "불연성마대", "폐기물 스티커", "판매처", "쓰레기봉투"],
+  description: DEFAULT_DESCRIPTION,
+  keywords: [
+    "종량제봉투",
+    "불연성마대",
+    "PP마대",
+    "건설마대",
+    "폐기물 스티커",
+    "쓰레기봉투",
+    "판매처",
+    "위치 검색",
+    "지도",
+    "전주",
+    "강남"
+  ],
 
   verification: {
     google: "bzqaOAyJOVuUHnFTeNbX13oFIddTUa_6pLJvMWo1UWI",
@@ -27,27 +41,18 @@ export const metadata: Metadata = {
   },
 
   openGraph: {
-    title: "우리동네 종량제봉투 판매처 찾기",
-    description: "내 주변 쓰레기봉투 판매처를 지도에서 빠르게 확인하세요.",
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
     url: "/",
-    siteName: "종량제봉투 지도",
+    siteName: "trashbagmap",
     locale: "ko_KR",
     type: "website",
-    images: [
-      {
-        url: OG_IMAGE,
-        width: 1200,
-        height: 630,
-        alt: "우리동네 종량제봉투 판매처 찾기 — 위치 기반 지도 서비스",
-      },
-    ],
   },
 
   twitter: {
     card: "summary_large_image",
-    title: "우리동네 종량제봉투 판매처 찾기",
-    description: "내 주변 쓰레기봉투 판매처를 지도에서 빠르게 확인하세요.",
-    images: [OG_IMAGE],
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
   },
 };
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import BottomSheetList from "@/components/BottomSheetList";
 import HomeSearchOverlay from "@/components/HomeSearchOverlay";
 import LocationPermissionModal from "@/components/LocationPermissionModal";
@@ -9,6 +9,7 @@ import MapView from "@/components/MapView";
 import StoreDetailSheet from "@/components/StoreDetailSheet";
 import type { StoreListFilter } from "@/hooks/useStores";
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
+import { sendGtagEvent } from "@/lib/gtag";
 import { filterStoresForSearch } from "@/lib/storeSearch";
 import { DEFAULT_REGION, type LatLng } from "@/lib/types";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
@@ -62,8 +63,14 @@ export default function HomeClient() {
     [mapCenterOverride, manualCenter, userLocation]
   );
 
-  const handleSelectStore = (store: StoreData) => {
+  const handleFilterChange = useCallback((filter: StoreListFilter) => {
+    sendGtagEvent("filter_select", { filter });
+    setActiveFilter(filter);
+  }, []);
+
+  const handleMapMarkerSelect = (store: StoreData) => {
     const resolved = storesById.get(store.id) ?? store;
+    sendGtagEvent("click_marker", { store_id: resolved.id });
     setSelectedStore(resolved);
     setSheetView("detail");
   };
@@ -92,6 +99,7 @@ export default function HomeClient() {
   };
 
   const handleMoveToLocation = () => {
+    sendGtagEvent("click_my_location");
     if (permission !== "granted") {
       setLocationModalOpen(true);
       return;
@@ -166,10 +174,10 @@ export default function HomeClient() {
             stores={loading ? [] : mapStores}
             activeFilter={activeFilter}
             selectedStoreId={selectedStore?.id}
-            onSelectStore={handleSelectStore}
+            onSelectStore={handleMapMarkerSelect}
             userMarkerPosition={permission === "granted" && userLocation ? userLocation : null}
           />
-          <section className="absolute left-[15px] right-[15px] top-[calc(16px+env(safe-area-inset-top,0px))] z-sheet flex flex-col gap-4">
+          <section className="absolute left-[15px] right-[15px] top-[calc(16px+env(safe-area-inset-top,0px))] z-sheet flex flex-col gap-2">
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
@@ -180,6 +188,12 @@ export default function HomeClient() {
                 주소나 업체명을 검색해주세요
               </span>
             </button>
+            <p className="rounded-[8px] bg-white/90 px-3 py-1.5 text-center text-[10px] leading-snug text-[#444444] shadow-[0px_0px_2px_0px_rgba(0,0,0,0.06)]">
+              <span className="font-semibold text-[#171717]">종량제봉투</span>·
+              <span className="font-semibold text-[#171717]">불연성마대</span>·
+              <span className="font-semibold text-[#171717]">PP마대(건설마대)</span>·
+              <span className="font-semibold text-[#171717]">폐기물 스티커</span> 위치·거리 검색
+            </p>
             <div className="flex justify-end">
               <button
                 type="button"
@@ -201,6 +215,7 @@ export default function HomeClient() {
           {SHOW_HOME_REPORT_BUTTON && !bottomSheetExpanded && sheetView === "list" ? (
             <Link
               href="/report"
+              onClick={() => sendGtagEvent("click_report")}
               className="absolute bottom-[36vh] right-[15px] z-[35] flex items-center gap-0.5 rounded-full bg-[#d4fe1c] px-4 py-3 text-[16px] font-bold leading-normal tracking-[0.1px] text-[#171717] shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)]"
             >
               <img src="/Img/Icon/write_24.svg" alt="" width={24} height={24} className="shrink-0" />
@@ -220,7 +235,7 @@ export default function HomeClient() {
             query={searchQuery}
             onQueryChange={setSearchQuery}
             activeFilter={activeFilter}
-            onActiveFilterChange={setActiveFilter}
+            onActiveFilterChange={handleFilterChange}
             results={searchResults}
             onSelectStore={handleSearchSelectStore}
           />
@@ -238,7 +253,7 @@ export default function HomeClient() {
               selectedStoreId={selectedStore?.id}
               onSelectStore={handleSelectStoreWithPan}
               activeFilter={activeFilter}
-              onChangeFilter={setActiveFilter}
+              onChangeFilter={handleFilterChange}
               expanded={bottomSheetExpanded}
               onExpandedChange={setBottomSheetExpanded}
             />
