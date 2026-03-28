@@ -5,6 +5,8 @@ import "@/lib/kakao";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
 import { DEFAULT_REGION, LatLng } from "@/lib/types";
 
+const COORD_EPS = 1e-5;
+
 type Props = {
   value: LatLng;
   onChange: (value: LatLng) => void;
@@ -26,21 +28,37 @@ export default function LocationPickerMap({
   const [error, setError] = useState<string | null>(null);
   const { isLoading, isReady, error: loaderError } = useKakaoMapLoader();
 
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const skipIdleAfterProgrammaticRef = useRef(0);
+
   useEffect(() => {
     if (!containerRef.current || !isReady || !window.kakao?.maps) return;
+    if (mapRef.current) return;
+
+    const el = containerRef.current;
+    const v = valueRef.current;
+    const lat = v.lat ?? DEFAULT_REGION.lat;
+    const lng = v.lng ?? DEFAULT_REGION.lng;
 
     let mounted = true;
     try {
-      const map = new window.kakao.maps.Map(containerRef.current, {
-        center: new window.kakao.maps.LatLng(value.lat ?? DEFAULT_REGION.lat, value.lng ?? DEFAULT_REGION.lng),
+      const map = new window.kakao.maps.Map(el, {
+        center: new window.kakao.maps.LatLng(lat, lng),
         level: 4
       });
       mapRef.current = map;
       console.info("[KakaoMap] map initialized (LocationPickerMap)");
 
       window.kakao.maps.event.addListener(map, "idle", () => {
+        if (skipIdleAfterProgrammaticRef.current > 0) {
+          skipIdleAfterProgrammaticRef.current -= 1;
+          return;
+        }
         const center = map.getCenter();
-        onChange({ lat: center.getLat(), lng: center.getLng() });
+        onChangeRef.current({ lat: center.getLat(), lng: center.getLng() });
       });
     } catch (e) {
       if (mounted) {
@@ -51,8 +69,26 @@ export default function LocationPickerMap({
 
     return () => {
       mounted = false;
+      mapRef.current = null;
+      if (el) el.innerHTML = "";
     };
-  }, [isReady, onChange, value.lat, value.lng]);
+  }, [isReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !window.kakao?.maps) return;
+
+    const center = map.getCenter();
+    const clat = center.getLat();
+    const clng = center.getLng();
+    const lat = value.lat ?? DEFAULT_REGION.lat;
+    const lng = value.lng ?? DEFAULT_REGION.lng;
+
+    if (Math.abs(clat - lat) < COORD_EPS && Math.abs(clng - lng) < COORD_EPS) return;
+
+    skipIdleAfterProgrammaticRef.current = 1;
+    map.setCenter(new window.kakao.maps.LatLng(lat, lng));
+  }, [value.lat, value.lng]);
 
   useEffect(() => {
     if (!loaderError) return;

@@ -1,7 +1,8 @@
 /**
  * 1) .next 정리 — 기본은 매번 삭제(Cannot find module './948.js' 등 깨진 webpack 청크 방지).
  *    NEXT_DEV_KEEP_CACHE=1 일 때만 유지하되, prod 빌드만 남은 .next 는 감지 시 삭제.
- * 2) middleware-manifest 보정
+ * 2) middleware-manifest 보정 — **이미 .next 가 있을 때만** (캐시 유지 모드 등).
+ *    삭제 직후 빈 상태에 manifest 만 만들면 layout.css / main-app.js 404 가 날 수 있음.
  * 3) 지정 포트(기본 3000) LISTEN 프로세스 종료
  * 4) next dev 실행
  *
@@ -41,10 +42,12 @@ if (process.env.NEXT_DEV_KEEP_CACHE === "1") {
   console.log("[next-dev] .next 캐시를 지웠습니다. (개발 서버 청크 불일치 방지)");
 }
 
-spawnSync(process.execPath, [path.join(__dirname, "ensure-middleware-manifest.js")], {
-  cwd: root,
-  stdio: "inherit"
-});
+if (fs.existsSync(nextDir)) {
+  spawnSync(process.execPath, [path.join(__dirname, "ensure-middleware-manifest.js")], {
+    cwd: root,
+    stdio: "inherit"
+  });
+}
 
 function freeListeningPort(p) {
   if (process.platform === "win32") return;

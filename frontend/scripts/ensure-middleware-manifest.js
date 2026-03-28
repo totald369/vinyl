@@ -1,7 +1,9 @@
 /**
- * Next dev가 .next/server/middleware-manifest.json 없이(또는 손상되어) 요청을 받으면
- * ENOENT 또는 layout.css / main-app.js 로딩 실패가 날 수 있습니다.
- * dev 시작 전에 최소한의 유효한 JSON이 있도록 합니다.
+ * Next dev가 기존 .next 캐시를 쓸 때 middleware-manifest.json 이 없거나 손상되면
+ * 요청 처리가 꼬일 수 있어, 최소한의 유효한 JSON으로 보정합니다.
+ *
+ * 주의: .next 를 비운 직후(폴더 없음)에는 next-dev.js 가 이 스크립트를 호출하지 않습니다.
+ * 그 상태에서 manifest 만 만들면 정적 청크(layout.css, main-app.js) 404 가 날 수 있습니다.
  *
  * 커스텀 middleware.ts 가 있으면 Next 가 곧바로 덮어쓰는 manifest 와 충돌할 수 있으므로,
  * 이 프로젝트에서는 통과 전용 미들웨어를 두지 않습니다(필요 시 Next 기본 파이프라인만 사용).

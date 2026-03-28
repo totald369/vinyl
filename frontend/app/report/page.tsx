@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import LocationPickerMap from "@/components/map/LocationPickerMap";
+import { useUserLocation } from "@/hooks/useUserLocation";
 import type { AddressSearchResult } from "@/lib/kakao/addressSearch";
 import { searchAddress } from "@/lib/services/addressSearch";
 import { supabase } from "@/lib/supabaseClient";
@@ -20,6 +21,7 @@ type SelectedAddressState = {
 
 export default function ReportPage() {
   const router = useRouter();
+  const { userLocation, permission } = useUserLocation();
   const [location, setLocation] = useState<LatLng>({ lat: DEFAULT_REGION.lat, lng: DEFAULT_REGION.lng });
   const [address, setAddress] = useState("");
   const [addressDetail, setAddressDetail] = useState("");
@@ -72,6 +74,11 @@ export default function ReportPage() {
 
     return () => window.clearTimeout(timer);
   }, [address]);
+
+  useEffect(() => {
+    if (permission !== "granted" || !userLocation) return;
+    setLocation(userLocation);
+  }, [permission, userLocation]);
 
   const handleSubmit = async () => {
     if (!resolvedStoreName.trim()) {
