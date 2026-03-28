@@ -9,6 +9,7 @@ import MapView from "@/components/MapView";
 import StoreDetailSheet from "@/components/StoreDetailSheet";
 import type { DistrictTrashbagConfig } from "@/lib/districtTrashbagSeo";
 import type { StoreListFilter } from "@/hooks/useStores";
+import type { BottomSheetSnap } from "@/lib/bottomSheetSnap";
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
 import { sendGtagEvent } from "@/lib/gtag";
 import { filterStoresForSearch } from "@/lib/storeSearch";
@@ -28,7 +29,8 @@ export default function DistrictTrashbagClient({ config }: Props) {
   const { userLocation, permission, requestLocation } = useUserLocation();
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<StoreListFilter>("payBag");
-  const [bottomSheetExpanded, setBottomSheetExpanded] = useState(false);
+  const [bottomSheetSnap, setBottomSheetSnap] = useState<BottomSheetSnap>("collapsed");
+  const [sheetBlocksMapPointer, setSheetBlocksMapPointer] = useState(false);
   const [sheetView, setSheetView] = useState<"list" | "detail">("list");
   const [exploreAnchor, setExploreAnchor] = useState<LatLng | null>(null);
   const [mapCenterOverride, setMapCenterOverride] = useState<LatLng | null>(null);
@@ -203,16 +205,18 @@ export default function DistrictTrashbagClient({ config }: Props) {
         </div>
       ) : (
         <>
-          <MapView
-            center={center}
-            centerVersion={centerVersion}
-            preferredMapLevel={exploreAnchor != null ? 6 : 5}
-            stores={loading ? [] : mapStores}
-            activeFilter={activeFilter}
-            selectedStoreId={selectedStore?.id}
-            onSelectStore={handleMapMarkerSelect}
-            userMarkerPosition={permission === "granted" && userLocation ? userLocation : null}
-          />
+          <div className={`h-full w-full ${sheetBlocksMapPointer ? "pointer-events-none" : ""}`}>
+            <MapView
+              center={center}
+              centerVersion={centerVersion}
+              preferredMapLevel={exploreAnchor != null ? 6 : 5}
+              stores={loading ? [] : mapStores}
+              activeFilter={activeFilter}
+              selectedStoreId={selectedStore?.id}
+              onSelectStore={handleMapMarkerSelect}
+              userMarkerPosition={permission === "granted" && userLocation ? userLocation : null}
+            />
+          </div>
           <section className="absolute left-[15px] right-[15px] top-[calc(12px+env(safe-area-inset-top,0px))] z-sheet flex flex-col gap-2">
             <button
               type="button"
@@ -242,7 +246,7 @@ export default function DistrictTrashbagClient({ config }: Props) {
             </div>
           </section>
 
-          {SHOW_HOME_REPORT_BUTTON && !bottomSheetExpanded && sheetView === "list" ? (
+          {SHOW_HOME_REPORT_BUTTON && bottomSheetSnap === "collapsed" && sheetView === "list" ? (
             <Link
               href="/report"
               onClick={() => sendGtagEvent("click_report", { page: config.slug })}
@@ -290,8 +294,9 @@ export default function DistrictTrashbagClient({ config }: Props) {
               onSelectStore={handleSelectStoreWithPan}
               activeFilter={activeFilter}
               onChangeFilter={handleFilterChange}
-              expanded={bottomSheetExpanded}
-              onExpandedChange={setBottomSheetExpanded}
+              snap={bottomSheetSnap}
+              onSnapChange={setBottomSheetSnap}
+              onDragActiveChange={setSheetBlocksMapPointer}
             />
           )}
         </>

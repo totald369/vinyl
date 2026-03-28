@@ -8,6 +8,7 @@ import LocationPermissionModal from "@/components/LocationPermissionModal";
 import MapView from "@/components/MapView";
 import StoreDetailSheet from "@/components/StoreDetailSheet";
 import type { StoreListFilter } from "@/hooks/useStores";
+import type { BottomSheetSnap } from "@/lib/bottomSheetSnap";
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
 import { sendGtagEvent } from "@/lib/gtag";
 import { filterStoresForSearch } from "@/lib/storeSearch";
@@ -23,7 +24,8 @@ export default function HomeClient() {
   const { userLocation, permission, requestLocation } = useUserLocation();
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<StoreListFilter>("payBag");
-  const [bottomSheetExpanded, setBottomSheetExpanded] = useState(false);
+  const [bottomSheetSnap, setBottomSheetSnap] = useState<BottomSheetSnap>("collapsed");
+  const [sheetBlocksMapPointer, setSheetBlocksMapPointer] = useState(false);
   const [sheetView, setSheetView] = useState<"list" | "detail">("list");
   /** 검색으로 상점을 고른 뒤: 목록·지도 기준점을 해당 매장으로 두고 반경 2km(기존 LIST_RADIUS) 표시 */
   const [exploreAnchor, setExploreAnchor] = useState<LatLng | null>(null);
@@ -193,16 +195,18 @@ export default function HomeClient() {
         </div>
       ) : (
         <>
-          <MapView
-            center={center}
-            centerVersion={centerVersion}
-            preferredMapLevel={exploreAnchor != null ? 6 : 5}
-            stores={loading ? [] : mapStores}
-            activeFilter={activeFilter}
-            selectedStoreId={selectedStore?.id}
-            onSelectStore={handleMapMarkerSelect}
-            userMarkerPosition={permission === "granted" && userLocation ? userLocation : null}
-          />
+          <div className={`h-full w-full ${sheetBlocksMapPointer ? "pointer-events-none" : ""}`}>
+            <MapView
+              center={center}
+              centerVersion={centerVersion}
+              preferredMapLevel={exploreAnchor != null ? 6 : 5}
+              stores={loading ? [] : mapStores}
+              activeFilter={activeFilter}
+              selectedStoreId={selectedStore?.id}
+              onSelectStore={handleMapMarkerSelect}
+              userMarkerPosition={permission === "granted" && userLocation ? userLocation : null}
+            />
+          </div>
           <section className="absolute left-[15px] right-[15px] top-[calc(16px+env(safe-area-inset-top,0px))] z-sheet flex flex-col gap-2">
             <button
               type="button"
@@ -238,7 +242,7 @@ export default function HomeClient() {
             </div>
           </section>
 
-          {SHOW_HOME_REPORT_BUTTON && !bottomSheetExpanded && sheetView === "list" ? (
+          {SHOW_HOME_REPORT_BUTTON && bottomSheetSnap === "collapsed" && sheetView === "list" ? (
             <Link
               href="/report"
               onClick={() => sendGtagEvent("click_report")}
@@ -283,8 +287,9 @@ export default function HomeClient() {
               onSelectStore={handleSelectStoreWithPan}
               activeFilter={activeFilter}
               onChangeFilter={handleFilterChange}
-              expanded={bottomSheetExpanded}
-              onExpandedChange={setBottomSheetExpanded}
+              snap={bottomSheetSnap}
+              onSnapChange={setBottomSheetSnap}
+              onDragActiveChange={setSheetBlocksMapPointer}
             />
           )}
         </>

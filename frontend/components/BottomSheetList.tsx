@@ -3,6 +3,15 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { StoreProductChips } from "@/components/StoreProductChips";
 import { StoreData, StoreListFilter } from "@/hooks/useStores";
+import {
+  BOTTOM_SHEET_TAP_VELOCITY_MAX,
+  cycleBottomSheetSnap,
+  getBottomSheetSnapGeometry,
+  resolveSnapTyFromRelease,
+  snapToTy,
+  tyToSnapExact,
+  type BottomSheetSnap
+} from "@/lib/bottomSheetSnap";
 import { shortRegion } from "@/lib/shortAddress";
 
 type Props = {
@@ -11,13 +20,13 @@ type Props = {
   onSelectStore: (store: StoreData) => void;
   activeFilter: StoreListFilter;
   onChangeFilter: (value: StoreListFilter) => void;
-  expanded: boolean;
-  onExpandedChange: (expanded: boolean) => void;
+  snap: BottomSheetSnap;
+  onSnapChange: (snap: BottomSheetSnap) => void;
+  /** 시트를 드래그하는 동안 true (지도 등 상호작용 차단용) */
+  onDragActiveChange?: (active: boolean) => void;
 };
 
-/** 맵이 보이도록 남기는 상단 여백(px) */
 const EXPANDED_TOP_OFFSET_PX = 108;
-/** 접힘 시 화면에 보이는 시트 높이 비율 */
 const COLLAPSED_HEIGHT_RATIO = 0.35;
 
 function readViewportHeight(): number {
@@ -29,23 +38,20 @@ function peekHeightPx(): number {
   return Math.max(140, Math.round(readViewportHeight() * COLLAPSED_HEIGHT_RATIO));
 }
 
-/** 시트 DOM 높이(최대 펼침과 동일) */
 function sheetFullHeightPx(): number {
   return Math.max(200, Math.round(readViewportHeight() - EXPANDED_TOP_OFFSET_PX));
 }
 
-/** 아래로 밀어 숨길 거리: 전체 높이 − 말고 올라온(peek) 높이 */
 function maxTranslateY(): number {
   const fullH = sheetFullHeightPx();
   const peekH = peekHeightPx();
   return Math.max(0, fullH - peekH);
 }
 
-const LIST_TO_SHEET_DRAG_PX = 14;
-const LIST_FLICK_VELOCITY = -0.55;
-const LIST_FLICK_DOWN_VELOCITY = 0.55;
+const LIST_DRAG_THRESHOLD_PX = 14;
+const LIST_FLICK_UP = -0.52;
+const LIST_FLICK_DOWN = 0.52;
 
-/** 드래그 중 경계 밖 살짝 당김(고무줄) */
 function rubberClampTy(ty: number, maxTy: number, rubber: boolean): number {
   if (!rubber) return Math.min(maxTy, Math.max(0, ty));
   if (ty < 0) return ty * 0.32;
@@ -53,14 +59,17 @@ function rubberClampTy(ty: number, maxTy: number, rubber: boolean): number {
   return ty;
 }
 
+const SNAP_ORDER: BottomSheetSnap[] = ["expanded", "half", "collapsed"];
+
 export default function BottomSheetList({
   stores,
   selectedStoreId,
   onSelectStore,
   activeFilter,
   onChangeFilter,
-  expanded,
-  onExpandedChange
+  snap,
+  onSnapChange,
+  onDragActiveChange
 }: Props) {
   const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
   const scrollHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -79,16 +88,48 @@ export default function BottomSheetList({
   const listGestureRef = useRef<{
     pointerId: number;
     startY: number;
+    startT: number;
     lastY: number;
     lastT: number;
     sheetDragStarted: boolean;
   } | null>(null);
 
-  /** 드래그 중 translateY(px). null이면 expanded에 맞춤 */
   const [dragTy, setDragTy] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [listSheetTouchLock, setListSheetTouchLock] = useState(false);
   const listUlRef = useRef<HTMLUListElement | null>(null);
+
+  const dragTyRafRef = useRef<number | null>(null);
+  const pendingDragTyRef = useRef<number | null>(null);
+
+  const cancelDragTyRaf = useCallback(() => {
+    if (dragTyRafRef.current != null) {
+      cancelAnimationFrame(dragTyRafRef.current);
+      dragTyRafRef.current = null;
+    }
+    pendingDragTyRef.current = null;
+  }, []);
+
+  const scheduleSetDragTy = useCallback((ty: number) => {
+    pendingDragTyRef.current = ty;
+    if (dragTyRafRef.current != null) return;
+    dragTyRafRef.current = requestAnimationFrame(() => {
+      dragTyRafRef.current = null;
+      const v = pendingDragTyRef.current;
+      pendingDragTyRef.current = null;
+      if (v != null) setDragTy(v);
+    });
+  }, []);
+
+  useEffect(() => () => cancelDragTyRaf(), [cancelDragTyRaf]);
+
+  const setDragging = useCallback(
+    (v: boolean) => {
+      setIsDragging(v);
+      onDragActiveChange?.(v);
+    },
+    [onDragActiveChange]
+  );
 
   const SCROLLBAR_HIDE_MS = 700;
 
@@ -111,11 +152,13 @@ export default function BottomSheetList({
     };
   }, []);
 
+  const geom = getBottomSheetSnapGeometry(maxTranslateY());
+
   useEffect(() => {
     const onResize = () => {
       if (dragTy == null) return;
-      const maxTy = maxTranslateY();
-      setDragTy((ty) => (ty == null ? ty : Math.min(maxTy, Math.max(0, ty))));
+      const g = getBottomSheetSnapGeometry(maxTranslateY());
+      setDragTy((ty) => (ty == null ? ty : Math.min(g.maxTy, Math.max(0, ty))));
     };
     window.addEventListener("resize", onResize);
     window.visualViewport?.addEventListener("resize", onResize);
@@ -126,45 +169,43 @@ export default function BottomSheetList({
   }, [dragTy]);
 
   const resolveTranslateY = useCallback(() => {
-    const maxTy = maxTranslateY();
     if (dragTy != null) return dragTy;
-    return expanded ? 0 : maxTy;
-  }, [dragTy, expanded]);
+    return snapToTy(snap, geom);
+  }, [dragTy, geom, snap]);
 
-  const applyPointerTy = useCallback((clientY: number, startY: number, startTy: number, rubber: boolean) => {
-    const maxTy = maxTranslateY();
-    const next = startTy + (clientY - startY);
-    setDragTy(rubberClampTy(next, maxTy, rubber));
-  }, []);
+  const applyPointerTy = useCallback(
+    (clientY: number, startY: number, startTy: number, rubber: boolean) => {
+      const maxTy = geom.maxTy;
+      const next = startTy + (clientY - startY);
+      scheduleSetDragTy(rubberClampTy(next, maxTy, rubber));
+    },
+    [geom.maxTy, scheduleSetDragTy]
+  );
 
-  const snapFromTy = useCallback(
+  const finishDrag = useCallback(
     (hardTy: number, lastY: number, lastT: number, releaseY: number, moved: boolean) => {
-      const maxTy = maxTranslateY();
-      if (!moved) {
-        onExpandedChange(!expanded);
-        setDragTy(null);
-        return;
+      cancelDragTyRaf();
+      const dt = Math.max(1, performance.now() - lastT);
+      const vy = (releaseY - lastY) / dt;
+      const meaningfulGesture =
+        moved || Math.abs(vy) > BOTTOM_SHEET_TAP_VELOCITY_MAX;
+      if (!meaningfulGesture) {
+        onSnapChange(cycleBottomSheetSnap(snap));
+      } else {
+        const targetTy = resolveSnapTyFromRelease(hardTy, vy, geom, true);
+        onSnapChange(tyToSnapExact(targetTy, geom));
       }
-      const mid = maxTy / 2;
-      let nextExpanded = hardTy < mid;
-      const dt = performance.now() - lastT;
-      if (dt > 0 && dt < 200) {
-        const vy = (releaseY - lastY) / dt;
-        if (vy < -0.35) nextExpanded = true;
-        else if (vy > 0.35) nextExpanded = false;
-      }
-      onExpandedChange(nextExpanded);
       setDragTy(null);
     },
-    [expanded, onExpandedChange]
+    [cancelDragTyRaf, geom, onSnapChange, snap]
   );
 
   const onDragPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.button !== 0) return;
       e.currentTarget.setPointerCapture(e.pointerId);
-      const maxTy = maxTranslateY();
-      const startTy = expanded ? 0 : maxTy;
+      const g = getBottomSheetSnapGeometry(maxTranslateY());
+      const startTy = snapToTy(snap, g);
       dragRef.current = {
         pointerId: e.pointerId,
         startY: e.clientY,
@@ -173,10 +214,10 @@ export default function BottomSheetList({
         lastT: performance.now(),
         moved: false
       };
-      setIsDragging(true);
+      setDragging(true);
       setDragTy(startTy);
     },
-    [expanded]
+    [setDragging, snap]
   );
 
   const onDragPointerMove = useCallback(
@@ -202,7 +243,7 @@ export default function BottomSheetList({
         /* ignore */
       }
 
-      const maxTy = maxTranslateY();
+      const maxTy = geom.maxTy;
       const raw = d.startTy + (e.clientY - d.startY);
       const hardTy = Math.min(maxTy, Math.max(0, raw));
       const moved = d.moved;
@@ -210,27 +251,26 @@ export default function BottomSheetList({
       const lastT = d.lastT;
 
       dragRef.current = null;
-      setIsDragging(false);
+      setDragging(false);
 
-      snapFromTy(hardTy, lastY, lastT, e.clientY, moved);
+      finishDrag(hardTy, lastY, lastT, e.clientY, moved);
     },
-    [snapFromTy]
+    [finishDrag, geom.maxTy, setDragging]
   );
 
-  const onListPointerDown = useCallback(
-    (e: React.PointerEvent<HTMLUListElement>) => {
-      if (e.button !== 0) return;
-      if (dragRef.current) return;
-      listGestureRef.current = {
-        pointerId: e.pointerId,
-        startY: e.clientY,
-        lastY: e.clientY,
-        lastT: performance.now(),
-        sheetDragStarted: false
-      };
-    },
-    []
-  );
+  const onListPointerDown = useCallback((e: React.PointerEvent<HTMLUListElement>) => {
+    if (e.button !== 0) return;
+    if (dragRef.current) return;
+    const now = performance.now();
+    listGestureRef.current = {
+      pointerId: e.pointerId,
+      startY: e.clientY,
+      startT: now,
+      lastY: e.clientY,
+      lastT: now,
+      sheetDragStarted: false
+    };
+  }, []);
 
   const onListPointerMove = useCallback(
     (e: React.PointerEvent<HTMLUListElement>) => {
@@ -241,6 +281,9 @@ export default function BottomSheetList({
       g.lastT = performance.now();
 
       const ul = e.currentTarget;
+      const gSnap = getBottomSheetSnapGeometry(maxTranslateY());
+      const currentTy = dragTy ?? snapToTy(snap, gSnap);
+      const EPS = 6;
 
       if (g.sheetDragStarted) {
         const d = dragRef.current;
@@ -253,14 +296,18 @@ export default function BottomSheetList({
         return;
       }
 
-      const dy = e.clientY - g.startY;
+      if (ul.scrollTop > 0) return;
 
-      if (!expanded) {
-        if (ul.scrollTop > 0) return;
-        if (dy > -LIST_TO_SHEET_DRAG_PX) return;
+      const dy = e.clientY - g.startY;
+      const canOpenMore = currentTy > EPS;
+      const canCloseMore = currentTy < gSnap.maxTy - EPS;
+
+      if (dy < -LIST_DRAG_THRESHOLD_PX && canOpenMore) {
+        /* 위로: 더 펼침 */
+      } else if (dy > LIST_DRAG_THRESHOLD_PX && canCloseMore) {
+        /* 아래로: 더 접음 */
       } else {
-        if (ul.scrollTop > 0) return;
-        if (dy < LIST_TO_SHEET_DRAG_PX) return;
+        return;
       }
 
       g.sheetDragStarted = true;
@@ -273,20 +320,18 @@ export default function BottomSheetList({
         /* ignore */
       }
 
-      const maxTy = maxTranslateY();
-      const startTy = expanded ? 0 : maxTy;
       dragRef.current = {
         pointerId: e.pointerId,
         startY: g.startY,
-        startTy,
+        startTy: currentTy,
         lastY: e.clientY,
         lastT: performance.now(),
         moved: true
       };
-      setIsDragging(true);
-      applyPointerTy(e.clientY, g.startY, startTy, true);
+      setDragging(true);
+      applyPointerTy(e.clientY, g.startY, currentTy, true);
     },
-    [applyPointerTy, expanded]
+    [applyPointerTy, dragTy, setDragging, snap]
   );
 
   const onListPointerUp = useCallback(
@@ -295,6 +340,7 @@ export default function BottomSheetList({
       if (!g || e.pointerId !== g.pointerId) return;
 
       const ul = e.currentTarget;
+      const gSnap = getBottomSheetSnapGeometry(maxTranslateY());
 
       if (g.sheetDragStarted && dragRef.current) {
         try {
@@ -303,56 +349,60 @@ export default function BottomSheetList({
           /* ignore */
         }
         const d = dragRef.current;
-        const maxTy = maxTranslateY();
         const raw = d.startTy + (e.clientY - d.startY);
-        const hardTy = Math.min(maxTy, Math.max(0, raw));
+        const hardTy = Math.min(gSnap.maxTy, Math.max(0, raw));
         const lastY = d.lastY;
         const lastT = d.lastT;
 
         dragRef.current = null;
-        setIsDragging(false);
+        setDragging(false);
         setListSheetTouchLock(false);
         listGestureRef.current = null;
 
-        snapFromTy(hardTy, lastY, lastT, e.clientY, d.moved);
+        finishDrag(hardTy, lastY, lastT, e.clientY, d.moved);
         return;
       }
 
       if (ul.scrollTop === 0 && !g.sheetDragStarted) {
-        const dt = performance.now() - g.lastT;
-        if (dt > 0 && dt < 220) {
-          const vy = (e.clientY - g.lastY) / dt;
-          if (!expanded && vy < LIST_FLICK_VELOCITY) {
+        const totalT = performance.now() - g.startT;
+        if (totalT > 0 && totalT < 320) {
+          const vy = (e.clientY - g.startY) / totalT;
+          const idx = SNAP_ORDER.indexOf(snap);
+          if (vy < LIST_FLICK_UP && idx > 0) {
             suppressListClickRef.current = true;
-            onExpandedChange(true);
-          } else if (expanded && vy > LIST_FLICK_DOWN_VELOCITY) {
+            onSnapChange(SNAP_ORDER[idx - 1]);
+          } else if (vy > LIST_FLICK_DOWN && idx < SNAP_ORDER.length - 1) {
             suppressListClickRef.current = true;
-            onExpandedChange(false);
+            onSnapChange(SNAP_ORDER[idx + 1]);
           }
         }
       }
 
       listGestureRef.current = null;
     },
-    [expanded, onExpandedChange, snapFromTy]
+    [finishDrag, onSnapChange, setDragging, snap]
   );
 
-  const onListPointerCancel = useCallback((e: React.PointerEvent<HTMLUListElement>) => {
-    const g = listGestureRef.current;
-    if (!g || e.pointerId !== g.pointerId) return;
-    if (g.sheetDragStarted && dragRef.current) {
-      try {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      } catch {
-        /* ignore */
+  const onListPointerCancel = useCallback(
+    (e: React.PointerEvent<HTMLUListElement>) => {
+      const g = listGestureRef.current;
+      if (!g || e.pointerId !== g.pointerId) return;
+      if (g.sheetDragStarted && dragRef.current) {
+        try {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        } catch {
+          /* ignore */
+        }
+        dragRef.current = null;
+        setDragging(false);
+        setListSheetTouchLock(false);
+        cancelDragTyRaf();
+        setDragTy(null);
       }
-      dragRef.current = null;
-      setIsDragging(false);
-      setListSheetTouchLock(false);
-      setDragTy(null);
-    }
-    listGestureRef.current = null;
-  }, []);
+      listGestureRef.current = null;
+    },
+    [cancelDragTyRaf, setDragging]
+  );
 
   const onListClickCapture = useCallback((e: React.MouseEvent<HTMLUListElement>) => {
     if (suppressListClickRef.current) {
@@ -368,7 +418,7 @@ export default function BottomSheetList({
   useEffect(() => {
     if (isDragging) return;
     setDragTy(null);
-  }, [expanded, isDragging]);
+  }, [isDragging, snap]);
 
   useEffect(() => {
     const el = listUlRef.current;
@@ -387,6 +437,13 @@ export default function BottomSheetList({
     node.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [selectedStoreId]);
 
+  const handleLabel =
+    snap === "expanded"
+      ? "목록 · 아래로 내려 접기"
+      : snap === "half"
+        ? "목록 · 위아래로 높이 조절"
+        : "목록 · 위로 올려 펼치기";
+
   return (
     <section
       style={{
@@ -394,7 +451,7 @@ export default function BottomSheetList({
         transform: `translate3d(0, ${translateY}px, 0)`,
         transition: isDragging
           ? "none"
-          : "transform 340ms cubic-bezier(0.32, 0.72, 0, 1)",
+          : "transform 360ms cubic-bezier(0.25, 0.1, 0.25, 1)",
         willChange: isDragging ? "transform" : "auto"
       }}
       className="absolute bottom-0 left-0 right-0 z-sheet flex min-h-0 flex-col rounded-t-[16px] border-t border-border-subtle bg-bg-surface shadow-floating"
@@ -409,11 +466,11 @@ export default function BottomSheetList({
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            onExpandedChange(!expanded);
+            onSnapChange(cycleBottomSheetSnap(snap));
           }
         }}
         className="flex w-full shrink-0 cursor-grab touch-none select-none flex-col items-center pt-3 pb-4 active:cursor-grabbing"
-        aria-label={expanded ? "목록 접기 · 아래로 밀어 내리기" : "목록 펼치기 · 위로 밀어 올리기"}
+        aria-label={handleLabel}
       >
         <span className="pointer-events-none h-1 w-11 rounded-full bg-[rgba(17,17,17,0.15)]" />
       </div>
@@ -541,3 +598,5 @@ export default function BottomSheetList({
     </section>
   );
 }
+
+export type { BottomSheetSnap };
