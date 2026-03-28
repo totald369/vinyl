@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "dev:clean": "rm -rf .next && next dev",
-    "dev:poll": "rm -rf .next && NEXT_DEV_POLL=1 next dev",
+    "dev": "node scripts/next-dev.js",
+    "dev:clean": "rm -rf .next && node scripts/next-dev.js",
+    "dev:poll": "rm -rf .next && NEXT_DEV_POLL=1 node scripts/next-dev.js",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

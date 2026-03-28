@@ -25,18 +25,46 @@ declare global {
           image?: unknown;
           zIndex?: number;
         }) => KakaoMarker;
+        CustomOverlay: new (options: {
+          map?: KakaoMap;
+          position: { getLat: () => number; getLng: () => number };
+          content: HTMLElement;
+          xAnchor?: number;
+          yAnchor?: number;
+          zIndex?: number;
+          clickable?: boolean;
+        }) => KakaoCustomOverlay;
         event: {
-          addListener: (target: KakaoMap | KakaoMarker, eventName: string, callback: () => void) => void;
+          addListener: (
+            target: KakaoMap | KakaoMarker | KakaoCustomOverlay,
+            eventName: string,
+            callback: (...args: unknown[]) => void
+          ) => void;
+          removeListener: (
+            target: KakaoMap | KakaoMarker | KakaoCustomOverlay,
+            eventName: string,
+            callback: (...args: unknown[]) => void
+          ) => void;
         };
       };
     };
   }
 }
 
+export type KakaoMapPoint = {
+  getX: () => number;
+  getY: () => number;
+};
+
+export type KakaoMapProjection = {
+  pointFromCoords: (latLng: { getLat: () => number; getLng: () => number }) => KakaoMapPoint;
+};
+
 export type KakaoMap = {
   setCenter: (latLng: { getLat: () => number; getLng: () => number }) => void;
   setLevel: (level: number) => void;
   getCenter: () => { getLat: () => number; getLng: () => number };
+  getProjection: () => KakaoMapProjection;
   getBounds: () => {
     getSouthWest: () => { getLat: () => number; getLng: () => number };
     getNorthEast: () => { getLat: () => number; getLng: () => number };
@@ -49,6 +77,11 @@ export type KakaoMarker = {
   setPosition: (pos: { getLat: () => number; getLng: () => number }) => void;
   getPosition: () => { getLat: () => number; getLng: () => number };
   setImage: (image: unknown) => void;
+  setZIndex: (z: number) => void;
+};
+
+export type KakaoCustomOverlay = {
+  setMap: (map: KakaoMap | null) => void;
   setZIndex: (z: number) => void;
 };
 

@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# `bash scripts/npm run dev` 처럼 .sh 없이 쓸 수 있게 npm.sh 로 전달
+exec "$(dirname "$0")/npm.sh" "$@"

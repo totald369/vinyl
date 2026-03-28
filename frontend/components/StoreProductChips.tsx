@@ -45,11 +45,8 @@ export function StoreProductChips({ store }: { store: StoreData }) {
         <div className="relative size-4 shrink-0 overflow-hidden">
           <img src="/Img/Icon/non-fire_16.svg" alt="" width={16} height={16} className="size-4" />
         </div>
-        <span className="flex flex-col leading-tight">
-          <span className="whitespace-nowrap text-[14px] font-medium tracking-[0.1px] text-[#6f522a]">
-            불연성마대
-          </span>
-          <span className="whitespace-nowrap text-[11px] font-medium text-[#6f522a]/90">PP·건설마대</span>
+        <span className="whitespace-nowrap text-[14px] font-medium leading-normal tracking-[0.1px] text-[#6f522a]">
+          불연성마대
         </span>
       </div>
     );
