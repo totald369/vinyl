@@ -20,22 +20,6 @@ export function StoreProductChips({ store }: { store: StoreData }) {
     );
   }
 
-  if (store.hasLargeWasteSticker) {
-    chips.push(
-      <div
-        key="sticker"
-        className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-[#e0f5f5] py-1 pl-1.5 pr-2"
-      >
-        <div className="relative size-4 shrink-0 overflow-hidden">
-          <img src="/Img/Icon/sticker_16.svg" alt="" width={16} height={16} className="size-4" />
-        </div>
-        <span className="whitespace-nowrap text-[14px] font-medium leading-normal tracking-[0.1px] text-[#14a1a1]">
-          폐기물 스티커
-        </span>
-      </div>
-    );
-  }
-
   if (store.hasSpecialBag) {
     chips.push(
       <div
@@ -47,6 +31,22 @@ export function StoreProductChips({ store }: { store: StoreData }) {
         </div>
         <span className="whitespace-nowrap text-[14px] font-medium leading-normal tracking-[0.1px] text-[#6f522a]">
           불연성마대
+        </span>
+      </div>
+    );
+  }
+
+  if (store.hasLargeWasteSticker) {
+    chips.push(
+      <div
+        key="sticker"
+        className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-[#e0f5f5] py-1 pl-1.5 pr-2"
+      >
+        <div className="relative size-4 shrink-0 overflow-hidden">
+          <img src="/Img/Icon/sticker_16.svg" alt="" width={16} height={16} className="size-4" />
+        </div>
+        <span className="whitespace-nowrap text-[14px] font-medium leading-normal tracking-[0.1px] text-[#14a1a1]">
+          폐기물 스티커
         </span>
       </div>
     );

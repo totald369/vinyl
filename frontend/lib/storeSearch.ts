@@ -18,8 +18,8 @@ export function filterStoresForSearch(
 
   const sorted = stores
     .filter((s) => {
-      if (filter === "largeSticker") return s.hasLargeWasteSticker;
       if (filter === "nonBurnable") return s.hasSpecialBag;
+      if (filter === "largeSticker") return s.hasLargeWasteSticker;
       return s.hasTrashBag;
     })
     .filter((s) => {

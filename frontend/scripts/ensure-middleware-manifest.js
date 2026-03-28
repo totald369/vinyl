@@ -1,7 +1,10 @@
 /**
  * Next dev가 .next/server/middleware-manifest.json 없이(또는 손상되어) 요청을 받으면
- * layout.css / main-app.js 등이 500으로 떨어질 수 있습니다.
- * dev 시작 전에 최소한의 유효한 manifest를 보장합니다.
+ * ENOENT 또는 layout.css / main-app.js 로딩 실패가 날 수 있습니다.
+ * dev 시작 전에 최소한의 유효한 JSON이 있도록 합니다.
+ *
+ * 커스텀 middleware.ts 가 있으면 Next 가 곧바로 덮어쓰는 manifest 와 충돌할 수 있으므로,
+ * 이 프로젝트에서는 통과 전용 미들웨어를 두지 않습니다(필요 시 Next 기본 파이프라인만 사용).
  */
 const fs = require("fs");
 const path = require("path");

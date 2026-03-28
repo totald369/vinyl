@@ -1,7 +1,10 @@
 /**
- * 1) middleware-manifest 보정
- * 2) 지정 포트(기본 3000)를 점유 중인 LISTEN 프로세스 종료 → 예전에 죽은 next dev에 브라우저가 붙는 500 방지
- * 3) next dev 실행
+ * 1) (선택) production 빌드만 남은 .next 는 제거 — dev 가 요청하는 webpack.js / main-app.js 가 없어 404 나는 경우 방지
+ * 2) middleware-manifest 보정
+ * 3) 지정 포트(기본 3000)를 점유 중인 LISTEN 프로세스 종료 → 예전에 죽은 next dev에 브라우저가 붙는 500 방지
+ * 4) next dev 실행
+ *
+ * 캐시 유지: NEXT_DEV_KEEP_CACHE=1 npm run dev
  */
 const fs = require("fs");
 const path = require("path");
@@ -9,6 +12,32 @@ const { spawnSync, spawn, execFileSync } = require("child_process");
 
 const root = path.join(__dirname, "..");
 const port = String(process.env.PORT || "3000");
+
+function nextDirLooksLikeProductionOnly(nextDir) {
+  const chunksDir = path.join(nextDir, "static", "chunks");
+  if (!fs.existsSync(chunksDir)) return false;
+  let names;
+  try {
+    names = fs.readdirSync(chunksDir);
+  } catch {
+    return false;
+  }
+  const hasHashedWebpack = names.some((n) => /^webpack-[a-zA-Z0-9_-]+\.js$/.test(n));
+  const hasBareWebpack = names.includes("webpack.js");
+  return hasHashedWebpack && !hasBareWebpack;
+}
+
+const nextDir = path.join(root, ".next");
+if (
+  process.env.NEXT_DEV_KEEP_CACHE !== "1" &&
+  fs.existsSync(nextDir) &&
+  nextDirLooksLikeProductionOnly(nextDir)
+) {
+  fs.rmSync(nextDir, { recursive: true, force: true });
+  console.log(
+    "[next-dev] production 빌드(.next)를 지웠습니다. dev 전용 청크와 충돌을 막기 위함입니다."
+  );
+}
 
 spawnSync(process.execPath, [path.join(__dirname, "ensure-middleware-manifest.js")], {
   cwd: root,

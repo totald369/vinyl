@@ -41,13 +41,13 @@ const FILTER_MARKER_MAP: Record<StoreListFilter, { src: string; selectedSrc: str
     src: "/Img/Icon/trash_bag_80.svg",
     selectedSrc: "/Img/Icon/trash_bag_80_selected.svg"
   },
-  largeSticker: {
-    src: "/Img/Icon/sticker_80.svg",
-    selectedSrc: "/Img/Icon/sticker_80_selected.svg"
-  },
   nonBurnable: {
     src: "/Img/Icon/non-fire_80.svg",
     selectedSrc: "/Img/Icon/non-fire_80_selected.svg"
+  },
+  largeSticker: {
+    src: "/Img/Icon/sticker_80.svg",
+    selectedSrc: "/Img/Icon/sticker_80_selected.svg"
   }
 };
 

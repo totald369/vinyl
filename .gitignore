@@ -18,3 +18,14 @@ frontend/scripts/geocode-cache-songpa.json
 frontend/scripts/geocode-cache-gangdong.json
 frontend/scripts/geocode-cache-mapo.json
 frontend/scripts/geocode-cache-yeongdeungpo.json
+frontend/scripts/geocode-cache-dongjak.json
+frontend/scripts/geocode-cache-gwangjin.json
+frontend/scripts/geocode-cache-gwangjin-pdf.json
+frontend/scripts/geocode-cache-seongdong.json
+frontend/scripts/geocode-cache-jung.json
+frontend/scripts/geocode-cache-nowon.json
+frontend/scripts/geocode-cache-nowon-gdms.json
+frontend/scripts/geocode-cache-nowon-gdms-trash.json
+frontend/scripts/geocode-cache-dobong.json
+frontend/scripts/geocode-cache-dobong-tistory.json
+frontend/scripts/geocode-cache-gangbuk.json

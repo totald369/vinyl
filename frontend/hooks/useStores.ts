@@ -6,7 +6,7 @@ import { pickDataReferenceDateFromRow } from "@/lib/datasetDate";
 import { DEFAULT_REGION, LatLng } from "@/lib/types";
 const LIST_RADIUS_KM = 2;
 
-export type StoreListFilter = "payBag" | "largeSticker" | "nonBurnable";
+export type StoreListFilter = "payBag" | "nonBurnable" | "largeSticker";
 
 export type StoreData = {
   id: string;
@@ -150,8 +150,8 @@ export function useStores(
         distance: haversineKm(referencePoint, { lat: store.lat, lng: store.lng })
       }))
       .filter((store) => {
-        if (filter === "largeSticker") return store.hasLargeWasteSticker;
         if (filter === "nonBurnable") return store.hasSpecialBag;
+        if (filter === "largeSticker") return store.hasLargeWasteSticker;
         return store.hasTrashBag;
       })
       .filter((store) => (store.distance ?? Infinity) <= LIST_RADIUS_KM)

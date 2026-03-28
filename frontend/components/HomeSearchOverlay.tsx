@@ -124,18 +124,6 @@ export default function HomeSearchOverlay({
             </button>
             <button
               type="button"
-              onClick={() => onActiveFilterChange("largeSticker")}
-              className={`flex shrink-0 items-center gap-0.5 rounded-[8px] py-2 pl-2 pr-3 text-[14px] font-semibold leading-normal tracking-[0.1px] ${
-                activeFilter === "largeSticker"
-                  ? "border-0 bg-[#171717] text-white"
-                  : "border border-[#EEEEEE] bg-white text-[#333333]"
-              }`}
-            >
-              <img src="/Img/Icon/sticker_24.svg" alt="" width={24} height={24} className="size-6 shrink-0" />
-              <span className="whitespace-nowrap">폐기물 스티커</span>
-            </button>
-            <button
-              type="button"
               onClick={() => onActiveFilterChange("nonBurnable")}
               className={`flex shrink-0 items-center gap-0.5 rounded-[8px] py-2 pl-2 pr-3 text-[14px] font-semibold leading-normal tracking-[0.1px] ${
                 activeFilter === "nonBurnable"
@@ -154,6 +142,18 @@ export default function HomeSearchOverlay({
                   PP마대(건설마대)
                 </span>
               </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onActiveFilterChange("largeSticker")}
+              className={`flex shrink-0 items-center gap-0.5 rounded-[8px] py-2 pl-2 pr-3 text-[14px] font-semibold leading-normal tracking-[0.1px] ${
+                activeFilter === "largeSticker"
+                  ? "border-0 bg-[#171717] text-white"
+                  : "border border-[#EEEEEE] bg-white text-[#333333]"
+              }`}
+            >
+              <img src="/Img/Icon/sticker_24.svg" alt="" width={24} height={24} className="size-6 shrink-0" />
+              <span className="whitespace-nowrap">폐기물 스티커</span>
             </button>
           </div>
 
