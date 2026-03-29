@@ -32,3 +32,6 @@ frontend/scripts/geocode-cache-gangbuk.json
 frontend/scripts/geocode-cache-eunpyeong.json
 frontend/scripts/geocode-cache-yangcheon.json
 frontend/scripts/geocode-cache-guro.json
+frontend/scripts/geocode-cache-dongdaemun.json
+frontend/scripts/geocode-cache-seodaemun-gdms.json
+frontend/scripts/geocode-cache-yongsan.json
