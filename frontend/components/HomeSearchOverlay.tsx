@@ -211,7 +211,7 @@ export default function HomeSearchOverlay({
                   <button
                     type="button"
                     onClick={() => onSelectStore(store)}
-                    className="flex w-full flex-col gap-3 rounded-[8px] px-4 py-4 text-left transition-colors active:bg-[#eff3f4]"
+                    className="flex w-full cursor-pointer flex-col gap-3 rounded-[8px] bg-transparent px-4 py-4 text-left transition-colors hover:bg-[#eff3f4] active:bg-[#eff3f4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                   >
                     {/* 피그마 754:374 — 상단 블록 gap 12px, 제목·주소 블록 내부 gap 6px */}
                     <div className="flex flex-col gap-3">
