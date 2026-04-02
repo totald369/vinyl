@@ -1,7 +1,11 @@
 import fs from "fs";
 import path from "path";
 
-import type { DistrictTrashbagConfig } from "@/lib/districtTrashbagSeo";
+import {
+  type DistrictTrashbagConfig,
+  districtSeoDescription,
+  districtTrashbagH1
+} from "@/lib/districtTrashbagSeo";
 import { SITE_URL } from "@/lib/site";
 
 type RawRow = {
@@ -40,8 +44,8 @@ export function buildDistrictTrashbagJsonLd(cfg: DistrictTrashbagConfig, pagePat
   return {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    name: `${cfg.labelGu} 종량제 봉투·불연성마대 판매처 지도`,
-    description: `${cfg.labelGu} 종량제 봉투 및 불연성마대 판매처를 지도에서 확인합니다.`,
+    name: districtTrashbagH1(cfg),
+    description: districtSeoDescription(cfg),
     url: pageUrl,
     isPartOf: {
       "@type": "WebSite",

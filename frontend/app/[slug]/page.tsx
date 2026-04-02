@@ -6,6 +6,7 @@ import {
   districtIntroLeadParagraph,
   districtSeoDescription,
   districtSeoTitle,
+  districtTrashbagH1,
   getDistrictTrashbagConfig,
   isDistrictTrashbagSlug,
   type DistrictTrashbagSlug
@@ -29,8 +30,8 @@ export function generateMetadata({ params }: PageProps): Metadata {
   }
   const cfg = getDistrictTrashbagConfig(params.slug)!;
   const path = `/${cfg.slug}`;
-  const title = districtSeoTitle(cfg.labelGu);
-  const description = districtSeoDescription(cfg.labelGu);
+  const title = districtSeoTitle(cfg);
+  const description = districtSeoDescription(cfg);
   return {
     alternates: { canonical: path },
     title: { absolute: title },
@@ -81,7 +82,7 @@ export default function DistrictTrashbagPage({ params }: PageProps) {
 
         <header className="mb-4">
           <h1 className="text-title-lg font-bold text-text-primary md:text-[28px] md:leading-9">
-            {cfg.labelGu} 종량제 봉투 판매처
+            {districtTrashbagH1(cfg)}
           </h1>
           <p className="mt-3 text-body-md text-text-secondary">{lead}</p>
           <p className="mt-2 text-body-md text-text-secondary">{extra}</p>

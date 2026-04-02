@@ -75,10 +75,37 @@ export function buildDistrictExtraIntro(cfg: DistrictTrashbagConfig): string {
   return variants[idx % variants.length];
 }
 
-export function districtSeoTitle(labelGu: string): string {
-  return `${labelGu} 종량제 봉투 판매처 | 불연성마대 파는곳`;
+/**
+ * 검색 결과 CTR용 title (페이지마다 패턴·문장 분산, 약 50~60자).
+ * H1은 `districtTrashbagH1`로 키워드 중심 유지.
+ */
+export function districtSeoTitle(cfg: DistrictTrashbagConfig): string {
+  const { labelGu } = cfg;
+  const bySlug: Record<DistrictTrashbagSlug, string> = {
+    "gangnam-trashbag": `${labelGu} 종량제 봉투 어디서 사나요? 지금 살 수 있는 판매처를 지도에서 바로 확인 · 불연성마대`,
+    "songpa-trashbag": `${labelGu} 불연성마대 파는 곳 찾기(헛걸음 줄이는 방법) 지도에서 종량제봉투·판매처 동시 확인하기`,
+    "gangdong-trashbag": `${labelGu} 지금 종량제 봉투 살 수 있는 곳 찾기(가까운 판매처 지도에서 바로 확인) 불연성마대`
+  };
+  return bySlug[cfg.slug];
 }
 
-export function districtSeoDescription(labelGu: string): string {
-  return `${labelGu} 종량제 봉투 및 불연성마대 판매처를 지도에서 확인하세요. 가까운 판매처와 위치 정보를 제공합니다.`;
+/** SERP 클릭 유도형 description (약 120~160자, 지역·키워드 자연 포함) */
+export function districtSeoDescription(cfg: DistrictTrashbagConfig): string {
+  const { labelGu, labelShort } = cfg;
+  const bySlug: Record<DistrictTrashbagSlug, string> = {
+    "gangnam-trashbag": `${labelGu}에서 종량제 봉투·불연성마대 판매처를 찾는다면 지도에서 바로 확인하세요. 취급 품목 필터로 필요한 매장만 모아보고, 거리순 정렬로 헛걸음 없이 가까운 곳을 찾을 수 있습니다. 편의점·마트·철물점 등 실제 판매점 위치를 한 화면에서 비교해 보세요.`,
+    "songpa-trashbag": `${labelGu} 종량제 봉투와 불연성마대, 어디서 살 수 있을까요? 판매처 위치와 주소를 지도·목록으로 한번에 보고 방문 동선을 짜보세요. 필터로 불연성 마대만 골라볼 수 있어 찾기 쉽습니다. 재고·영업은 매장에 문의해 주세요.`,
+    "gangdong-trashbag": `${labelShort} 일대에서 지금 살 수 있는 종량제 봉투·불연성마대 판매점을 지도에서 확인하세요. 마커를 누르면 주소와 취급 품목을 바로 볼 수 있어 시간을 아낄 수 있습니다. 목록은 거리순으로 정렬되며, 공개 데이터를 기반으로 안내합니다.`
+  };
+  return bySlug[cfg.slug];
+}
+
+/** H1: SEO 키워드 중심 (구·품목 조합을 페이지마다 달리) */
+export function districtTrashbagH1(cfg: DistrictTrashbagConfig): string {
+  const bySlug: Record<DistrictTrashbagSlug, string> = {
+    "gangnam-trashbag": `${cfg.labelShort} 종량제 봉투 판매처`,
+    "songpa-trashbag": `${cfg.labelShort} 불연성마대 판매처`,
+    "gangdong-trashbag": `${cfg.labelGu} 종량제 봉투 판매처`
+  };
+  return bySlug[cfg.slug];
 }
