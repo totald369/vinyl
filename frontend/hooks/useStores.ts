@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { dedupeStoresByNameAndLocation } from "@/lib/dedupeStores";
+import {
+  dedupeStoresByBizNameProximity,
+  dedupeStoresByNameAndLocation
+} from "@/lib/dedupeStores";
 import { pickDataReferenceDateFromRow } from "@/lib/datasetDate";
 import {
   collectVerifiedStoreIdsFromReports,
@@ -124,17 +127,20 @@ export function useStores(
         if (!res.ok) throw new Error("stores.sample.json 로드 실패");
         return res.json() as Promise<RawStoreRow[]>;
       }),
+      fetch("/data/stores.gunpo.json").then((res) =>
+        res.ok ? (res.json() as Promise<RawStoreRow[]>) : ([] as RawStoreRow[])
+      ),
       fetch("/data/reports_rows.json").then((res) =>
         res.ok ? (res.json() as Promise<RawReportRow[]>) : ([] as RawReportRow[])
       )
     ])
-      .then(([mainRows, reportRows]) => {
+      .then(([mainRows, gunpoRows, reportRows]) => {
         if (!mounted) return;
 
         const verifiedIds = collectVerifiedStoreIdsFromReports(reportRows);
         const extraRaw = reportRowsToExtraRawStores(reportRows);
 
-        const normalizedMain = mainRows
+        const normalizedMain = [...mainRows, ...gunpoRows]
           .map(normalizeRow)
           .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng))
           .map((row) => ({
@@ -146,10 +152,12 @@ export function useStores(
           .map((raw) => normalizeRow(raw as RawStoreRow))
           .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng));
 
-        const cleaned = dedupeStoresByNameAndLocation([
-          ...normalizedMain,
-          ...normalizedExtra
-        ]);
+        const cleaned = dedupeStoresByBizNameProximity(
+          dedupeStoresByNameAndLocation([
+            ...normalizedMain,
+            ...normalizedExtra
+          ])
+        );
 
         setStores(cleaned);
         setLoading(false);

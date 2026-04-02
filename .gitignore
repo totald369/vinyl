@@ -14,6 +14,7 @@ frontend/.next/
 frontend/.env.local
 
 # Geocode API cache (local)
+frontend/scripts/geocode-cache-gunpo.json
 frontend/scripts/geocode-cache-songpa.json
 frontend/scripts/geocode-cache-gangdong.json
 frontend/scripts/geocode-cache-mapo.json
