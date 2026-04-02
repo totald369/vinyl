@@ -1,5 +1,6 @@
 import Link from "next/link";
 import CheckLottie from "@/components/CheckLottie";
+import { SITE_BRAND_KO } from "@/lib/seoBrand";
 
 export default function EditRequestSuccessPage() {
   return (
@@ -26,9 +27,11 @@ export default function EditRequestSuccessPage() {
           href="/"
           className="flex h-12 w-full items-center justify-center rounded-[8px] bg-[#171717] text-center text-[16px] font-bold leading-[1.5] text-[#d4fe1c]"
         >
-          홈으로
+          {SITE_BRAND_KO} 홈으로
         </Link>
       </div>
+
+      <p className="pb-1 text-center text-[12px] text-[#999999]">{SITE_BRAND_KO}</p>
 
       <div className="h-[33px] w-full shrink-0 bg-white pb-[env(safe-area-inset-bottom,0px)]">
         <div className="relative mx-auto h-full w-[135px]">

@@ -8,6 +8,7 @@ import { mockStores } from "@/lib/mock";
 import { searchAddress } from "@/lib/services/addressSearch";
 import { getBrowserSupabaseClient } from "@/lib/supabase";
 import { FILTER_LABELS, FilterType } from "@/lib/types";
+import { SITE_BRAND_KO } from "@/lib/seoBrand";
 
 type RequestType = "closed" | "items_changed" | "address_changed" | "other";
 
@@ -165,7 +166,12 @@ function EditRequestContent() {
   return (
     <main className="mx-auto flex h-screen max-w-md flex-col overflow-hidden bg-white">
       <header className="z-[6] flex h-14 w-full shrink-0 items-center gap-1 overflow-hidden bg-white px-2">
-        <div className="size-12 opacity-0" aria-hidden />
+        <Link
+          href="/"
+          className="flex size-12 shrink-0 items-center justify-center text-[12px] font-bold leading-tight text-[#171717]"
+        >
+          {SITE_BRAND_KO}
+        </Link>
         <h1 className="min-w-0 flex-1 text-center text-[16px] font-bold leading-6 text-[#171717]">정보 수정 요청</h1>
         <Link href="/" className="flex size-12 items-center justify-center" aria-label="닫기">
           <img src="/Img/Icon/close_32.svg" alt="" width={32} height={32} className="size-8" />
@@ -333,6 +339,7 @@ function EditRequestContent() {
             </button>
           </div>
         </div>
+        <p className="px-4 pb-1 text-center text-[12px] text-[#999999]">{SITE_BRAND_KO}</p>
       </section>
 
       <div className="h-[33px] w-full shrink-0 bg-white pb-[env(safe-area-inset-bottom,0px)]">

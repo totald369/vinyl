@@ -2,21 +2,35 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import StoreList from "@/components/StoreList";
 import { mockStores } from "@/lib/mock";
+import {
+  DEFAULT_OG_IMAGE_ALT,
+  SITE_BRAND_KO,
+  defaultOpenGraphImage,
+  seoAbsoluteMetaTitleForPath,
+  seoMetaDescriptionForPath
+} from "@/lib/seoBrand";
+
+const PAGE_PATH = "/stores";
+const PAGE_TITLE = seoAbsoluteMetaTitleForPath(PAGE_PATH);
+const PAGE_DESCRIPTION = seoMetaDescriptionForPath(PAGE_PATH);
 
 export const metadata: Metadata = {
-  alternates: { canonical: "/stores" },
-  title: "판매처 목록",
-  description:
-    "종량제봉투·불연성마대·폐기물 스티커 판매처를 목록으로 확인하세요. 지도 홈에서 내 주변 매장을 검색한 뒤 강남 안내 페이지와 함께 참고할 수 있습니다.",
+  alternates: { canonical: PAGE_PATH },
+  title: { absolute: PAGE_TITLE },
+  description: PAGE_DESCRIPTION,
   openGraph: {
-    title: "판매처 목록 | 종량제봉투·스티커",
-    description: "샘플 판매처 정보와 품목(종량제봉투, 마대, 스티커)을 한눈에 봅니다.",
-    url: "/stores"
+    title: PAGE_TITLE,
+    description: PAGE_DESCRIPTION,
+    url: PAGE_PATH,
+    siteName: SITE_BRAND_KO,
+    images: [{ ...defaultOpenGraphImage, alt: DEFAULT_OG_IMAGE_ALT }],
   },
   twitter: {
-    title: "판매처 목록 | 종량제봉투·스티커",
-    description: "샘플 판매처 정보와 품목을 한눈에 봅니다."
-  }
+    card: "summary_large_image",
+    title: PAGE_TITLE,
+    description: PAGE_DESCRIPTION,
+    images: [defaultOpenGraphImage.url],
+  },
 };
 
 export default function StoresPage() {
@@ -26,12 +40,15 @@ export default function StoresPage() {
         <h1 className="text-xl font-bold">판매처 목록</h1>
         <p className="text-sm text-slate-600">지도에서 확인한 판매처를 목록으로 볼 수 있어요.</p>
         <nav className="mt-2 text-sm text-slate-600" aria-label="관련 페이지">
-          <Link href="/">지도 홈</Link>
+          <Link href="/">{SITE_BRAND_KO} 홈</Link>
           {" · "}
-          <Link href="/gangnam">강남 종량제봉투 안내</Link>
+          <Link href="/gangnam">강남 종량제 봉투 안내</Link>
         </nav>
       </header>
       <StoreList contentState={mockStores.length ? "ready" : "empty"} stores={mockStores} />
+      <footer className="border-t border-slate-200 pt-4 text-center text-xs text-slate-500">
+        {SITE_BRAND_KO}
+      </footer>
     </main>
   );
 }

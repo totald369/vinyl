@@ -9,6 +9,7 @@ import type { AddressSearchResult } from "@/lib/kakao/addressSearch";
 import { searchAddress } from "@/lib/services/addressSearch";
 import { supabase } from "@/lib/supabaseClient";
 import { DEFAULT_REGION, FILTER_LABELS, FilterType, LatLng } from "@/lib/types";
+import { SITE_BRAND_KO } from "@/lib/seoBrand";
 
 const itemOrder: FilterType[] = ["PAY_AS_YOU_THROW", "NON_BURNABLE_BAG", "WASTE_STICKER"];
 type SelectedAddressState = {
@@ -137,7 +138,12 @@ export default function ReportPage() {
   return (
     <main className="mx-auto flex h-screen max-w-md flex-col overflow-hidden bg-white">
       <header className="z-[6] flex h-14 w-full shrink-0 items-center gap-1 overflow-hidden bg-white px-2">
-        <div className="size-12 opacity-0" aria-hidden />
+        <Link
+          href="/"
+          className="flex size-12 shrink-0 items-center justify-center text-[12px] font-bold leading-tight text-[#171717]"
+        >
+          {SITE_BRAND_KO}
+        </Link>
         <h1 className="min-w-0 flex-1 text-center text-[16px] font-bold leading-6 text-[#171717]">제보하기</h1>
         <Link href="/" className="flex size-12 items-center justify-center" aria-label="닫기">
           <img src="/Img/Icon/close_32.svg" alt="" width={32} height={32} className="size-8" />
@@ -282,6 +288,7 @@ export default function ReportPage() {
             {submitting ? "제출 중..." : "제보하기"}
           </button>
         </div>
+        <p className="px-4 pb-1 text-center text-[12px] text-[#999999]">{SITE_BRAND_KO}</p>
         <div className="h-[33px] w-full bg-white pb-[env(safe-area-inset-bottom,0px)]">
           <div className="relative mx-auto h-full w-[135px]">
             <span className="absolute bottom-2 left-1/2 h-[5px] w-[135px] -translate-x-1/2 rounded-[100px] bg-[#222222]" />

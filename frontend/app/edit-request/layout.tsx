@@ -1,16 +1,34 @@
 import type { Metadata } from "next";
+import {
+  DEFAULT_OG_IMAGE_ALT,
+  SITE_BRAND_KO,
+  defaultOpenGraphImage,
+  seoAbsoluteMetaTitleForPath,
+  seoMetaDescriptionForPath
+} from "@/lib/seoBrand";
+
+const PATH = "/edit-request";
+const TITLE = seoAbsoluteMetaTitleForPath(PATH);
+const DESCRIPTION = seoMetaDescriptionForPath(PATH);
 
 export const metadata: Metadata = {
-  alternates: { canonical: "/edit-request" },
-  title: "판매처 정보 수정 요청",
-  description:
-    "등록된 판매처의 폐업·주소 변경·판매 품목 변경 등을 요청하세요. 확인 후 지도 정보가 업데이트됩니다.",
+  alternates: { canonical: PATH },
+  title: { absolute: TITLE },
+  description: DESCRIPTION,
   openGraph: {
-    title: "판매처 정보 수정 요청",
-    description: "잘못된 판매처 정보를 알려주시면 검토 후 반영합니다.",
-    url: "/edit-request"
+    title: TITLE,
+    description: DESCRIPTION,
+    url: PATH,
+    siteName: SITE_BRAND_KO,
+    images: [{ ...defaultOpenGraphImage, alt: DEFAULT_OG_IMAGE_ALT }],
   },
-  robots: { index: true, follow: true }
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
+    images: [defaultOpenGraphImage.url],
+  },
+  robots: { index: true, follow: true },
 };
 
 export default function EditRequestLayout({ children }: { children: React.ReactNode }) {

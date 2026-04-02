@@ -33,6 +33,10 @@ export default function SearchControls({
 
   return (
     <section className="space-y-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-title-md font-bold tracking-tight text-text-primary">쓰봉맵</p>
+        <span className="shrink-0 text-caption text-text-tertiary">종량제·마대·스티커</span>
+      </div>
       <div className="flex items-center gap-2 overflow-x-auto">
         <FilterChip label="기본 지역(강남)" active={listMode === "defaultRegion"} onClick={onClickDefaultRegion} />
         <FilterChip label="내 위치" active={listMode === "myLocation"} onClick={onClickMyLocation} />

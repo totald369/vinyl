@@ -7,6 +7,7 @@ import {
   districtTrashbagH1
 } from "@/lib/districtTrashbagSeo";
 import { SITE_URL } from "@/lib/site";
+import { SITE_BRAND_KO } from "@/lib/seoBrand";
 
 type RawRow = {
   name?: string;
@@ -49,7 +50,7 @@ export function buildDistrictTrashbagJsonLd(cfg: DistrictTrashbagConfig, pagePat
     url: pageUrl,
     isPartOf: {
       "@type": "WebSite",
-      name: "trashbagmap",
+      name: SITE_BRAND_KO,
       url: SITE_URL
     },
     about: {

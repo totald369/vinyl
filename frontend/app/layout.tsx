@@ -4,21 +4,29 @@ import Script from "next/script";
 import { GoogleAnalytics } from "@/components/GoogleAnalytics";
 import { GA_MEASUREMENT_ID } from "@/lib/gtag";
 import { SITE_URL } from "@/lib/site";
+import {
+  DEFAULT_OG_IMAGE_ALT,
+  SITE_BRAND_KO,
+  SEO_META_DESCRIPTION_BY_VARIANT,
+  SEO_META_TITLE_VARIANTS,
+  defaultOpenGraphImage
+} from "@/lib/seoBrand";
 
-const DEFAULT_TITLE =
-  "종량제봉투·불연성마대·PP마대·건설마대 판매처 찾기 | 위치 기반 지도";
-const DEFAULT_DESCRIPTION =
-  "종량제봉투, 불연성마대, PP마대(건설마대), 폐기물 스티커 판매처를 내 위치·주소·업체명으로 검색하고 지도에서 거리순으로 확인하세요. 전국 지정 판매처 안내.";
+const DEFAULT_TITLE = SEO_META_TITLE_VARIANTS[0];
+const DEFAULT_DESCRIPTION = SEO_META_DESCRIPTION_BY_VARIANT[0];
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
+  applicationName: SITE_BRAND_KO,
   title: {
     default: DEFAULT_TITLE,
-    template: "%s | trashbagmap"
+    template: `${SITE_BRAND_KO} | %s`
   },
   description: DEFAULT_DESCRIPTION,
   keywords: [
+    "쓰봉맵",
     "종량제봉투",
+    "종량제 봉투",
     "불연성마대",
     "PP마대",
     "건설마대",
@@ -47,15 +55,17 @@ export const metadata: Metadata = {
     title: DEFAULT_TITLE,
     description: DEFAULT_DESCRIPTION,
     url: "/",
-    siteName: "trashbagmap",
+    siteName: SITE_BRAND_KO,
     locale: "ko_KR",
     type: "website",
+    images: [{ ...defaultOpenGraphImage, alt: DEFAULT_OG_IMAGE_ALT }],
   },
 
   twitter: {
     card: "summary_large_image",
     title: DEFAULT_TITLE,
     description: DEFAULT_DESCRIPTION,
+    images: [defaultOpenGraphImage.url],
   },
 };
 

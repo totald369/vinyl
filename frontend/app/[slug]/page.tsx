@@ -5,13 +5,17 @@ import {
   buildDistrictExtraIntro,
   districtIntroLeadParagraph,
   districtSeoDescription,
-  districtSeoTitle,
   districtTrashbagH1,
   getDistrictTrashbagConfig,
   isDistrictTrashbagSlug,
   type DistrictTrashbagSlug
 } from "@/lib/districtTrashbagSeo";
 import { buildDistrictTrashbagJsonLd } from "@/lib/districtTrashbagJsonLd";
+import {
+  SITE_BRAND_KO,
+  defaultOpenGraphImage,
+  seoAbsoluteMetaTitleForPath
+} from "@/lib/seoBrand";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -30,7 +34,7 @@ export function generateMetadata({ params }: PageProps): Metadata {
   }
   const cfg = getDistrictTrashbagConfig(params.slug)!;
   const path = `/${cfg.slug}`;
-  const title = districtSeoTitle(cfg);
+  const title = seoAbsoluteMetaTitleForPath(path);
   const description = districtSeoDescription(cfg);
   return {
     alternates: { canonical: path },
@@ -41,12 +45,14 @@ export function generateMetadata({ params }: PageProps): Metadata {
       description,
       url: path,
       locale: "ko_KR",
-      type: "website"
+      type: "website",
+      images: [defaultOpenGraphImage]
     },
     twitter: {
       card: "summary_large_image",
       title,
-      description
+      description,
+      images: [defaultOpenGraphImage.url]
     },
     robots: { index: true, follow: true }
   };
@@ -72,7 +78,7 @@ export default function DistrictTrashbagPage({ params }: PageProps) {
       <article className="mx-auto max-w-2xl px-4 pb-16 pt-4 md:px-6 md:pt-8">
         <nav className="mb-4 text-body-sm text-text-secondary" aria-label="이동 경로">
           <Link href="/" className="hover:underline">
-            홈
+            쓰봉맵 홈
           </Link>
           <span aria-hidden className="mx-1.5 text-text-tertiary">
             /
@@ -104,6 +110,10 @@ export default function DistrictTrashbagPage({ params }: PageProps) {
           </a>
           를 함께 확인해 주세요.
         </p>
+
+        <footer className="mt-10 border-t border-border-subtle pt-6 text-center text-caption text-text-tertiary">
+          {SITE_BRAND_KO}
+        </footer>
       </article>
     </>
   );

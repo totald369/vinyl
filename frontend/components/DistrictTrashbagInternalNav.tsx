@@ -31,7 +31,7 @@ export default function DistrictTrashbagInternalNav({ currentSlug }: Props) {
         ))}
         <li>
           <Link href="/" className="font-medium text-brand-700 underline-offset-2 hover:underline">
-            서울 전체 보기
+            쓰봉맵 홈
           </Link>
         </li>
         <li>

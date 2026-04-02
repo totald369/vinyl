@@ -1,9 +1,9 @@
 import { ImageResponse } from "next/og";
+import { SITE_BRAND_KO } from "@/lib/seoBrand";
 
 export const runtime = "edge";
 
-export const alt =
-  "종량제봉투·불연성마대·PP마대(건설마대)·폐기물 스티커 판매처 — 위치 기반 지도";
+export const alt = `${SITE_BRAND_KO} — 종량제 봉투·불연성마대·PP마대(건설마대)·폐기물 스티커 판매처 지도`;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -41,7 +41,7 @@ export default async function OpenGraphImage() {
             letterSpacing: "-0.02em",
           }}
         >
-          trashbagmap
+          {SITE_BRAND_KO}
         </div>
         <div
           style={{
@@ -63,7 +63,7 @@ export default async function OpenGraphImage() {
             textAlign: "center",
           }}
         >
-          내 주변 판매처를 지도·검색으로 찾기
+          지금 바로 내 주변 판매처를 지도·검색으로 찾기
         </div>
       </div>
     ),

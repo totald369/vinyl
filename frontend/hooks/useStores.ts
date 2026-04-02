@@ -130,17 +130,28 @@ export function useStores(
       fetch("/data/stores.gunpo.json").then((res) =>
         res.ok ? (res.json() as Promise<RawStoreRow[]>) : ([] as RawStoreRow[])
       ),
+      fetch("/data/stores.goyang.json").then((res) =>
+        res.ok ? (res.json() as Promise<RawStoreRow[]>) : ([] as RawStoreRow[])
+      ),
+      fetch("/data/stores.goyang-sticker.json").then((res) =>
+        res.ok ? (res.json() as Promise<RawStoreRow[]>) : ([] as RawStoreRow[])
+      ),
       fetch("/data/reports_rows.json").then((res) =>
         res.ok ? (res.json() as Promise<RawReportRow[]>) : ([] as RawReportRow[])
       )
     ])
-      .then(([mainRows, gunpoRows, reportRows]) => {
+      .then(([mainRows, gunpoRows, goyangRows, goyangStickerRows, reportRows]) => {
         if (!mounted) return;
 
         const verifiedIds = collectVerifiedStoreIdsFromReports(reportRows);
         const extraRaw = reportRowsToExtraRawStores(reportRows);
 
-        const normalizedMain = [...mainRows, ...gunpoRows]
+        const normalizedMain = [
+          ...mainRows,
+          ...gunpoRows,
+          ...goyangRows,
+          ...goyangStickerRows
+        ]
           .map(normalizeRow)
           .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng))
           .map((row) => ({
