@@ -63,6 +63,7 @@ function mergeTwoStores<T extends MergeableStore>(a: T, b: T): T {
     hasSpecialBag: base.hasSpecialBag || other.hasSpecialBag,
     hasLargeWasteSticker:
       base.hasLargeWasteSticker || other.hasLargeWasteSticker,
+    adminVerified: !!(base.adminVerified || other.adminVerified),
     dataReferenceDate: pickNewerDate(
       base.dataReferenceDate,
       other.dataReferenceDate

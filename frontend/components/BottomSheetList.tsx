@@ -578,9 +578,20 @@ export default function BottomSheetList({
                   >
                     <div className="flex flex-col gap-3">
                       <div className="flex flex-col gap-1.5">
-                        <p className="text-[18px] font-semibold leading-normal tracking-[0.1px] text-[#171717]">
-                          {store.name}
-                        </p>
+                        <div className="flex items-center gap-0.5">
+                          <p className="text-[18px] font-semibold leading-normal tracking-[0.1px] text-[#171717]">
+                            {store.name}
+                          </p>
+                          {store.adminVerified ? (
+                            <img
+                              src="/Img/Icon/confirm_24.svg"
+                              alt="판매여부 확인완료"
+                              width={20}
+                              height={20}
+                              className="size-5 shrink-0"
+                            />
+                          ) : null}
+                        </div>
                         <div className="flex min-w-0 items-center gap-2">
                           <p className="min-w-0 truncate text-[14px] font-normal leading-normal tracking-[0.1px] text-[#555555]">
                             {shortRegion(store.roadAddress || store.address || "")}

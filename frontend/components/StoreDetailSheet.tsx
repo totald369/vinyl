@@ -74,15 +74,25 @@ export default function StoreDetailSheet({
         >
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-1">
+                <h2 className="text-[20px] font-bold leading-normal tracking-[0.1px] text-[#171717]">
+                  {store.name}
+                </h2>
+                {store.adminVerified ? (
+                  <img
+                    src="/Img/Icon/confirm_24.svg"
+                    alt=""
+                    width={24}
+                    height={24}
+                    className="size-6 shrink-0"
+                  />
+                ) : null}
+              </div>
               {store.adminVerified ? (
-                <div className="flex items-center gap-2">
-                  <img src="/Img/Icon/confirm_24.svg" alt="" width={24} height={24} className="size-6 shrink-0" />
-                  <p className="text-[16px] font-semibold leading-normal tracking-[0.1px] text-[#0130b6]">
-                    판매여부 확인완료
-                  </p>
-                </div>
+                <p className="text-[16px] font-semibold leading-normal tracking-[0.1px] text-[#0130b6]">
+                  판매여부 확인완료
+                </p>
               ) : null}
-              <h2 className="text-[20px] font-bold leading-normal tracking-[0.1px] text-[#171717]">{store.name}</h2>
             </div>
             {addressLine ? (
               <p className="text-[16px] font-normal leading-[1.4] tracking-[0.1px] text-[#555555]">

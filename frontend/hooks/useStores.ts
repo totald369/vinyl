@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { dedupeStoresByNameAndLocation } from "@/lib/dedupeStores";
 import { pickDataReferenceDateFromRow } from "@/lib/datasetDate";
+import {
+  collectVerifiedStoreIdsFromReports,
+  reportRowsToExtraRawStores,
+  type RawReportRow
+} from "@/lib/reportStores";
 import { DEFAULT_REGION, LatLng } from "@/lib/types";
 const LIST_RADIUS_KM = 2;
 
@@ -114,21 +119,37 @@ export function useStores(
     setLoading(true);
     setError(null);
 
-    fetch("/data/stores.sample.json")
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error("stores.sample.json 로드 실패");
-        }
-        return res.json();
-      })
-      .then((rows: RawStoreRow[]) => {
+    Promise.all([
+      fetch("/data/stores.sample.json").then((res) => {
+        if (!res.ok) throw new Error("stores.sample.json 로드 실패");
+        return res.json() as Promise<RawStoreRow[]>;
+      }),
+      fetch("/data/reports_rows.json").then((res) =>
+        res.ok ? (res.json() as Promise<RawReportRow[]>) : ([] as RawReportRow[])
+      )
+    ])
+      .then(([mainRows, reportRows]) => {
         if (!mounted) return;
 
-        const cleaned = dedupeStoresByNameAndLocation(
-          rows
-            .map(normalizeRow)
-            .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng))
-        );
+        const verifiedIds = collectVerifiedStoreIdsFromReports(reportRows);
+        const extraRaw = reportRowsToExtraRawStores(reportRows);
+
+        const normalizedMain = mainRows
+          .map(normalizeRow)
+          .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng))
+          .map((row) => ({
+            ...row,
+            adminVerified: !!(row.adminVerified || verifiedIds.has(row.id))
+          }));
+
+        const normalizedExtra = extraRaw
+          .map((raw) => normalizeRow(raw as RawStoreRow))
+          .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng));
+
+        const cleaned = dedupeStoresByNameAndLocation([
+          ...normalizedMain,
+          ...normalizedExtra
+        ]);
 
         setStores(cleaned);
         setLoading(false);
