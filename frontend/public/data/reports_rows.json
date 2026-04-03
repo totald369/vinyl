@@ -14,5 +14,21 @@
     "message": "종량제 봉투",
     "status": "pending",
     "created_at": "2026-04-02 02:10:52.769711+00"
+  },
+  {
+    "id": "928b0f3b-39b9-4402-9796-e1b95f6e30f8",
+    "report_type": "edit_request",
+    "store_id": "25945",
+    "name": "롯데 프리미엄 푸드마켓공덕점",
+    "road_address": "서울 마포구 마포대로 109",
+    "detail_address": "롯데캐슬 지하1층",
+    "lat": 37.5450378113796,
+    "lng": 126.950657621071,
+    "has_trash_bag": true,
+    "has_special_bag": true,
+    "has_large_waste_sticker": false,
+    "message": "불연성 마대, 종량제 봉투",
+    "status": "pending",
+    "created_at": "2026-04-02 22:53:34.097608+00"
   }
 ]

@@ -6,6 +6,7 @@ import {
   dedupeStoresByNameAndLocation
 } from "@/lib/dedupeStores";
 import { pickDataReferenceDateFromRow } from "@/lib/datasetDate";
+import { parseSearchTokens, textMatchesAllTokens } from "@/lib/searchTokens";
 import {
   collectVerifiedStoreIdsFromReports,
   reportRowsToExtraRawStores,
@@ -197,7 +198,7 @@ export function useStores(
 
     const filter = options?.activeFilter ?? "payBag";
     const ds = options?.districtScope;
-    const addrNeedle = ds?.addressContains.trim().toLowerCase() ?? "";
+    const addrTokens = ds ? parseSearchTokens(ds.addressContains) : [];
     const maxRadiusKm =
       ds != null
         ? ds.listRadiusKm == null
@@ -211,9 +212,9 @@ export function useStores(
         distance: haversineKm(referencePoint, { lat: store.lat, lng: store.lng })
       }))
       .filter((store) => {
-        if (!addrNeedle) return true;
+        if (!addrTokens.length) return true;
         const blob = `${store.roadAddress ?? ""} ${store.address ?? ""}`.toLowerCase();
-        return blob.includes(addrNeedle);
+        return textMatchesAllTokens(blob, addrTokens);
       })
       .filter((store) => {
         if (filter === "nonBurnable") return store.hasSpecialBag;

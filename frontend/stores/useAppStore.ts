@@ -10,6 +10,7 @@ import {
   PermissionState,
   StoreItem
 } from "@/lib/types";
+import { parseSearchTokens, textMatchesAllTokens } from "@/lib/searchTokens";
 import { getDistanceKm } from "@/lib/utils";
 
 type AppState = {
@@ -42,7 +43,7 @@ function applyList({
   listMode: ListMode;
   userLocation: { lat: number; lng: number } | null;
 }): StoreItem[] {
-  const normalizedQuery = query.trim().toLowerCase();
+  const tokens = parseSearchTokens(query);
   let next = [...stores];
 
   if (selectedFilters.length > 0) {
@@ -51,12 +52,11 @@ function applyList({
     );
   }
 
-  if (normalizedQuery) {
-    next = next.filter(
-      (store) =>
-        store.name.toLowerCase().includes(normalizedQuery) ||
-        store.address.toLowerCase().includes(normalizedQuery)
-    );
+  if (tokens.length > 0) {
+    next = next.filter((store) => {
+      const blob = `${store.name} ${store.address}`.toLowerCase();
+      return textMatchesAllTokens(blob, tokens);
+    });
   }
 
   const origin =

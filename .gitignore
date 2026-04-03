@@ -16,6 +16,7 @@ frontend/.env.local
 # Geocode API cache (local)
 frontend/scripts/geocode-cache-goyang.json
 frontend/scripts/geocode-cache-goyang-sticker.json
+frontend/scripts/geocode-cache-reports-merge.json
 frontend/scripts/geocode-cache-gunpo.json
 frontend/scripts/geocode-cache-songpa.json
 frontend/scripts/geocode-cache-gangdong.json

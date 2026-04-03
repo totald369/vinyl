@@ -1,4 +1,5 @@
 import type { StoreData, StoreListFilter } from "@/hooks/useStores";
+import { parseSearchTokens, textMatchesAllTokens } from "@/lib/searchTokens";
 import type { LatLng } from "@/lib/types";
 import { getDistanceKm } from "@/lib/utils";
 
@@ -13,8 +14,8 @@ export function filterStoresForSearch(
   referencePoint: LatLng,
   limit?: number
 ): StoreData[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
+  const tokens = parseSearchTokens(query);
+  if (!tokens.length) return [];
 
   const sorted = stores
     .filter((s) => {
@@ -23,9 +24,8 @@ export function filterStoresForSearch(
       return s.hasTrashBag;
     })
     .filter((s) => {
-      const name = (s.name || "").toLowerCase();
-      const addr = ((s.roadAddress || s.address) ?? "").toLowerCase();
-      return name.includes(q) || addr.includes(q);
+      const blob = `${s.name ?? ""} ${(s.roadAddress || s.address) ?? ""}`.toLowerCase();
+      return textMatchesAllTokens(blob, tokens);
     })
     .map((s) => ({
       ...s,

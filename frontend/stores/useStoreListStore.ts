@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { isPointInBounds } from "@/lib/geo";
 import { mockStores } from "@/lib/mock";
+import { parseSearchTokens, textMatchesAllTokens } from "@/lib/searchTokens";
 import { getDistanceKm } from "@/lib/utils";
 import { ContentState, DEFAULT_REGION, FilterType, LatLng, SearchBounds, StoreItem } from "@/lib/types";
 
@@ -69,7 +70,7 @@ export const useStoreListStore = create<StoreListStore>((set, get) => ({
   applyAllFilters: (origin, bounds) => {
     try {
       const { allStores, query, selectedFilters } = get();
-      const normalizedQuery = query.trim().toLowerCase();
+      const tokens = parseSearchTokens(query);
       let next = [...allStores];
 
       if (selectedFilters.length > 0) {
@@ -78,12 +79,11 @@ export const useStoreListStore = create<StoreListStore>((set, get) => ({
         );
       }
 
-      if (normalizedQuery) {
-        next = next.filter(
-          (store) =>
-            store.name.toLowerCase().includes(normalizedQuery) ||
-            store.address.toLowerCase().includes(normalizedQuery)
-        );
+      if (tokens.length > 0) {
+        next = next.filter((store) => {
+          const blob = `${store.name} ${store.address}`.toLowerCase();
+          return textMatchesAllTokens(blob, tokens);
+        });
       }
 
       if (bounds) {
