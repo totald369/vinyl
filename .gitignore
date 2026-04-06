@@ -41,6 +41,7 @@ frontend/scripts/geocode-cache-seodaemun-gdms.json
 frontend/scripts/geocode-cache-yongsan.json
 frontend/scripts/geocode-cache-namyangju.json
 frontend/scripts/geocode-cache-suwon.json
+frontend/scripts/geocode-cache-gwacheon.json
 
 # TypeScript incremental
 **/tsconfig.tsbuildinfo
