@@ -16,9 +16,13 @@ type Props = {
   onActiveFilterChange: (value: StoreListFilter) => void;
   /** 필터·검색어 기준 전체 매칭 건수(표시용) */
   totalMatchCount: number;
+  /** 첫 페이지 API 로딩 중 */
+  loading?: boolean;
   /** 현재 화면에 그릴 구간(무한 스크롤) */
   results: StoreData[];
   hasMoreResults: boolean;
+  /** 다음 페이지 불러오는 중 */
+  loadingMoreResults?: boolean;
   onLoadMoreResults: () => void;
   onSelectStore: (store: StoreData) => void;
 };
@@ -31,8 +35,10 @@ export default function HomeSearchOverlay({
   activeFilter,
   onActiveFilterChange,
   totalMatchCount,
+  loading = false,
   results,
   hasMoreResults,
+  loadingMoreResults = false,
   onLoadMoreResults,
   onSelectStore
 }: Props) {
@@ -47,7 +53,7 @@ export default function HomeSearchOverlay({
   }, [open]);
 
   useEffect(() => {
-    if (!open || !hasMoreResults) return;
+    if (!open || !hasMoreResults || loadingMoreResults) return;
     const root = listRef.current;
     const target = sentinelRef.current;
     if (!root || !target) return;
@@ -60,7 +66,7 @@ export default function HomeSearchOverlay({
     );
     obs.observe(target);
     return () => obs.disconnect();
-  }, [open, hasMoreResults, onLoadMoreResults, results.length, totalMatchCount]);
+  }, [open, hasMoreResults, loadingMoreResults, onLoadMoreResults, results.length, totalMatchCount]);
 
   if (!open) return null;
 
@@ -157,7 +163,7 @@ export default function HomeSearchOverlay({
             </button>
           </div>
 
-          {query.trim() ? (
+          {query.trim() && !loading ? (
             <p
               className="shrink-0 px-4 text-[13px] font-medium leading-normal tracking-[0.1px] text-[#666666]"
               role="status"
@@ -178,6 +184,10 @@ export default function HomeSearchOverlay({
             {!query.trim() ? (
               <li className="px-4 py-8 text-center text-[14px] font-normal leading-normal tracking-[0.1px] text-[#999999]">
                 검색어를 입력하면 결과가 표시됩니다.
+              </li>
+            ) : loading ? (
+              <li className="px-4 py-8 text-center text-[14px] font-normal leading-normal tracking-[0.1px] text-[#666666]">
+                검색 중…
               </li>
             ) : totalMatchCount === 0 ? (
               <li className="flex flex-1 flex-col items-center justify-center px-4 pb-10 pt-4">
@@ -256,13 +266,13 @@ export default function HomeSearchOverlay({
                 </li>
               ))
             )}
-            {query.trim() && hasMoreResults ? (
+            {query.trim() && !loading && hasMoreResults ? (
               <li
                 ref={sentinelRef}
                 className="flex min-h-[48px] shrink-0 items-center justify-center py-2 text-[12px] text-[#999999]"
                 aria-hidden
               >
-                스크롤하면 더 불러옵니다…
+                {loadingMoreResults ? "불러오는 중…" : "스크롤하면 더 불러옵니다…"}
               </li>
             ) : null}
           </ul>

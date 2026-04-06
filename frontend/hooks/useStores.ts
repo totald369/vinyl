@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseSearchTokens, textMatchesAllTokens } from "@/lib/searchTokens";
 import type { StoreData } from "@/lib/storeData";
 import { DEFAULT_REGION, LatLng } from "@/lib/types";
 
 const LIST_RADIUS_KM = 2;
+const SEARCH_PAGE_SIZE = 100;
 
 export type StoreListFilter = "payBag" | "nonBurnable" | "largeSticker";
 
@@ -62,6 +63,11 @@ export function useStores(
   const [selectedStore, setSelectedStore] = useState<StoreData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** 검색(q) API: 전체 매칭 건수(표시용) */
+  const [searchTotal, setSearchTotal] = useState(0);
+  const [searchHasMore, setSearchHasMore] = useState(false);
+  const [searchLoadingMore, setSearchLoadingMore] = useState(false);
+  const searchFetchGen = useRef(0);
 
   const searchQuery = options?.searchQuery ?? "";
   const debouncedSearch = useDebounced(searchQuery.trim(), 320);
@@ -96,20 +102,31 @@ export function useStores(
     if (districtSlug && districtScope) {
       return `district:${districtSlug}:${districtScope.sortFrom.lat}:${districtScope.sortFrom.lng}`;
     }
-    return `home:${fetchCenter.lat}:${fetchCenter.lng}:q:${debouncedSearch}`;
+    if (debouncedSearch) {
+      const f = options?.activeFilter ?? "payBag";
+      return `search:${fetchCenter.lat}:${fetchCenter.lng}:q:${debouncedSearch}:f:${f}`;
+    }
+    return `home:${fetchCenter.lat}:${fetchCenter.lng}:radius`;
   }, [
     districtSlug,
     districtScope?.sortFrom.lat,
     districtScope?.sortFrom.lng,
     fetchCenter.lat,
     fetchCenter.lng,
-    debouncedSearch
+    debouncedSearch,
+    options?.activeFilter
   ]);
 
   useEffect(() => {
     let mounted = true;
+    const gen = ++searchFetchGen.current;
     setLoading(true);
     setError(null);
+    setSearchLoadingMore(false);
+    setSearchHasMore(false);
+    if (debouncedSearch) {
+      setSearchTotal(0);
+    }
 
     const params = new URLSearchParams();
     params.set("lat", String(fetchCenter.lat));
@@ -119,25 +136,43 @@ export function useStores(
       params.set("district", districtSlug);
     } else if (debouncedSearch) {
       params.set("q", debouncedSearch);
+      params.set("offset", "0");
+      params.set("limit", String(SEARCH_PAGE_SIZE));
+      params.set("filter", options?.activeFilter ?? "payBag");
     } else {
       params.set("radiusKm", String(LIST_RADIUS_KM));
     }
 
-    fetch(`/api/stores?${params.toString()}`)
+    const url = `/api/stores?${params.toString()}`;
+
+    fetch(url)
       .then((res) => {
         if (!res.ok) throw new Error(`매장 데이터를 불러오지 못했습니다 (${res.status})`);
-        return res.json() as Promise<{ stores: StoreData[] }>;
+        return res.json() as Promise<{
+          stores: StoreData[];
+          mode?: string;
+          total?: number;
+          hasMore?: boolean;
+        }>;
       })
       .then((data) => {
-        if (!mounted) return;
+        if (!mounted || gen !== searchFetchGen.current) return;
         const rows = Array.isArray(data.stores) ? data.stores : [];
-        setStores(rows);
+        if (debouncedSearch) {
+          setStores(rows);
+          setSearchTotal(typeof data.total === "number" ? data.total : rows.length);
+          setSearchHasMore(Boolean(data.hasMore));
+        } else {
+          setStores(rows);
+        }
         setLoading(false);
       })
       .catch((e) => {
-        if (!mounted) return;
+        if (!mounted || gen !== searchFetchGen.current) return;
         setError(e instanceof Error ? e.message : "데이터 로드 오류");
         setStores([]);
+        setSearchTotal(0);
+        setSearchHasMore(false);
         setLoading(false);
       });
 
@@ -145,6 +180,64 @@ export function useStores(
       mounted = false;
     };
   }, [fetchDepsKey]);
+
+  const loadMoreSearchStores = useCallback(async () => {
+    if (districtSlug) return;
+    if (!debouncedSearch.trim()) return;
+    if (searchLoadingMore || !searchHasMore) return;
+
+    const gen = searchFetchGen.current;
+    setSearchLoadingMore(true);
+
+    const params = new URLSearchParams();
+    params.set("lat", String(fetchCenter.lat));
+    params.set("lng", String(fetchCenter.lng));
+    params.set("q", debouncedSearch);
+    params.set("offset", String(stores.length));
+    params.set("limit", String(SEARCH_PAGE_SIZE));
+    params.set("filter", options?.activeFilter ?? "payBag");
+
+    try {
+      const res = await fetch(`/api/stores?${params.toString()}`);
+      if (!res.ok) throw new Error(`매장 데이터를 불러오지 못했습니다 (${res.status})`);
+      const data = (await res.json()) as {
+        stores: StoreData[];
+        mode?: string;
+        hasMore?: boolean;
+      };
+      if (gen !== searchFetchGen.current) return;
+      const rows = Array.isArray(data.stores) ? data.stores : [];
+      setStores((prev) => {
+        const seen = new Set(prev.map((s) => s.id));
+        const merged = [...prev];
+        for (const s of rows) {
+          if (!seen.has(s.id)) {
+            seen.add(s.id);
+            merged.push(s);
+          }
+        }
+        return merged;
+      });
+      setSearchHasMore(Boolean(data.hasMore));
+    } catch {
+      if (gen === searchFetchGen.current) {
+        setSearchHasMore(false);
+      }
+    } finally {
+      if (gen === searchFetchGen.current) {
+        setSearchLoadingMore(false);
+      }
+    }
+  }, [
+    debouncedSearch,
+    districtSlug,
+    fetchCenter.lat,
+    fetchCenter.lng,
+    options?.activeFilter,
+    searchHasMore,
+    searchLoadingMore,
+    stores.length
+  ]);
 
   const sortedStores = useMemo(() => {
     if (!stores.length) return [];
@@ -205,6 +298,10 @@ export function useStores(
     sortedStores,
     defaultCenter,
     loading,
-    error
+    error,
+    searchTotal,
+    searchHasMore,
+    searchLoadingMore,
+    loadMoreSearchStores
   };
 }

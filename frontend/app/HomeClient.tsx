@@ -11,13 +11,10 @@ import type { StoreListFilter } from "@/hooks/useStores";
 import type { BottomSheetSnap } from "@/lib/bottomSheetSnap";
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
 import { sendGtagEvent } from "@/lib/gtag";
-import { filterStoresForSearch } from "@/lib/storeSearch";
 import { DEFAULT_REGION, type LatLng } from "@/lib/types";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
 import { StoreData, useStores } from "@/hooks/useStores";
 import { useUserLocation } from "@/hooks/useUserLocation";
-
-const SEARCH_LIST_BATCH = 100;
 
 export default function HomeClient() {
   const { isLoading, error } = useKakaoMapLoader();
@@ -34,51 +31,28 @@ export default function HomeClient() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const { selectedStore, setSelectedStore, sortedStores, stores, defaultCenter, loading } = useStores(
-    userLocation,
-    {
-      activeFilter,
-      listReference: exploreAnchor,
-      searchQuery: searchOpen ? searchQuery : ""
-    }
-  );
-
-  const searchReference = useMemo(
-    () => userLocation ?? { lat: DEFAULT_REGION.lat, lng: DEFAULT_REGION.lng },
-    [userLocation]
-  );
-
-  const searchResultsAll = useMemo(
-    () =>
-      loading || !searchQuery.trim()
-        ? []
-        : filterStoresForSearch(stores, searchQuery, activeFilter, searchReference),
-    [activeFilter, loading, searchQuery, searchReference, stores]
-  );
-
-  const [searchVisibleCount, setSearchVisibleCount] = useState(SEARCH_LIST_BATCH);
-
-  useEffect(() => {
-    setSearchVisibleCount(SEARCH_LIST_BATCH);
-  }, [
-    searchOpen,
-    searchQuery,
+  const {
+    selectedStore,
+    setSelectedStore,
+    sortedStores,
+    stores,
+    defaultCenter,
+    loading,
+    searchTotal,
+    searchHasMore,
+    searchLoadingMore,
+    loadMoreSearchStores
+  } = useStores(userLocation, {
     activeFilter,
-    searchReference.lat,
-    searchReference.lng,
-    loading
-  ]);
+    listReference: exploreAnchor,
+    searchQuery: searchOpen ? searchQuery : ""
+  });
 
-  const searchResultsVisible = useMemo(
-    () => searchResultsAll.slice(0, searchVisibleCount),
-    [searchResultsAll, searchVisibleCount]
-  );
+  const searchOverlayResults = useMemo(() => {
+    if (!searchQuery.trim() || loading) return [];
+    return stores;
+  }, [loading, searchQuery, stores]);
 
-  const searchHasMore = searchVisibleCount < searchResultsAll.length;
-
-  const loadMoreSearchResults = useCallback(() => {
-    setSearchVisibleCount((c) => Math.min(c + SEARCH_LIST_BATCH, searchResultsAll.length));
-  }, [searchResultsAll.length]);
   const storesById = useMemo(() => new Map(stores.map((s) => [s.id, s])), [stores]);
 
   const [manualCenter, setManualCenter] = useState(defaultCenter);
@@ -270,10 +244,12 @@ export default function HomeClient() {
             onQueryChange={setSearchQuery}
             activeFilter={activeFilter}
             onActiveFilterChange={handleFilterChange}
-            totalMatchCount={searchResultsAll.length}
-            results={searchResultsVisible}
+            totalMatchCount={searchTotal}
+            loading={loading}
+            results={searchOverlayResults}
             hasMoreResults={searchHasMore}
-            onLoadMoreResults={loadMoreSearchResults}
+            loadingMoreResults={searchLoadingMore}
+            onLoadMoreResults={loadMoreSearchStores}
             onSelectStore={handleSearchSelectStore}
           />
 

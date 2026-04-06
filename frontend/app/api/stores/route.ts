@@ -16,7 +16,45 @@ export const runtime = "nodejs";
 
 const DEFAULT_RADIUS_KM = 2;
 const MAX_RADIUS_KM = 2;
-const SEARCH_LIMIT = 150;
+
+/** 검색(q) 매칭 후 거리순으로 잘라 보내는 상한. 경기도 등 광역 검색 시 수만 건이 필요해 150은 부족함. */
+function getSearchLimit(): number {
+  const raw = process.env.STORES_SEARCH_LIMIT;
+  if (raw != null && raw !== "") {
+    const n = Number(raw);
+    if (Number.isFinite(n)) {
+      return Math.min(100000, Math.max(500, Math.floor(n)));
+    }
+  }
+  return 25000;
+}
+
+const SEARCH_PAGE_DEFAULT = 100;
+const SEARCH_PAGE_MAX = 200;
+
+function parseSearchOffsetLimit(searchParams: URLSearchParams): { offset: number; limit: number } {
+  let offset = Number(searchParams.get("offset"));
+  let limit = Number(searchParams.get("limit"));
+  if (!Number.isFinite(offset) || offset < 0) offset = 0;
+  if (!Number.isFinite(limit) || limit < 1) limit = SEARCH_PAGE_DEFAULT;
+  limit = Math.min(Math.max(Math.floor(limit), 1), SEARCH_PAGE_MAX);
+  offset = Math.max(0, Math.floor(offset));
+  return { offset, limit };
+}
+
+type ProductFilter = "payBag" | "nonBurnable" | "largeSticker";
+
+function parseProductFilter(searchParams: URLSearchParams): ProductFilter {
+  const f = searchParams.get("filter")?.trim();
+  if (f === "nonBurnable" || f === "largeSticker") return f;
+  return "payBag";
+}
+
+function matchesProductFilter(s: StoreData, filter: ProductFilter): boolean {
+  if (filter === "nonBurnable") return s.hasSpecialBag;
+  if (filter === "largeSticker") return s.hasLargeWasteSticker;
+  return s.hasTrashBag;
+}
 
 /** 클라이언트에 노출하는 최소 필드 */
 function toPublicStore(s: StoreData, distanceKm?: number) {
@@ -110,13 +148,25 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // --- 검색: 전체에서 토큰 매칭 후 거리순 상한 ---
+  // --- 검색: 토큰 매칭 + 상품 필터 후 거리순, total 노출·offset/limit 페이지 ---
   if (qRaw) {
     const tokens = parseSearchTokens(qRaw);
     if (!tokens.length) {
-      return NextResponse.json({ mode: "search", stores: [] });
+      return NextResponse.json({
+        mode: "search",
+        total: 0,
+        offset: 0,
+        limit: SEARCH_PAGE_DEFAULT,
+        hasMore: false,
+        stores: []
+      });
     }
+    const productFilter = parseProductFilter(searchParams);
+    const { offset: rawOffset, limit } = parseSearchOffsetLimit(searchParams);
+    const maxServe = getSearchLimit();
+
     const candidates = all.filter((s) => {
+      if (!matchesProductFilter(s, productFilter)) return false;
       const blob = `${s.name} ${s.roadAddress ?? ""} ${s.address ?? ""}`.toLowerCase();
       return textMatchesAllTokens(blob, tokens);
     });
@@ -125,10 +175,20 @@ export async function GET(request: NextRequest) {
       d: getDistanceKm(origin.lat, origin.lng, s.lat, s.lng)
     }));
     withDist.sort((a, b) => a.d - b.d);
-    const sliced = withDist.slice(0, SEARCH_LIMIT);
+
+    const total = withDist.length;
+    const capped = withDist.slice(0, maxServe);
+    const offset = Math.min(rawOffset, capped.length);
+    const page = capped.slice(offset, offset + limit);
+    const hasMore = offset + page.length < capped.length;
+
     return NextResponse.json({
       mode: "search",
-      stores: sliced.map(({ store, d }) => toPublicStore(store, d))
+      total,
+      offset,
+      limit,
+      hasMore,
+      stores: page.map(({ store, d }) => toPublicStore(store, d))
     });
   }
 
