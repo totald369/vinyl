@@ -1,4 +1,5 @@
-import type { StoreData, StoreListFilter } from "@/hooks/useStores";
+import type { StoreData } from "@/lib/storeData";
+import type { StoreListFilter } from "@/hooks/useStores";
 import { parseSearchTokens, textMatchesAllTokens } from "@/lib/searchTokens";
 import type { LatLng } from "@/lib/types";
 import { getDistanceKm } from "@/lib/utils";

@@ -31,13 +31,17 @@ export default function HomeClient() {
   const [exploreAnchor, setExploreAnchor] = useState<LatLng | null>(null);
   /** 위치 권한이 있어도 검색/목록에서 선택한 지점으로 지도 중심 이동 */
   const [mapCenterOverride, setMapCenterOverride] = useState<LatLng | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { selectedStore, setSelectedStore, sortedStores, stores, defaultCenter, loading } = useStores(
     userLocation,
-    { activeFilter, listReference: exploreAnchor }
+    {
+      activeFilter,
+      listReference: exploreAnchor,
+      searchQuery: searchOpen ? searchQuery : ""
+    }
   );
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
 
   const searchReference = useMemo(
     () => userLocation ?? { lat: DEFAULT_REGION.lat, lng: DEFAULT_REGION.lng },

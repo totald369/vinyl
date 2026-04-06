@@ -1,18 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  dedupeStoresByBizNameProximity,
-  dedupeStoresByNameAndLocation
-} from "@/lib/dedupeStores";
-import { pickDataReferenceDateFromRow } from "@/lib/datasetDate";
 import { parseSearchTokens, textMatchesAllTokens } from "@/lib/searchTokens";
-import {
-  collectVerifiedStoreIdsFromReports,
-  reportRowsToExtraRawStores,
-  type RawReportRow
-} from "@/lib/reportStores";
+import type { StoreData } from "@/lib/storeData";
 import { DEFAULT_REGION, LatLng } from "@/lib/types";
+
 const LIST_RADIUS_KM = 2;
 
 export type StoreListFilter = "payBag" | "nonBurnable" | "largeSticker";
@@ -25,21 +17,7 @@ export type DistrictListScope = {
   listRadiusKm?: number | null;
 };
 
-export type StoreData = {
-  id: string;
-  name: string;
-  lat: number;
-  lng: number;
-  roadAddress?: string;
-  address?: string;
-  businessStatus?: string;
-  hasTrashBag: boolean;
-  hasSpecialBag: boolean;
-  hasLargeWasteSticker: boolean;
-  adminVerified?: boolean;
-  dataReferenceDate?: string;
-  distance?: number;
-};
+export type { StoreData };
 
 function toRadians(value: number) {
   return (value * Math.PI) / 180;
@@ -59,50 +37,13 @@ function haversineKm(from: LatLng, to: LatLng) {
   return earthRadiusKm * c;
 }
 
-type RawStoreRow = {
-  id?: string;
-  name?: string;
-  lat?: number;
-  lng?: number;
-  roadAddress?: string;
-  address?: string;
-  businessStatus?: string;
-  largeWasteStickerYn?: string;
-  storeCategory?: string;
-  adminVerified?: boolean;
-  dataReferenceDate?: string;
-  hasTrashBag?: boolean;
-  hasSpecialBag?: boolean;
-  hasLargeWasteSticker?: boolean;
-} & Record<string, unknown>;
-
-function normalizeRow(raw: RawStoreRow): StoreData {
-  const hasTrashBag =
-    raw.hasTrashBag === true || raw.storeCategory === "payBag";
-  const hasSpecialBag =
-    raw.hasSpecialBag === true || raw.storeCategory === "nonBurnable";
-  const hasLargeWasteSticker =
-    raw.hasLargeWasteSticker === true || raw.largeWasteStickerYn === "Y";
-
-  const fromJson =
-    typeof raw.dataReferenceDate === "string" && raw.dataReferenceDate.trim()
-      ? raw.dataReferenceDate.trim()
-      : "";
-
-  return {
-    id: String(raw.id ?? ""),
-    name: String(raw.name ?? ""),
-    lat: Number(raw.lat),
-    lng: Number(raw.lng),
-    roadAddress: raw.roadAddress ?? raw.address ?? "",
-    address: raw.address ?? "",
-    businessStatus: raw.businessStatus,
-    hasTrashBag,
-    hasSpecialBag,
-    hasLargeWasteSticker,
-    adminVerified: raw.adminVerified === true,
-    dataReferenceDate: fromJson || pickDataReferenceDateFromRow(raw)
-  };
+function useDebounced<T>(value: T, ms: number): T {
+  const [d, setD] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setD(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return d;
 }
 
 export function useStores(
@@ -111,6 +52,10 @@ export function useStores(
     activeFilter: StoreListFilter;
     listReference?: LatLng | null;
     districtScope?: DistrictListScope | null;
+    /** 구 SEO 페이지일 때만 설정 — API에서 해당 구 매장만 로드 */
+    districtSlug?: string;
+    /** 검색 오버레이 입력값(홈·구 공통). 비어 있으면 반경 API 사용 */
+    searchQuery?: string;
   }
 ) {
   const [stores, setStores] = useState<StoreData[]>([]);
@@ -118,72 +63,88 @@ export function useStores(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const searchQuery = options?.searchQuery ?? "";
+  const debouncedSearch = useDebounced(searchQuery.trim(), 320);
+
+  const districtSlug = options?.districtSlug;
+  const districtScope = options?.districtScope;
+
+  const listRef = options?.listReference ?? null;
+
+  const fetchCenter = useMemo((): LatLng => {
+    if (districtSlug && districtScope) {
+      return districtScope.sortFrom;
+    }
+    return (
+      listRef ??
+      userLocation ?? {
+        lat: DEFAULT_REGION.lat,
+        lng: DEFAULT_REGION.lng
+      }
+    );
+  }, [
+    districtSlug,
+    districtScope,
+    listRef?.lat,
+    listRef?.lng,
+    userLocation?.lat,
+    userLocation?.lng
+  ]);
+
+  /** 구 페이지는 검색 입력으로 API를 다시 부르지 않고(클라이언트 필터만), 홈은 반경/검색에 따라 재요청 */
+  const fetchDepsKey = useMemo(() => {
+    if (districtSlug && districtScope) {
+      return `district:${districtSlug}:${districtScope.sortFrom.lat}:${districtScope.sortFrom.lng}`;
+    }
+    return `home:${fetchCenter.lat}:${fetchCenter.lng}:q:${debouncedSearch}`;
+  }, [
+    districtSlug,
+    districtScope?.sortFrom.lat,
+    districtScope?.sortFrom.lng,
+    fetchCenter.lat,
+    fetchCenter.lng,
+    debouncedSearch
+  ]);
+
   useEffect(() => {
     let mounted = true;
     setLoading(true);
     setError(null);
 
-    Promise.all([
-      fetch("/data/stores.sample.json").then((res) => {
-        if (!res.ok) throw new Error("stores.sample.json 로드 실패");
-        return res.json() as Promise<RawStoreRow[]>;
-      }),
-      fetch("/data/stores.gunpo.json").then((res) =>
-        res.ok ? (res.json() as Promise<RawStoreRow[]>) : ([] as RawStoreRow[])
-      ),
-      fetch("/data/stores.goyang.json").then((res) =>
-        res.ok ? (res.json() as Promise<RawStoreRow[]>) : ([] as RawStoreRow[])
-      ),
-      fetch("/data/stores.goyang-sticker.json").then((res) =>
-        res.ok ? (res.json() as Promise<RawStoreRow[]>) : ([] as RawStoreRow[])
-      ),
-      fetch("/data/reports_rows.json").then((res) =>
-        res.ok ? (res.json() as Promise<RawReportRow[]>) : ([] as RawReportRow[])
-      )
-    ])
-      .then(([mainRows, gunpoRows, goyangRows, goyangStickerRows, reportRows]) => {
+    const params = new URLSearchParams();
+    params.set("lat", String(fetchCenter.lat));
+    params.set("lng", String(fetchCenter.lng));
+
+    if (districtSlug && districtScope) {
+      params.set("district", districtSlug);
+    } else if (debouncedSearch) {
+      params.set("q", debouncedSearch);
+    } else {
+      params.set("radiusKm", String(LIST_RADIUS_KM));
+    }
+
+    fetch(`/api/stores?${params.toString()}`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`매장 데이터를 불러오지 못했습니다 (${res.status})`);
+        return res.json() as Promise<{ stores: StoreData[] }>;
+      })
+      .then((data) => {
         if (!mounted) return;
-
-        const verifiedIds = collectVerifiedStoreIdsFromReports(reportRows);
-        const extraRaw = reportRowsToExtraRawStores(reportRows);
-
-        const normalizedMain = [
-          ...mainRows,
-          ...gunpoRows,
-          ...goyangRows,
-          ...goyangStickerRows
-        ]
-          .map(normalizeRow)
-          .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng))
-          .map((row) => ({
-            ...row,
-            adminVerified: !!(row.adminVerified || verifiedIds.has(row.id))
-          }));
-
-        const normalizedExtra = extraRaw
-          .map((raw) => normalizeRow(raw as RawStoreRow))
-          .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng));
-
-        const cleaned = dedupeStoresByBizNameProximity(
-          dedupeStoresByNameAndLocation([
-            ...normalizedMain,
-            ...normalizedExtra
-          ])
-        );
-
-        setStores(cleaned);
+        const rows = Array.isArray(data.stores) ? data.stores : [];
+        setStores(rows);
         setLoading(false);
       })
       .catch((e) => {
         if (!mounted) return;
         setError(e instanceof Error ? e.message : "데이터 로드 오류");
+        setStores([]);
         setLoading(false);
       });
 
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [fetchDepsKey]);
 
   const sortedStores = useMemo(() => {
     if (!stores.length) return [];

@@ -34,6 +34,8 @@ export default function DistrictTrashbagClient({ config }: Props) {
   const [sheetView, setSheetView] = useState<"list" | "detail">("list");
   const [exploreAnchor, setExploreAnchor] = useState<LatLng | null>(null);
   const [mapCenterOverride, setMapCenterOverride] = useState<LatLng | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const districtScope = useMemo(
     () => ({
@@ -46,7 +48,13 @@ export default function DistrictTrashbagClient({ config }: Props) {
 
   const { selectedStore, setSelectedStore, sortedStores, stores, loading } = useStores(
     userLocation,
-    { activeFilter, listReference: exploreAnchor, districtScope }
+    {
+      activeFilter,
+      listReference: exploreAnchor,
+      districtScope,
+      districtSlug: config.slug,
+      searchQuery: ""
+    }
   );
 
   const districtStores = useMemo(() => {
@@ -55,9 +63,6 @@ export default function DistrictTrashbagClient({ config }: Props) {
       `${s.roadAddress ?? ""} ${s.address ?? ""}`.toLowerCase().includes(n)
     );
   }, [stores, config.addressKeyword]);
-
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
 
   const searchReference = useMemo(
     () =>
