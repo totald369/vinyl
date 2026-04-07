@@ -1,5 +1,5 @@
 /** 빌드/런타임에 `NEXT_PUBLIC_GA_MEASUREMENT_ID`가 없을 때 쓰는 기본 측정 ID */
-const GA_DEFAULT_ID = "G-80ZYJJ27G5";
+const GA_DEFAULT_ID = "G-ZLEDFYW94N";
 
 /**
  * `NEXT_PUBLIC_*`는 빌드 시 클라이언트 번들에 인라인됩니다.

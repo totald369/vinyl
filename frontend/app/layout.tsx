@@ -78,19 +78,15 @@ export default function RootLayout({
 
   return (
     <html lang="ko">
+      <head>
+        {/*
+          Google 태그: <head> 바로 다음(프로덕션 + 유효한 측정 ID)
+          SPA 라우트 보조는 body의 GtagRouteTracker
+        */}
+        {isProd && GA_MEASUREMENT_ID ? <GoogleAnalyticsScripts /> : null}
+      </head>
       <body>
-        {isProd && GA_MEASUREMENT_ID ? (
-          <>
-            {/*
-              GA4 (프로덕션 + 유효한 측정 ID)
-              - GoogleAnalyticsScripts: gtag/js + 인라인 config → 최초 page_view (필수)
-              - GtagRouteTracker: 선택(NEXT_PUBLIC_GA_ROUTE_TRACKER≠0) 시 SPA 전환만 추가 page_view
-              라우트 추적 끄기: NEXT_PUBLIC_GA_ROUTE_TRACKER=0
-            */}
-            <GoogleAnalyticsScripts />
-            {GA_ROUTE_TRACKER_ENABLED ? <GtagRouteTracker /> : null}
-          </>
-        ) : null}
+        {isProd && GA_MEASUREMENT_ID && GA_ROUTE_TRACKER_ENABLED ? <GtagRouteTracker /> : null}
         {children}
       </body>
     </html>
