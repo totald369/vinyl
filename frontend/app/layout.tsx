@@ -1,8 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import Script from "next/script";
+import { GoogleAnalyticsScripts } from "@/components/GoogleAnalyticsScripts";
 import { GtagRouteTracker } from "@/components/GtagRouteTracker";
-import { GA_MEASUREMENT_ID } from "@/lib/gtag";
 import { SITE_URL } from "@/lib/site";
 import {
   DEFAULT_OG_IMAGE_ALT,
@@ -81,21 +80,13 @@ export default function RootLayout({
       <body>
         {isProd ? (
           <>
-            {/* 1) gtag.js — Google 권장 순서: 외부 스크립트 후 인라인 초기화 */}
-            <Script
-              id="ga-gtag-js"
-              src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
-              strategy="afterInteractive"
-            />
-            <Script id="ga-gtag-init" strategy="afterInteractive">
-              {`
-                window.dataLayer = window.dataLayer || [];
-                function gtag(){dataLayer.push(arguments);}
-                gtag('js', new Date());
-                gtag('config', '${GA_MEASUREMENT_ID}');
-              `}
-            </Script>
-            {/* 2) App Router 클라이언트 전환 시 page_view (최초 로드는 위 config로 1회만) */}
+            {/*
+              GA4 (프로덕션만)
+              - GoogleAnalyticsScripts: gtag.js + dataLayer + window.gtag + gtag(config) → 최초 page_view
+              - GtagRouteTracker: 클라이언트 라우트 변경 시 page_path 전송
+              테스트: Network `googletagmanager` / `collect`, Console `window.gtag` — Vercel에 NEXT_PUBLIC_GA_DEBUG=1
+            */}
+            <GoogleAnalyticsScripts />
             <GtagRouteTracker />
           </>
         ) : null}

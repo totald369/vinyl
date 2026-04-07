@@ -3,6 +3,17 @@ const nextConfig = {
   experimental: {
     typedRoutes: true
   },
+  /** non-www → www (lib/site.ts SITE_URL·GA 스트림과 동일 호스트로 통일) */
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "trashbagmap.com" }],
+        destination: "https://www.trashbagmap.com/:path*",
+        permanent: true
+      }
+    ];
+  },
   async rewrites() {
     return [{ source: "/favicon.ico", destination: "/Img/Icon/trash_bag_24.svg" }];
   },
