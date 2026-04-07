@@ -5,18 +5,29 @@ import Script from "next/script";
 import { GA_DEBUG, GA_MEASUREMENT_ID } from "@/lib/gtag";
 
 /**
- * App Router + next/script GA4 (프로덕션에서만 layout에서 마운트)
+ * GA4 필수 순서 (하나라도 빠지면 수집 안 됨):
+ * 1) <Script src="https://www.googletagmanager.com/gtag/js?id=측정ID" />
+ * 2) window.dataLayer = window.dataLayer || [];
+ * 3) function gtag(){ dataLayer.push(arguments); }  → 전역에 window.gtag = gtag
+ * 4) gtag('js', new Date());
+ * 5) gtag('config', '측정ID');
  *
- * 테스트 포인트 (배포 URL, 광고차단 끄기):
- * - Network 필터: `googletagmanager` → gtag/js 로드
- * - Network 필터: `collect` 또는 `google-analytics` → g/collect
- * - Console: NEXT_PUBLIC_GA_DEBUG=1 일 때 [GA] 로그 (아래 onLoad)
- * - Console: `typeof window.gtag`, `window.dataLayer`
+ * 인라인은 dangerouslySetInnerHTML로 넣어 React/번들이 문자열을 건드리지 않게 함.
+ * dataLayer는 window.dataLayer로 명시 (strict/스코프 이슈 방지).
  *
- * www vs non-www: SITE_URL은 www. non-www는 next.config redirects로 www로 통일.
+ * 테스트(배포 URL, 광고차단 끄기): typeof window.gtag === "function", window.dataLayer 배열,
+ * Network: googletagmanager.com/gtag/js, google-analytics.com/g/collect
  */
 export function GoogleAnalyticsScripts() {
   const id = GA_MEASUREMENT_ID;
+
+  const inlineInit = `
+window.dataLayer = window.dataLayer || [];
+function gtag(){window.dataLayer.push(arguments);}
+window.gtag = gtag;
+gtag('js', new Date());
+gtag('config', '${id}');
+`.trim();
 
   useEffect(() => {
     if (!GA_DEBUG || process.env.NODE_ENV !== "production") return;
@@ -40,15 +51,11 @@ export function GoogleAnalyticsScripts() {
           console.log("[GA] typeof window.gtag:", typeof window.gtag);
         }}
       />
-      <Script id="ga-gtag-init" strategy="afterInteractive">
-        {`
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
-          window.gtag = gtag;
-          gtag('js', new Date());
-          gtag('config', '${id}');
-        `}
-      </Script>
+      <Script
+        id="ga-gtag-init"
+        strategy="afterInteractive"
+        dangerouslySetInnerHTML={{ __html: inlineInit }}
+      />
     </>
   );
 }

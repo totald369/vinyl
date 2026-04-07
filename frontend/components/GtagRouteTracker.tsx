@@ -14,18 +14,19 @@ function GaPageViews() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isFirstNavigation = useRef(true);
+  const searchKey = searchParams.toString();
 
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") return;
 
-    const qs = searchParams?.toString();
+    const qs = searchKey;
     const path = qs ? `${pathname}?${qs}` : pathname;
 
     if (isFirstNavigation.current) {
       isFirstNavigation.current = false;
       if (GA_DEBUG) {
         console.log(
-          "[GA] 첫 화면은 layout config의 page_view에 맡김 — 경로:",
+          "[GA] 첫 화면은 GoogleAnalyticsScripts의 gtag(config) page_view에 맡김 — 경로:",
           path,
           "(여기서는 전송 안 함)"
         );
@@ -34,7 +35,7 @@ function GaPageViews() {
     }
 
     sendGtagPageView(path);
-  }, [pathname, searchParams]);
+  }, [pathname, searchKey]);
 
   return null;
 }
