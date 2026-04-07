@@ -2,6 +2,8 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { GoogleAnalyticsScripts } from "@/components/GoogleAnalyticsScripts";
 import { GtagRouteTracker } from "@/components/GtagRouteTracker";
+import { MicrosoftClarityScripts } from "@/components/MicrosoftClarityScripts";
+import { CLARITY_PROJECT_ID } from "@/lib/clarity";
 import { GA_MEASUREMENT_ID, GA_ROUTE_TRACKER_ENABLED } from "@/lib/gtag";
 import { SITE_URL } from "@/lib/site";
 import {
@@ -80,10 +82,11 @@ export default function RootLayout({
     <html lang="ko">
       <head>
         {/*
-          Google 태그: <head> 바로 다음(프로덕션 + 유효한 측정 ID)
-          SPA 라우트 보조는 body의 GtagRouteTracker
+          Google 태그 · Microsoft Clarity: <head> (프로덕션)
+          SPA 라우트 GA 보조는 body의 GtagRouteTracker
         */}
         {isProd && GA_MEASUREMENT_ID ? <GoogleAnalyticsScripts /> : null}
+        {isProd && CLARITY_PROJECT_ID ? <MicrosoftClarityScripts /> : null}
       </head>
       <body>
         {isProd && GA_MEASUREMENT_ID && GA_ROUTE_TRACKER_ENABLED ? <GtagRouteTracker /> : null}
