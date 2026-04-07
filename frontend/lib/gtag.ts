@@ -1,20 +1,60 @@
+/** 빌드/런타임에 `NEXT_PUBLIC_GA_MEASUREMENT_ID`가 없을 때 쓰는 기본 측정 ID */
 const GA_DEFAULT_ID = "G-80ZYJJ27G5";
 
-function resolveGaMeasurementId(): string {
+/**
+ * `NEXT_PUBLIC_*`는 빌드 시 클라이언트 번들에 인라인됩니다.
+ * - 키가 없음(undefined): 경고 후 기본값 사용(배포 기본 동작 유지).
+ * - 빈 문자열: 의도적 비활성화로 간주 → null, 스크립트 미삽입.
+ * - 형식 오류(G-… 아님): null + 경고.
+ */
+export function getGaMeasurementId(): string | null {
   const raw =
-    typeof process !== "undefined" ? process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim() : "";
-  if (raw && /^G-[A-Z0-9]+$/i.test(raw)) {
-    return raw;
+    typeof process !== "undefined" ? process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID : undefined;
+
+  if (raw === undefined) {
+    /* 프로덕션 빌드(SSG)에서는 로그 스팸 방지 — 로컬 dev에서만 안내 */
+    if (typeof console !== "undefined" && process.env.NODE_ENV !== "production") {
+      console.warn(
+        `[GA] NEXT_PUBLIC_GA_MEASUREMENT_ID is undefined; using built-in default ${GA_DEFAULT_ID}.`
+      );
+    }
+    return GA_DEFAULT_ID;
   }
-  return GA_DEFAULT_ID;
+
+  const trimmed = raw.trim();
+  if (trimmed === "") {
+    if (typeof console !== "undefined") {
+      console.warn(
+        "[GA] NEXT_PUBLIC_GA_MEASUREMENT_ID is empty; GA scripts will not load. Set a valid G- ID or remove the variable to use the default."
+      );
+    }
+    return null;
+  }
+
+  if (!/^G-[A-Z0-9]+$/i.test(trimmed)) {
+    if (typeof console !== "undefined") {
+      console.warn("[GA] NEXT_PUBLIC_GA_MEASUREMENT_ID is invalid:", raw);
+    }
+    return null;
+  }
+
+  return trimmed;
 }
 
-/** Vercel 등에서 `NEXT_PUBLIC_GA_MEASUREMENT_ID`로 덮어쓸 수 있습니다. 잘못된 값·빈 값은 기본값으로 대체합니다. */
-export const GA_MEASUREMENT_ID = resolveGaMeasurementId();
+/** 모듈 로드 시 한 번 결정. GoogleAnalyticsScripts / 클라이언트 gtag 호출이 동일 값을 씁니다. */
+export const GA_MEASUREMENT_ID: string | null = getGaMeasurementId();
+
+/**
+ * `NEXT_PUBLIC_GA_ROUTE_TRACKER=0` 또는 `false` → 라우트 전환 page_view만 끔.
+ * 최초 page_view는 GoogleAnalyticsScripts(gtag config)만으로 측정됨.
+ */
+export const GA_ROUTE_TRACKER_ENABLED =
+  typeof process !== "undefined" &&
+  process.env.NEXT_PUBLIC_GA_ROUTE_TRACKER !== "0" &&
+  process.env.NEXT_PUBLIC_GA_ROUTE_TRACKER !== "false";
 
 /**
  * 프로덕션에서만 켜두세요. 수집 확인 후 `NEXT_PUBLIC_GA_DEBUG` 제거 권장.
- * Console: [GA] 접두 / Network: googletagmanager.com, google-analytics.com/g/collect
  */
 export const GA_DEBUG =
   typeof process !== "undefined" &&
@@ -43,23 +83,23 @@ const GTAG_RETRY_MS = 50;
 const GTAG_RETRY_MAX = 20;
 
 /**
- * 클라이언트 라우트 전환 시 page_view (최초 로드는 GoogleAnalyticsScripts의 gtag('config') 1회).
- * gtag가 아직 붙기 전에 라우트가 바뀌는 경우를 위해 짧게 재시도합니다.
+ * 클라이언트 라우트 전환 시 page_view (최초는 GoogleAnalyticsScripts의 gtag('config')만).
  */
 export function sendGtagPageView(path: string) {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || !GA_MEASUREMENT_ID) return;
   gaLog("page_view (route)", path);
 
+  const id = GA_MEASUREMENT_ID;
   const sendOrQueue = (attempt: number) => {
     if (typeof window.gtag === "function") {
-      window.gtag("config", GA_MEASUREMENT_ID, { page_path: path });
+      window.gtag("config", id, { page_path: path });
       return;
     }
     if (attempt < GTAG_RETRY_MAX) {
       window.setTimeout(() => sendOrQueue(attempt + 1), GTAG_RETRY_MS);
       return;
     }
-    (window.dataLayer ??= []).push(["config", GA_MEASUREMENT_ID, { page_path: path }]);
+    (window.dataLayer ??= []).push(["config", id, { page_path: path }]);
     gaLog("page_view: gtag 없음 → dataLayer 큐에 config 폴백");
   };
 
@@ -71,7 +111,7 @@ export function sendGtagEvent(
   eventName: GtagCustomEventName,
   params?: Record<string, string | number | boolean | undefined>
 ) {
-  if (typeof window === "undefined" || process.env.NODE_ENV !== "production") {
+  if (typeof window === "undefined" || process.env.NODE_ENV !== "production" || !GA_MEASUREMENT_ID) {
     return;
   }
   const cleaned = params

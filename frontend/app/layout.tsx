@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { GoogleAnalyticsScripts } from "@/components/GoogleAnalyticsScripts";
 import { GtagRouteTracker } from "@/components/GtagRouteTracker";
+import { GA_MEASUREMENT_ID, GA_ROUTE_TRACKER_ENABLED } from "@/lib/gtag";
 import { SITE_URL } from "@/lib/site";
 import {
   DEFAULT_OG_IMAGE_ALT,
@@ -78,16 +79,16 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body>
-        {isProd ? (
+        {isProd && GA_MEASUREMENT_ID ? (
           <>
             {/*
-              GA4 (프로덕션만)
-              - GoogleAnalyticsScripts: gtag.js + dataLayer + window.gtag + gtag(config) → 최초 page_view
-              - GtagRouteTracker: 클라이언트 라우트 변경 시 page_path 전송
-              테스트: Network `googletagmanager` / `collect`, Console `window.gtag` — Vercel에 NEXT_PUBLIC_GA_DEBUG=1
+              GA4 (프로덕션 + 유효한 측정 ID)
+              - GoogleAnalyticsScripts: gtag/js + 인라인 config → 최초 page_view (필수)
+              - GtagRouteTracker: 선택(NEXT_PUBLIC_GA_ROUTE_TRACKER≠0) 시 SPA 전환만 추가 page_view
+              라우트 추적 끄기: NEXT_PUBLIC_GA_ROUTE_TRACKER=0
             */}
             <GoogleAnalyticsScripts />
-            <GtagRouteTracker />
+            {GA_ROUTE_TRACKER_ENABLED ? <GtagRouteTracker /> : null}
           </>
         ) : null}
         {children}

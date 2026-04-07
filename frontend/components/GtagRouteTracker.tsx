@@ -2,13 +2,11 @@
 
 import { Suspense, useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { GA_DEBUG, sendGtagPageView } from "@/lib/gtag";
+import { GA_DEBUG, GA_MEASUREMENT_ID, sendGtagPageView } from "@/lib/gtag";
 
 /**
- * 최초 로드: layout의 gtag('config')가 자동 page_view 1회.
- * 이후: pathname·search 변경 시에만 sendGtagPageView (중복 방지).
- *
- * 테스트: 클라이언트 네비 후 Network에 추가 collect / Console에 [GA] page_view (route)
+ * layout에서 GA_ROUTE_TRACKER_ENABLED가 false면 마운트되지 않음 → 최초 page_view만
+ * GoogleAnalyticsScripts로 측정되는지 분리해서 검증 가능.
  */
 function GaPageViews() {
   const pathname = usePathname();
@@ -17,7 +15,7 @@ function GaPageViews() {
   const searchKey = searchParams.toString();
 
   useEffect(() => {
-    if (process.env.NODE_ENV !== "production") return;
+    if (process.env.NODE_ENV !== "production" || !GA_MEASUREMENT_ID) return;
 
     const qs = searchKey;
     const path = qs ? `${pathname}?${qs}` : pathname;
@@ -26,7 +24,7 @@ function GaPageViews() {
       isFirstNavigation.current = false;
       if (GA_DEBUG) {
         console.log(
-          "[GA] 첫 화면은 GoogleAnalyticsScripts의 gtag(config) page_view에 맡김 — 경로:",
+          "[GA] 첫 화면 page_view는 GoogleAnalyticsScripts만 — 경로:",
           path,
           "(여기서는 전송 안 함)"
         );
@@ -41,7 +39,9 @@ function GaPageViews() {
 }
 
 export function GtagRouteTracker() {
-  if (process.env.NODE_ENV !== "production") return null;
+  if (process.env.NODE_ENV !== "production" || !GA_MEASUREMENT_ID) {
+    return null;
+  }
 
   return (
     <Suspense fallback={null}>
