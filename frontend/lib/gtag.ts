@@ -1,4 +1,7 @@
-export const GA_MEASUREMENT_ID = "G-80ZYJJ27G5" as const;
+/** Vercel 등에서 `NEXT_PUBLIC_GA_MEASUREMENT_ID`로 덮어쓸 수 있습니다. */
+export const GA_MEASUREMENT_ID =
+  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim()) ||
+  "G-80ZYJJ27G5";
 
 export type GtagCustomEventName =
   | "click_my_location"

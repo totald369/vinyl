@@ -23,7 +23,8 @@ function GaPageViews() {
   return null;
 }
 
-export function GoogleAnalytics() {
+/** gtag 초기화는 `@next/third-parties/google`의 GoogleAnalytics가 담당하고, 여기서는 클라이언트 라우트 전환 시 page_view만 보강합니다. */
+export function GtagRouteTracker() {
   if (process.env.NODE_ENV !== "production") return null;
 
   return (

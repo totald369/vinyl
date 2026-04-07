@@ -1,7 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import Script from "next/script";
-import { GoogleAnalytics } from "@/components/GoogleAnalytics";
+import { GoogleAnalytics } from "@next/third-parties/google";
+import { GtagRouteTracker } from "@/components/GtagRouteTracker";
 import { GA_MEASUREMENT_ID } from "@/lib/gtag";
 import { SITE_URL } from "@/lib/site";
 import {
@@ -81,21 +81,10 @@ export default function RootLayout({
       <body>
         {isProd ? (
           <>
-            <Script
-              src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
-              strategy="afterInteractive"
-            />
-            <Script id="google-analytics-init" strategy="afterInteractive">
-              {`
-                window.dataLayer = window.dataLayer || [];
-                function gtag(){dataLayer.push(arguments);}
-                gtag('js', new Date());
-                gtag('config', '${GA_MEASUREMENT_ID}');
-              `}
-            </Script>
+            <GoogleAnalytics gaId={GA_MEASUREMENT_ID} />
+            <GtagRouteTracker />
           </>
         ) : null}
-        <GoogleAnalytics />
         {children}
       </body>
     </html>
