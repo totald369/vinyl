@@ -12,7 +12,6 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@next/third-parties": "^14.2.18",
     "@supabase/supabase-js": "^2.49.4",
     "es-hangul": "^2.3.8",
     "lottie-react": "^2.4.1",

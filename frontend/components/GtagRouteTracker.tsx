@@ -4,6 +4,10 @@ import { Suspense, useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { sendGtagPageView } from "@/lib/gtag";
 
+/**
+ * layout의 gtag('config')가 최초 page_view를 보냄.
+ * 이후 pathname·쿼리가 바뀔 때만 gtag('config', id, { page_path })로 추가 page_view (중복 방지).
+ */
 function GaPageViews() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -23,7 +27,6 @@ function GaPageViews() {
   return null;
 }
 
-/** gtag 초기화는 `@next/third-parties/google`의 GoogleAnalytics가 담당하고, 여기서는 클라이언트 라우트 전환 시 page_view만 보강합니다. */
 export function GtagRouteTracker() {
   if (process.env.NODE_ENV !== "production") return null;
 

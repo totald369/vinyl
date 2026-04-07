@@ -1,6 +1,6 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { GoogleAnalytics } from "@next/third-parties/google";
+import Script from "next/script";
 import { GtagRouteTracker } from "@/components/GtagRouteTracker";
 import { GA_MEASUREMENT_ID } from "@/lib/gtag";
 import { SITE_URL } from "@/lib/site";
@@ -81,7 +81,21 @@ export default function RootLayout({
       <body>
         {isProd ? (
           <>
-            <GoogleAnalytics gaId={GA_MEASUREMENT_ID} />
+            {/* 1) gtag.js — Google 권장 순서: 외부 스크립트 후 인라인 초기화 */}
+            <Script
+              id="ga-gtag-js"
+              src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+              strategy="afterInteractive"
+            />
+            <Script id="ga-gtag-init" strategy="afterInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', '${GA_MEASUREMENT_ID}');
+              `}
+            </Script>
+            {/* 2) App Router 클라이언트 전환 시 page_view (최초 로드는 위 config로 1회만) */}
             <GtagRouteTracker />
           </>
         ) : null}

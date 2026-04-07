@@ -16,6 +16,7 @@ declare global {
   }
 }
 
+/** 클라이언트 라우트 전환 시 GA4 page_view (최초 로드는 layout 인라인 config에서 처리) */
 export function sendGtagPageView(path: string) {
   if (typeof window === "undefined" || !window.gtag) return;
   window.gtag("config", GA_MEASUREMENT_ID, { page_path: path });
