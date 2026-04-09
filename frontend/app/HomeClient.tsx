@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import BottomSheetList from "@/components/BottomSheetList";
 import HomeSearchOverlay from "@/components/HomeSearchOverlay";
+import LayoutShiftObserver from "@/components/LayoutShiftObserver";
 import LocationPermissionModal from "@/components/LocationPermissionModal";
+import MapSkeleton from "@/components/MapSkeleton";
 import MapView from "@/components/MapView";
 import StoreDetailSheet from "@/components/StoreDetailSheet";
 import type { StoreListFilter } from "@/hooks/useStores";
@@ -166,37 +168,41 @@ export default function HomeClient() {
   }
 
   return (
-    <main className="relative mx-auto h-screen max-w-md overflow-hidden bg-bg-canvas">
-      {isLoading ? (
-        <div className="flex h-full items-center justify-center text-body-sm text-text-secondary">
-          카카오 지도를 불러오는 중입니다...
-        </div>
-      ) : (
-        <>
-          <div className={`h-full w-full ${sheetBlocksMapPointer ? "pointer-events-none" : ""}`}>
-            <MapView
-              center={center}
-              centerVersion={centerVersion}
-              preferredMapLevel={exploreAnchor != null ? 6 : 5}
-              stores={loading ? [] : mapStores}
-              activeFilter={activeFilter}
-              selectedStoreId={selectedStore?.id}
-              onSelectStore={handleMapMarkerSelect}
-              userMarkerPosition={permission === "granted" && userLocation ? userLocation : null}
-            />
+    <main className="relative mx-auto h-[100dvh] max-w-md overflow-hidden bg-bg-canvas">
+      <LayoutShiftObserver />
+      <div className="fixed inset-y-0 left-0 right-0 z-0 flex h-[100dvh] justify-center">
+        <div className="relative h-full min-h-0 w-full max-w-md">
+          <div
+            className={`absolute inset-0 z-0 ${sheetBlocksMapPointer ? "pointer-events-none" : ""}`}
+          >
+            {isLoading ? (
+              <MapSkeleton />
+            ) : (
+              <MapView
+                center={center}
+                centerVersion={centerVersion}
+                preferredMapLevel={exploreAnchor != null ? 6 : 5}
+                stores={loading ? [] : mapStores}
+                activeFilter={activeFilter}
+                selectedStoreId={selectedStore?.id}
+                onSelectStore={handleMapMarkerSelect}
+                userMarkerPosition={permission === "granted" && userLocation ? userLocation : null}
+              />
+            )}
           </div>
-          <section className="absolute left-[15px] right-[15px] top-[calc(16px+env(safe-area-inset-top,0px))] z-sheet flex flex-col gap-2">
+
+          <section className="pointer-events-none absolute left-[15px] right-[15px] top-[calc(16px+env(safe-area-inset-top,0px))] z-sheet flex flex-col gap-2">
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
-              className="flex h-12 w-full cursor-pointer items-center gap-2 rounded-[8px] border-0 bg-white px-4 py-2 text-left shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)] outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              className="pointer-events-auto flex h-12 w-full cursor-pointer items-center gap-2 rounded-[8px] border-0 bg-white px-4 py-2 text-left shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)] outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               <img src="/Img/Icon/search_24.svg" alt="" width={24} height={24} className="shrink-0" />
               <span className="flex h-full min-w-0 flex-1 items-center text-[16px] font-normal leading-normal tracking-[-0.3px] text-[#999999]">
                 주소나 업체명을 검색해주세요
               </span>
             </button>
-            <p className="rounded-[8px] bg-white/90 px-3 py-1.5 text-center text-[10px] leading-snug text-[#444444] shadow-[0px_0px_2px_0px_rgba(0,0,0,0.06)]">
+            <p className="pointer-events-auto rounded-[8px] bg-white/90 px-3 py-1.5 text-center text-[10px] leading-snug text-[#444444] shadow-[0px_0px_2px_0px_rgba(0,0,0,0.06)]">
               <span className="font-semibold text-[#171717]">종량제봉투</span>·
               <span className="font-semibold text-[#171717]">불연성마대</span>·
               <span className="font-semibold text-[#171717]">PP마대(건설마대)</span>·
@@ -206,7 +212,7 @@ export default function HomeClient() {
               <button
                 type="button"
                 onClick={handleMoveToLocation}
-                className="flex shrink-0 items-center justify-center border-0 bg-transparent p-0 shadow-none outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                className="pointer-events-auto flex shrink-0 items-center justify-center border-0 bg-transparent p-0 shadow-none outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 aria-label="내 위치"
               >
                 <img
@@ -224,7 +230,7 @@ export default function HomeClient() {
             <Link
               href="/report"
               onClick={() => sendGtagEvent("click_report")}
-              className="absolute bottom-[36vh] right-[15px] z-[35] flex items-center gap-0.5 rounded-full bg-[#d4fe1c] px-4 py-3 text-[16px] font-bold leading-normal tracking-[0.1px] text-[#171717] shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)]"
+              className="absolute bottom-[42vh] right-[15px] z-[35] flex items-center gap-0.5 rounded-full bg-[#d4fe1c] px-4 py-3 text-[16px] font-bold leading-normal tracking-[0.1px] text-[#171717] shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)] pointer-events-auto"
             >
               <img src="/Img/Icon/write_24.svg" alt="" width={24} height={24} className="shrink-0" />
               <span>제보하기</span>
@@ -270,11 +276,12 @@ export default function HomeClient() {
               snap={bottomSheetSnap}
               onSnapChange={setBottomSheetSnap}
               onDragActiveChange={setSheetBlocksMapPointer}
+              listLoading={loading}
             />
           )}
-        </>
-      )}
-      <nav aria-label="주요 안내 페이지">
+        </div>
+      </div>
+      <nav className="sr-only" aria-label="주요 안내 페이지">
         <a href="/stores">판매처 목록</a>
         {" · "}
         <a href="/gangnam">강남 종량제봉투 판매처 보기</a>

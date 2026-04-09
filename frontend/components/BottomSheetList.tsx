@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { StoreProductChips } from "@/components/StoreProductChips";
 import { StoreData, StoreListFilter } from "@/hooks/useStores";
 import {
@@ -24,27 +24,33 @@ type Props = {
   onSnapChange: (snap: BottomSheetSnap) => void;
   /** 시트를 드래그하는 동안 true (지도 등 상호작용 차단용) */
   onDragActiveChange?: (active: boolean) => void;
+  /** 목록 API 로딩 중(빈 목록일 때 스켈레톤으로 높이 유지) */
+  listLoading?: boolean;
 };
 
+/** 접힘 상태에서 화면에 보이는 시트 높이 ≈ 뷰포트 높이의 비율 */
+const COLLAPSED_PEEK_VH_RATIO = 0.4;
+/** 확장 시 시트 최대 높이: min(90vh, vh - 상단 여백) */
 const EXPANDED_TOP_OFFSET_PX = 108;
-const COLLAPSED_HEIGHT_RATIO = 0.35;
 
 function readViewportHeight(): number {
   if (typeof window === "undefined") return 640;
   return window.visualViewport?.height ?? window.innerHeight;
 }
 
-function peekHeightPx(): number {
-  return Math.max(140, Math.round(readViewportHeight() * COLLAPSED_HEIGHT_RATIO));
+function peekHeightPx(vh: number): number {
+  return Math.round(vh * COLLAPSED_PEEK_VH_RATIO);
 }
 
-function sheetFullHeightPx(): number {
-  return Math.max(200, Math.round(readViewportHeight() - EXPANDED_TOP_OFFSET_PX));
+function sheetFullHeightPx(vh: number): number {
+  const peek = peekHeightPx(vh);
+  const raw = Math.min(Math.round(vh * 0.9), vh - EXPANDED_TOP_OFFSET_PX);
+  return Math.min(Math.max(raw, peek + 80), Math.max(peek + 40, vh - 4));
 }
 
-function maxTranslateY(): number {
-  const fullH = sheetFullHeightPx();
-  const peekH = peekHeightPx();
+function maxTranslateY(vh: number): number {
+  const fullH = sheetFullHeightPx(vh);
+  const peekH = peekHeightPx(vh);
   return Math.max(0, fullH - peekH);
 }
 
@@ -75,7 +81,8 @@ export default function BottomSheetList({
   onChangeFilter,
   snap,
   onSnapChange,
-  onDragActiveChange
+  onDragActiveChange,
+  listLoading = false
 }: Props) {
   const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
   const scrollHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -158,21 +165,36 @@ export default function BottomSheetList({
     };
   }, []);
 
-  const geom = getBottomSheetSnapGeometry(maxTranslateY());
+  /**
+   * SSR·첫 클라이언트 페인트는 동일한 기본 높이(640)로 맞춰 하이드레이션 불일치를 방지하고,
+   * 마운트 직후 useLayoutEffect에서 실제 뷰포트로 갱신합니다.
+   */
+  const [viewportHeight, setViewportHeight] = useState(640);
+
+  useLayoutEffect(() => {
+    const sync = () => {
+      setViewportHeight(readViewportHeight());
+    };
+    sync();
+    window.addEventListener("resize", sync);
+    window.visualViewport?.addEventListener("resize", sync);
+    return () => {
+      window.removeEventListener("resize", sync);
+      window.visualViewport?.removeEventListener("resize", sync);
+    };
+  }, []);
+
+  const fullH = useMemo(() => sheetFullHeightPx(viewportHeight), [viewportHeight]);
+  const maxTy = useMemo(() => maxTranslateY(viewportHeight), [viewportHeight]);
+  const geom = useMemo(() => getBottomSheetSnapGeometry(maxTy), [maxTy]);
 
   useEffect(() => {
-    const onResize = () => {
-      if (dragTy == null) return;
-      const g = getBottomSheetSnapGeometry(maxTranslateY());
-      setDragTy((ty) => (ty == null ? ty : Math.min(g.maxTy, Math.max(0, ty))));
-    };
-    window.addEventListener("resize", onResize);
-    window.visualViewport?.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      window.visualViewport?.removeEventListener("resize", onResize);
-    };
-  }, [dragTy]);
+    if (dragTy == null) return;
+    setDragTy((ty) => {
+      if (ty == null) return ty;
+      return Math.min(geom.maxTy, Math.max(0, ty));
+    });
+  }, [dragTy, geom.maxTy]);
 
   const resolveTranslateY = useCallback(() => {
     if (dragTy != null) return dragTy;
@@ -210,8 +232,7 @@ export default function BottomSheetList({
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.button !== 0) return;
       e.currentTarget.setPointerCapture(e.pointerId);
-      const g = getBottomSheetSnapGeometry(maxTranslateY());
-      const startTy = snapToTy(snap, g);
+      const startTy = snapToTy(snap, geom);
       dragRef.current = {
         pointerId: e.pointerId,
         startY: e.clientY,
@@ -223,7 +244,7 @@ export default function BottomSheetList({
       setDragging(true);
       setDragTy(startTy);
     },
-    [setDragging, snap]
+    [geom, setDragging, snap]
   );
 
   const onDragPointerMove = useCallback(
@@ -287,8 +308,7 @@ export default function BottomSheetList({
       g.lastT = performance.now();
 
       const ul = e.currentTarget;
-      const gSnap = getBottomSheetSnapGeometry(maxTranslateY());
-      const currentTy = dragTy ?? snapToTy(snap, gSnap);
+      const currentTy = dragTy ?? snapToTy(snap, geom);
       const EPS = 6;
       const sheetFullyOpen = currentTy <= SHEET_FULLY_OPEN_EPS;
 
@@ -305,7 +325,7 @@ export default function BottomSheetList({
 
       const dy = e.clientY - g.startY;
       const canOpenMore = currentTy > EPS;
-      const canCloseMore = currentTy < gSnap.maxTy - EPS;
+      const canCloseMore = currentTy < geom.maxTy - EPS;
 
       /*
        * 시트가 완전히 펼쳐지기 전: 리스트는 스크롤되지 않음(overflow/touch-none).
@@ -341,7 +361,7 @@ export default function BottomSheetList({
       setDragging(true);
       applyPointerTy(e.clientY, g.startY, currentTy, true);
     },
-    [applyPointerTy, dragTy, setDragging, snap]
+    [applyPointerTy, dragTy, geom, setDragging, snap]
   );
 
   const onListPointerUp = useCallback(
@@ -350,7 +370,6 @@ export default function BottomSheetList({
       if (!g || e.pointerId !== g.pointerId) return;
 
       const ul = e.currentTarget;
-      const gSnap = getBottomSheetSnapGeometry(maxTranslateY());
 
       if (g.sheetDragStarted && dragRef.current) {
         try {
@@ -360,7 +379,7 @@ export default function BottomSheetList({
         }
         const d = dragRef.current;
         const raw = d.startTy + (e.clientY - d.startY);
-        const hardTy = Math.min(gSnap.maxTy, Math.max(0, raw));
+        const hardTy = Math.min(geom.maxTy, Math.max(0, raw));
         const lastY = d.lastY;
         const lastT = d.lastT;
 
@@ -390,7 +409,7 @@ export default function BottomSheetList({
 
       listGestureRef.current = null;
     },
-    [finishDrag, onSnapChange, setDragging, snap]
+    [finishDrag, geom, onSnapChange, setDragging, snap]
   );
 
   const onListPointerCancel = useCallback(
@@ -422,7 +441,6 @@ export default function BottomSheetList({
     }
   }, []);
 
-  const fullH = sheetFullHeightPx();
   const translateY = resolveTranslateY();
   const listScrollEnabled = translateY <= SHEET_FULLY_OPEN_EPS;
 
@@ -551,8 +569,17 @@ export default function BottomSheetList({
             isDragging || !listScrollEnabled ? "touch-none" : ""
           }`}
         >
-          {stores.length === 0 ? (
-            <li className="px-4 py-6 text-center text-[14px] leading-normal tracking-[0.1px] text-[#999999]">
+          {listLoading && stores.length === 0 ? (
+            Array.from({ length: 3 }, (_, i) => (
+              <li key={`list-skel-${i}`} className="px-4 py-4" aria-hidden>
+                <div className="flex flex-col gap-3">
+                  <div className="h-[18px] w-[72%] animate-pulse rounded-[6px] bg-neutral-200" />
+                  <div className="h-[14px] w-[48%] animate-pulse rounded-[6px] bg-neutral-100" />
+                </div>
+              </li>
+            ))
+          ) : stores.length === 0 ? (
+            <li className="min-h-[120px] px-4 py-6 text-center text-[14px] leading-normal tracking-[0.1px] text-[#999999]">
               주변에 표시할 판매처가 없습니다.
             </li>
           ) : (

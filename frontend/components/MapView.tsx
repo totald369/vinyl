@@ -295,5 +295,5 @@ export default function MapView({
     }
   }, [userMarkerPosition]);
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  return <div ref={containerRef} className="h-full min-h-0 w-full" />;
 }

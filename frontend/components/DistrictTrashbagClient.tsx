@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import BottomSheetList from "@/components/BottomSheetList";
 import HomeSearchOverlay from "@/components/HomeSearchOverlay";
 import LocationPermissionModal from "@/components/LocationPermissionModal";
+import MapSkeleton from "@/components/MapSkeleton";
 import MapView from "@/components/MapView";
 import StoreDetailSheet from "@/components/StoreDetailSheet";
 import type { DistrictTrashbagConfig } from "@/lib/districtTrashbagSeo";
@@ -204,13 +205,13 @@ export default function DistrictTrashbagClient({ config }: Props) {
 
   return (
     <div className="relative mx-auto h-[min(78vh,640px)] max-w-md overflow-hidden rounded-xl border border-black/5 bg-bg-canvas shadow-sm md:h-[70vh]">
-      {isLoading ? (
-        <div className="flex h-full items-center justify-center text-body-sm text-text-secondary">
-          카카오 지도를 불러오는 중입니다...
-        </div>
-      ) : (
-        <>
-          <div className={`h-full w-full ${sheetBlocksMapPointer ? "pointer-events-none" : ""}`}>
+      <div className="relative h-full w-full">
+        <div
+          className={`absolute inset-0 z-0 ${sheetBlocksMapPointer ? "pointer-events-none" : ""}`}
+        >
+          {isLoading ? (
+            <MapSkeleton />
+          ) : (
             <MapView
               center={center}
               centerVersion={centerVersion}
@@ -221,12 +222,13 @@ export default function DistrictTrashbagClient({ config }: Props) {
               onSelectStore={handleMapMarkerSelect}
               userMarkerPosition={permission === "granted" && userLocation ? userLocation : null}
             />
-          </div>
-          <section className="absolute left-[15px] right-[15px] top-[calc(12px+env(safe-area-inset-top,0px))] z-sheet flex flex-col gap-2">
+          )}
+        </div>
+        <section className="pointer-events-none absolute left-[15px] right-[15px] top-[calc(12px+env(safe-area-inset-top,0px))] z-sheet flex flex-col gap-2">
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
-              className="flex h-11 w-full cursor-pointer items-center gap-2 rounded-[8px] border-0 bg-white px-3 py-2 text-left shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)] outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              className="pointer-events-auto flex h-11 w-full cursor-pointer items-center gap-2 rounded-[8px] border-0 bg-white px-3 py-2 text-left shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)] outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               <img src="/Img/Icon/search_24.svg" alt="" width={22} height={22} className="shrink-0" />
               <span className="flex h-full min-w-0 flex-1 items-center text-[15px] font-normal text-[#999999]">
@@ -237,7 +239,7 @@ export default function DistrictTrashbagClient({ config }: Props) {
               <button
                 type="button"
                 onClick={handleMoveToLocation}
-                className="flex shrink-0 items-center justify-center border-0 bg-transparent p-0 shadow-none outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                className="pointer-events-auto flex shrink-0 items-center justify-center border-0 bg-transparent p-0 shadow-none outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 aria-label="내 위치"
               >
                 <img
@@ -255,7 +257,7 @@ export default function DistrictTrashbagClient({ config }: Props) {
             <Link
               href="/report"
               onClick={() => sendGtagEvent("click_report", { page: config.slug })}
-              className="absolute bottom-[32%] right-[12px] z-[35] flex items-center gap-0.5 rounded-full bg-[#d4fe1c] px-3 py-2.5 text-[15px] font-bold text-[#171717] shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)]"
+              className="absolute bottom-[42%] right-[12px] z-[35] flex items-center gap-0.5 rounded-full bg-[#d4fe1c] px-3 py-2.5 text-[15px] font-bold text-[#171717] shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)] pointer-events-auto"
             >
               <img src="/Img/Icon/write_24.svg" alt="" width={22} height={22} className="shrink-0" />
               <span>제보하기</span>
@@ -302,10 +304,10 @@ export default function DistrictTrashbagClient({ config }: Props) {
               snap={bottomSheetSnap}
               onSnapChange={setBottomSheetSnap}
               onDragActiveChange={setSheetBlocksMapPointer}
+              listLoading={loading}
             />
           )}
-        </>
-      )}
+      </div>
     </div>
   );
 }
