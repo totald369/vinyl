@@ -30,5 +30,21 @@
     "message": "불연성 마대, 종량제 봉투",
     "status": "pending",
     "created_at": "2026-04-02 22:53:34.097608+00"
+  },
+  {
+    "id": "1f55340f-dc05-4b82-a8a2-12a5f8044235",
+    "report_type": "new_store",
+    "store_id": null,
+    "name": "송산사지",
+    "road_address": "경기 의정부시 민락로 296",
+    "detail_address": "292호",
+    "lat": 37.7475100286069,
+    "lng": 127.109974995626,
+    "has_trash_bag": true,
+    "has_special_bag": false,
+    "has_large_waste_sticker": false,
+    "message": "종량제 봉투",
+    "status": "pending",
+    "created_at": "2026-04-07 01:46:52.051071+00"
   }
 ]

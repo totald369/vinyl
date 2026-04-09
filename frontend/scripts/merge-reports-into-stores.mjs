@@ -9,6 +9,9 @@
  *
  * 기본 입력: ~/Downloads/reports_rows.json
  * 필요: .env.local 의 KAKAO_REST_API_KEY (좌표가 없는 제보만 API 호출)
+ *
+ * 판매 인증 배지(adminVerified): 제보 status 가 approved 일 때만 true 로 반영합니다(pending 은 배지 없음).
+ * 중복: 동일 report id, 또는 상호(공백 무시)·좌표 50m 이내 기존 행이 있으면 신규 추가를 건너뜁니다.
  */
 
 import fs from "fs";
@@ -198,7 +201,9 @@ function mergeFlagsIntoStore(store, row, datePart) {
   store.hasTrashBag = !!(store.hasTrashBag || row.has_trash_bag);
   store.hasSpecialBag = !!(store.hasSpecialBag || row.has_special_bag);
   store.hasLargeWasteSticker = !!(store.hasLargeWasteSticker || row.has_large_waste_sticker);
-  store.adminVerified = true;
+  if (isApprovedReport(row)) {
+    store.adminVerified = true;
+  }
   if (datePart && datePart > (store.dataReferenceDate || "")) {
     store.dataReferenceDate = datePart;
   }
@@ -207,6 +212,33 @@ function mergeFlagsIntoStore(store, row, datePart) {
 function datePartFromCreated(created) {
   const t = (created || "").trim();
   return t.length >= 10 ? t.slice(0, 10) : undefined;
+}
+
+function isApprovedReport(row) {
+  return String(row?.status ?? "").toLowerCase() === "approved";
+}
+
+function normalizeNameLoose(name) {
+  return String(name ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+}
+
+/** 동일 report id 또는 근접 좌표+동일 상호로 이미 등록된 경우 */
+function isDuplicateStoreEntry(stores, coords, name, reportId) {
+  const rid = `report:${reportId}`;
+  if (stores.some((s) => String(s.id) === rid)) return true;
+  const nm = normalizeNameLoose(name);
+  if (!coords || !nm) return false;
+  for (const s of stores) {
+    const lat = Number(s.lat);
+    const lng = Number(s.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    if (haversineKm(coords, { lat, lng }) >= 0.05) continue;
+    if (normalizeNameLoose(s.name) === nm) return true;
+  }
+  return false;
 }
 
 async function main() {
@@ -297,6 +329,9 @@ async function main() {
       mergeFlagsIntoStore(match, row, datePart);
       updated++;
       console.error(`[주소매칭] ${match.id} ${match.name} ← 제보 ${row.name} (${row.id})`);
+    } else if (isDuplicateStoreEntry(stores, coords, row.name, row.id)) {
+      skipped++;
+      console.error(`[중복스킵] ${row.name} (${row.id}) — 동일 상호·근접 좌표 또는 이미 report:${row.id} 존재`);
     } else {
       const road = fullRoadForGeocode(row.road_address, "").replace(/^서울특별시\s/, "서울특별시 ");
       const detail = (row.detail_address || "").trim();
@@ -311,7 +346,7 @@ async function main() {
         hasTrashBag: row.has_trash_bag === true,
         hasSpecialBag: row.has_special_bag === true,
         hasLargeWasteSticker: row.has_large_waste_sticker === true,
-        adminVerified: true,
+        adminVerified: isApprovedReport(row),
         dataReferenceDate: datePart || "2026-04-02"
       };
       stores.push(newRow);

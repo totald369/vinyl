@@ -36,6 +36,11 @@ function isRejected(status: string | null | undefined): boolean {
   return (status ?? "").toLowerCase() === "rejected";
 }
 
+/** 관리자 승인된 제보만 판매 인증 배지(adminVerified) 대상 */
+function isApproved(status: string | null | undefined): boolean {
+  return (status ?? "").toLowerCase() === "approved";
+}
+
 /** 제보 행 → 기존 공공데이터 매장 id만 인증 처리 */
 export function collectVerifiedStoreIdsFromReports(rows: RawReportRow[]): Set<string> {
   const ids = new Set<string>();
@@ -76,7 +81,7 @@ export function reportRowsToExtraRawStores(rows: RawReportRow[]): ReportStoreJso
       hasTrashBag: row.has_trash_bag === true,
       hasSpecialBag: row.has_special_bag === true,
       hasLargeWasteSticker: row.has_large_waste_sticker === true,
-      adminVerified: true,
+      adminVerified: isApproved(row.status),
       dataReferenceDate: datePart
     });
   }
