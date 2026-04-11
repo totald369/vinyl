@@ -22,14 +22,15 @@ gtag('config', '${id}');
 
   return (
     <>
+      {/* [LCP/INP 최적화] afterInteractive → lazyOnload: 메인 스레드 경합 최소화 */}
       <Script
         id="ga-gtag-js"
         src={`https://www.googletagmanager.com/gtag/js?id=${id}`}
-        strategy="afterInteractive"
+        strategy="lazyOnload"
       />
       <Script
         id="ga-gtag-init"
-        strategy="afterInteractive"
+        strategy="lazyOnload"
         dangerouslySetInnerHTML={{ __html: inlineInit }}
       />
     </>

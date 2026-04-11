@@ -82,9 +82,23 @@ export default function RootLayout({
     <html lang="ko">
       <head>
         {/*
-          Google 태그 · Microsoft Clarity: <head> (프로덕션)
-          SPA 라우트 GA 보조는 body의 GtagRouteTracker
-        */}
+         * [LCP 최적화] Pretendard 폰트를 CSS @import 대신 preload + async stylesheet로 로드.
+         * @import는 CSSOM 파싱을 블록하지만, preload는 렌더를 막지 않고 다운로드합니다.
+         */}
+        <link
+          rel="preload"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css"
+          as="style"
+          crossOrigin="anonymous"
+        />
+        <link
+          rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css"
+          crossOrigin="anonymous"
+        />
+        {/*
+         * [LCP 최적화] GA·Clarity를 lazyOnload로 변경 → 메인 스레드 경합 최소화
+         */}
         {isProd && GA_MEASUREMENT_ID ? <GoogleAnalyticsScripts /> : null}
         {isProd && CLARITY_PROJECT_ID ? <MicrosoftClarityScripts /> : null}
       </head>

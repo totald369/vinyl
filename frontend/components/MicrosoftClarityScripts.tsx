@@ -22,7 +22,7 @@ export function MicrosoftClarityScripts() {
   return (
     <Script
       id="microsoft-clarity-init"
-      strategy="afterInteractive"
+      strategy="lazyOnload"
       dangerouslySetInnerHTML={{ __html: inline }}
     />
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import { StoreData, StoreListFilter } from "@/hooks/useStores";
 import type { KakaoCustomOverlay, KakaoMap, KakaoMapPoint, KakaoMarker } from "@/lib/kakao";
 import { LatLng } from "@/lib/types";
@@ -80,7 +80,8 @@ function createStoreMarkerElements(
   return { root, img };
 }
 
-export default function MapView({
+/* [INP 최적화] memo로 부모 리렌더 시 불필요한 지도 리렌더 차단 */
+function MapViewInner({
   center,
   centerVersion = 0,
   preferredMapLevel = null,
@@ -297,3 +298,6 @@ export default function MapView({
 
   return <div ref={containerRef} className="h-full min-h-0 w-full" />;
 }
+
+const MapView = memo(MapViewInner);
+export default MapView;

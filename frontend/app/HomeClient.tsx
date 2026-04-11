@@ -1,14 +1,10 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import BottomSheetList from "@/components/BottomSheetList";
-import HomeSearchOverlay from "@/components/HomeSearchOverlay";
-import LayoutShiftObserver from "@/components/LayoutShiftObserver";
-import LocationPermissionModal from "@/components/LocationPermissionModal";
 import MapSkeleton from "@/components/MapSkeleton";
-import MapView from "@/components/MapView";
-import StoreDetailSheet from "@/components/StoreDetailSheet";
 import type { StoreListFilter } from "@/hooks/useStores";
 import type { BottomSheetSnap } from "@/lib/bottomSheetSnap";
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
@@ -17,6 +13,16 @@ import { DEFAULT_REGION, type LatLng } from "@/lib/types";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
 import { StoreData, useStores } from "@/hooks/useStores";
 import { useUserLocation } from "@/hooks/useUserLocation";
+
+/*
+ * [LCP 최적화] 조건부로만 표시되는 무거운 컴포넌트를 dynamic import로 분리.
+ * 초기 JS 번들에서 제외하여 파싱·실행 비용을 줄입니다.
+ */
+const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
+const HomeSearchOverlay = dynamic(() => import("@/components/HomeSearchOverlay"), { ssr: false });
+const StoreDetailSheet = dynamic(() => import("@/components/StoreDetailSheet"), { ssr: false });
+const LocationPermissionModal = dynamic(() => import("@/components/LocationPermissionModal"), { ssr: false });
+const LayoutShiftObserver = dynamic(() => import("@/components/LayoutShiftObserver"), { ssr: false });
 
 export default function HomeClient() {
   const { isLoading, error } = useKakaoMapLoader();
@@ -76,14 +82,15 @@ export default function HomeClient() {
     setActiveFilter(filter);
   }, []);
 
-  const handleMapMarkerSelect = (store: StoreData) => {
+  /* [INP 최적화] useCallback으로 핸들러 참조 안정화 → 자식 memo 이점 + 불필요 리렌더 방지 */
+  const handleMapMarkerSelect = useCallback((store: StoreData) => {
     const resolved = storesById.get(store.id) ?? store;
     sendGtagEvent("click_marker", { store_id: resolved.id });
     setSelectedStore(resolved);
     setSheetView("detail");
-  };
+  }, [storesById, setSelectedStore]);
 
-  const handleSelectStoreWithPan = (store: StoreData) => {
+  const handleSelectStoreWithPan = useCallback((store: StoreData) => {
     const resolved = storesById.get(store.id) ?? store;
     const pos = { lat: Number(resolved.lat), lng: Number(resolved.lng) };
     setSelectedStore(resolved);
@@ -92,9 +99,9 @@ export default function HomeClient() {
     setCenterVersion((v) => v + 1);
     setSheetView("detail");
     setExploreAnchor((prev) => (prev != null ? pos : prev));
-  };
+  }, [storesById, setSelectedStore]);
 
-  const handleSearchSelectStore = (store: StoreData) => {
+  const handleSearchSelectStore = useCallback((store: StoreData) => {
     const resolved = storesById.get(store.id) ?? store;
     const pos = { lat: Number(resolved.lat), lng: Number(resolved.lng) };
     setSelectedStore(resolved);
@@ -104,9 +111,9 @@ export default function HomeClient() {
     setCenterVersion((v) => v + 1);
     setSheetView("detail");
     setSearchOpen(false);
-  };
+  }, [storesById, setSelectedStore]);
 
-  const handleMoveToLocation = () => {
+  const handleMoveToLocation = useCallback(() => {
     sendGtagEvent("click_my_location");
     if (permission !== "granted") {
       setLocationModalOpen(true);
@@ -122,12 +129,17 @@ export default function HomeClient() {
       setManualCenter({ lat: DEFAULT_REGION.lat, lng: DEFAULT_REGION.lng });
     }
     setCenterVersion((v) => v + 1);
-  };
+  }, [permission, userLocation, setSelectedStore]);
 
-  const handleLocationPermissionAllow = () => {
+  const handleLocationPermissionAllow = useCallback(() => {
     setLocationModalOpen(false);
     requestLocation();
-  };
+  }, [requestLocation]);
+
+  const handleCloseDetail = useCallback(() => setSheetView("list"), []);
+  const handleOpenSearch = useCallback(() => setSearchOpen(true), []);
+  const handleCloseSearch = useCallback(() => setSearchOpen(false), []);
+  const handleCloseLocationModal = useCallback(() => setLocationModalOpen(false), []);
 
   useEffect(() => {
     if (permission === "granted" && userLocation && !mapCenterOverride) {
@@ -138,20 +150,11 @@ export default function HomeClient() {
 
   useEffect(() => {
     if (!selectedStore) return;
-    // 상세 뷰는 현재 근거리 목록(sortedStores)이 아니라 전체 stores 기준으로 유지해야 함
     const exists = stores.some((store) => store.id === selectedStore.id);
-    console.debug("[home/select-guard] selectedStore id:", selectedStore.id);
-    console.debug("[home/select-guard] exists in full dataset:", exists);
     if (!exists) {
       setSelectedStore(null);
     }
   }, [selectedStore, setSelectedStore, stores]);
-
-  useEffect(() => {
-    if (!selectedStore) return;
-    console.debug("[home/selected] selectedStore id:", selectedStore.id);
-    console.debug("[home/selected] sheetView:", sheetView);
-  }, [selectedStore, sheetView]);
 
   useEffect(() => {
     if (!selectedStore) {
@@ -194,7 +197,7 @@ export default function HomeClient() {
           <section className="pointer-events-none absolute left-[15px] right-[15px] top-[calc(16px+env(safe-area-inset-top,0px))] z-sheet flex flex-col gap-2">
             <button
               type="button"
-              onClick={() => setSearchOpen(true)}
+              onClick={handleOpenSearch}
               className="pointer-events-auto flex h-12 w-full cursor-pointer items-center gap-2 rounded-[8px] border-0 bg-white px-4 py-2 text-left shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)] outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               <img src="/Img/Icon/search_24.svg" alt="" width={24} height={24} className="shrink-0" />
@@ -239,13 +242,13 @@ export default function HomeClient() {
 
           <LocationPermissionModal
             open={locationModalOpen}
-            onClose={() => setLocationModalOpen(false)}
+            onClose={handleCloseLocationModal}
             onAllow={handleLocationPermissionAllow}
           />
 
           <HomeSearchOverlay
             open={searchOpen}
-            onClose={() => setSearchOpen(false)}
+            onClose={handleCloseSearch}
             query={searchQuery}
             onQueryChange={setSearchQuery}
             activeFilter={activeFilter}
@@ -262,7 +265,7 @@ export default function HomeClient() {
           {selectedStore && sheetView === "detail" ? (
             <StoreDetailSheet
               store={selectedStore}
-              onClose={() => setSheetView("list")}
+              onClose={handleCloseDetail}
               userLocation={permission === "granted" && userLocation ? userLocation : null}
               kakaoMapsReady={!isLoading && !error}
             />

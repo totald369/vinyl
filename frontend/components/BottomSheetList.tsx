@@ -107,13 +107,20 @@ export default function BottomSheetList({
     sheetDragStarted: boolean;
   } | null>(null);
 
+  /*
+   * [INP 최적화] 드래그 중 translateY를 React state 대신 ref + 직접 DOM 조작으로 처리.
+   * setDragTy를 호출하면 전체 리스트가 리렌더되어 INP가 급등했으나,
+   * 이제 rAF에서 sectionRef.style.transform만 갱신하므로 React 리렌더가 발생하지 않습니다.
+   */
   const [dragTy, setDragTy] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [listSheetTouchLock, setListSheetTouchLock] = useState(false);
   const listUlRef = useRef<HTMLUListElement | null>(null);
+  const sectionRef = useRef<HTMLElement | null>(null);
 
   const dragTyRafRef = useRef<number | null>(null);
   const pendingDragTyRef = useRef<number | null>(null);
+  const liveDragTyRef = useRef<number | null>(null);
 
   const cancelDragTyRaf = useCallback(() => {
     if (dragTyRafRef.current != null) {
@@ -125,12 +132,15 @@ export default function BottomSheetList({
 
   const scheduleSetDragTy = useCallback((ty: number) => {
     pendingDragTyRef.current = ty;
+    liveDragTyRef.current = ty;
     if (dragTyRafRef.current != null) return;
     dragTyRafRef.current = requestAnimationFrame(() => {
       dragTyRafRef.current = null;
       const v = pendingDragTyRef.current;
       pendingDragTyRef.current = null;
-      if (v != null) setDragTy(v);
+      if (v != null && sectionRef.current) {
+        sectionRef.current.style.transform = `translate3d(0, ${v}px, 0)`;
+      }
     });
   }, []);
 
@@ -477,6 +487,7 @@ export default function BottomSheetList({
 
   return (
     <section
+      ref={sectionRef}
       style={{
         height: fullH,
         transform: `translate3d(0, ${translateY}px, 0)`,

@@ -1,5 +1,7 @@
-/* Pretendard CDN의 @font-face에는 이미 font-display: swap이 포함되어 있습니다. */
-@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css");
+/*
+ * [LCP 최적화] CSS @import 제거 — render-blocking chain을 끊기 위해
+ * layout.tsx에서 <link rel="preload"> + <link rel="stylesheet"> 로 비동기 로드합니다.
+ */
 
 @tailwind base;
 @tailwind components;
