@@ -59,7 +59,7 @@ export default function StoreDetailSheet({
    * 시트만 max-h로 캡 → flex-1 스크롤 영역이 뷰포트 안에서 제대로 수축됨.
    */
   return (
-    <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-[25] flex flex-col gap-3 pb-[max(8px,env(safe-area-inset-bottom,0px))]">
+    <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-[25] flex flex-col gap-3">
       <button
         type="button"
         onClick={onClose}
@@ -151,8 +151,8 @@ export default function StoreDetailSheet({
           </div>
         </div>
 
-        <div className="h-[33px] w-full shrink-0 bg-white">
-          <div className="relative mx-auto h-full w-[135px]">
+        <div className="w-full shrink-0 bg-white pb-[env(safe-area-inset-bottom,0px)]">
+          <div className="relative mx-auto h-[33px] w-[135px]">
             <span className="absolute bottom-2 left-1/2 h-[5px] w-[135px] -translate-x-1/2 rounded-[100px] bg-[#222222]" />
           </div>
         </div>
