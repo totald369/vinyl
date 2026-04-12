@@ -54,21 +54,33 @@ export default function StoreDetailSheet({
     return resolveKakaoDirectionsUrl(store, userLocation);
   }, [store, userLocation, kakaoMapsReady]);
 
+  /*
+   * 모바일 상세: 바닥 고정 오버레이는 높이를 내용에 맞추고(목록 버튼 바로 위),
+   * 시트만 max-h로 캡 → flex-1 스크롤 영역이 뷰포트 안에서 제대로 수축됨.
+   */
   return (
-    <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-[25] flex max-h-[min(92vh,calc(100%-48px))] flex-col-reverse items-center gap-4">
-      <section className="pointer-events-auto flex min-h-0 w-full max-h-full flex-1 flex-col overflow-hidden rounded-t-[16px] bg-white shadow-[0px_2px_8px_0px_rgba(0,0,0,0.04),0px_-8px_24px_0px_rgba(23,23,23,0.12)]">
+    <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-[25] flex flex-col gap-3 pb-[max(8px,env(safe-area-inset-bottom,0px))]">
+      <button
+        type="button"
+        onClick={onClose}
+        className="pointer-events-auto mx-auto shrink-0 whitespace-nowrap rounded-full bg-white px-4 py-3 text-[16px] font-bold leading-normal tracking-[0.1px] text-[#171717] shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)] outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+      >
+        목록으로 가기
+      </button>
+
+      <section className="pointer-events-auto flex max-h-[min(85dvh,calc(100dvh-56px))] min-h-0 w-full flex-col overflow-hidden rounded-t-[16px] bg-white shadow-[0px_2px_8px_0px_rgba(0,0,0,0.04),0px_-8px_24px_0px_rgba(23,23,23,0.12)]">
         <button
           type="button"
           onClick={onClose}
           className="flex w-full shrink-0 flex-col items-center pt-3 pb-4"
-          aria-label="목록으로 돌아가기"
+          aria-label="목록으로 닫기"
         >
           <span className="h-1 w-11 rounded-full bg-[rgba(17,17,17,0.15)]" />
         </button>
 
         <div
           onScroll={handleScroll}
-          className={`scrollbar-map-list flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-2 ${
+          className={`scrollbar-map-list flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden px-4 pb-2 ${
             scrolling ? "is-scrolling" : ""
           }`}
         >
@@ -145,14 +157,6 @@ export default function StoreDetailSheet({
           </div>
         </div>
       </section>
-
-      <button
-        type="button"
-        onClick={onClose}
-        className="pointer-events-auto shrink-0 whitespace-nowrap rounded-full bg-white px-4 py-3 text-[16px] font-bold leading-normal tracking-[0.1px] text-[#171717] shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)] outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-      >
-        목록으로 가기
-      </button>
     </div>
   );
 }

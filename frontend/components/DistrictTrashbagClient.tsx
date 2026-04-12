@@ -257,7 +257,7 @@ export default function DistrictTrashbagClient({ config }: Props) {
             <Link
               href="/report"
               onClick={() => sendGtagEvent("click_report", { page: config.slug })}
-              className="absolute bottom-[42%] right-[12px] z-[35] flex items-center gap-0.5 rounded-full bg-[#d4fe1c] px-3 py-2.5 text-[15px] font-bold text-[#171717] shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)] pointer-events-auto"
+              className="absolute bottom-[43vh] right-[12px] z-[35] flex items-center gap-0.5 rounded-full bg-[#d4fe1c] px-3 py-2.5 text-[15px] font-bold text-[#171717] shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)] pointer-events-auto"
             >
               <img src="/Img/Icon/write_24.svg" alt="" width={22} height={22} className="shrink-0" />
               <span>제보하기</span>

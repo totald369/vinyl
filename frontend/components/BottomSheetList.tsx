@@ -138,9 +138,12 @@ export default function BottomSheetList({
       dragTyRafRef.current = null;
       const v = pendingDragTyRef.current;
       pendingDragTyRef.current = null;
-      if (v != null && sectionRef.current) {
+      if (v == null) return;
+      /* DOM + state 동기화: state만 쓰면 드래그 중 부모 리렌더 시 잘못된 transform으로 덮어씌워져 접힘 높이가 깨질 수 있음 */
+      if (sectionRef.current) {
         sectionRef.current.style.transform = `translate3d(0, ${v}px, 0)`;
       }
+      setDragTy(v);
     });
   }, []);
 
