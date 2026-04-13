@@ -25,7 +25,9 @@ export default function StoreDetailSheet({
   kakaoMapsReady = true
 }: Props) {
   const scrollHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [scrolling, setScrolling] = useState(false);
+  const [copyToastVisible, setCopyToastVisible] = useState(false);
 
   const handleScroll = useCallback(() => {
     setScrolling(true);
@@ -39,14 +41,46 @@ export default function StoreDetailSheet({
   useEffect(() => {
     return () => {
       if (scrollHideTimerRef.current) clearTimeout(scrollHideTimerRef.current);
+      if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
     };
   }, []);
+
+  const addressLine = store.roadAddress?.trim() || store.address?.trim() || "";
+
+  const copyAddress = useCallback(async () => {
+    if (!addressLine) return;
+    const write = async () => {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(addressLine);
+        return;
+      }
+      const ta = document.createElement("textarea");
+      ta.value = addressLine;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    };
+    try {
+      await write();
+      setCopyToastVisible(true);
+      if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
+      copyToastTimerRef.current = setTimeout(() => {
+        setCopyToastVisible(false);
+        copyToastTimerRef.current = null;
+      }, 2200);
+    } catch {
+      // clipboard denied or unavailable
+    }
+  }, [addressLine]);
 
   const updateLabel = useMemo(
     () => formatDatasetUpdateLabel(store.dataReferenceDate),
     [store.dataReferenceDate]
   );
-  const addressLine = store.roadAddress?.trim() || store.address?.trim() || "";
   const directionsHref = useMemo(() => {
     if (!kakaoMapsReady) {
       return resolveKakaoDirectionsUrl(store, null);
@@ -107,9 +141,14 @@ export default function StoreDetailSheet({
               ) : null}
             </div>
             {addressLine ? (
-              <p className="text-[16px] font-normal leading-[1.4] tracking-[0.1px] text-[#555555]">
+              <button
+                type="button"
+                onClick={() => void copyAddress()}
+                className="w-full rounded-lg py-1 text-left text-[16px] font-normal leading-[1.4] tracking-[0.1px] text-[#555555] outline-none transition-colors active:bg-[rgba(23,23,23,0.06)] focus-visible:ring-2 focus-visible:ring-brand-500"
+                aria-label="주소 복사"
+              >
                 {addressLine}
-              </p>
+              </button>
             ) : null}
             <StoreProductChips store={store} />
             <div className="flex flex-wrap items-center gap-2">
@@ -157,6 +196,18 @@ export default function StoreDetailSheet({
           </div>
         </div>
       </section>
+
+      {copyToastVisible ? (
+        <div
+          className="pointer-events-none fixed bottom-[max(100px,calc(18dvh+env(safe-area-inset-bottom,0px)))] left-1/2 z-toast max-w-[min(90vw,320px)] -translate-x-1/2"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="rounded-full bg-[#171717] px-4 py-3 text-center text-[14px] font-semibold leading-normal text-white shadow-elevation-3">
+            주소가 복사되었습니다
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
