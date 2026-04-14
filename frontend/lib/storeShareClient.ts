@@ -4,15 +4,19 @@ import type { StoreData } from "@/hooks/useStores";
 import { sendGtagEvent } from "@/lib/gtag";
 import { getShortShareUrl, getStoreMetadata, isValidShortCode } from "@/lib/shortLink";
 
-type ShareMethod = "web_share" | "clipboard" | "manual";
+type ShareMethod = "web_share";
 
-type ShareResult = ShareMethod | "aborted" | "invalid";
-
-type ShareDebugInfo = {
-  hasNavigatorShare: boolean;
-  hasNavigatorCanShare: boolean;
-  hasClipboardWriteText: boolean;
+export type StoreShareFallbackPayload = {
+  title: string;
+  shortUrl: string;
+  lineForChat: string;
 };
+
+export type StoreShareOutcome =
+  | { status: "web_share" }
+  | { status: "aborted" }
+  | { status: "invalid" }
+  | { status: "fallback_ui"; payload: StoreShareFallbackPayload };
 
 async function copyTextToClipboard(text: string) {
   if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
@@ -37,126 +41,63 @@ async function copyTextToClipboard(text: string) {
   }
 }
 
-function getShareDebugInfo(): ShareDebugInfo {
-  if (typeof navigator === "undefined") {
-    return {
-      hasNavigatorShare: false,
-      hasNavigatorCanShare: false,
-      hasClipboardWriteText: false,
-    };
-  }
-
-  return {
-    hasNavigatorShare: typeof navigator.share === "function",
-    hasNavigatorCanShare: typeof navigator.canShare === "function",
-    hasClipboardWriteText: typeof navigator.clipboard?.writeText === "function",
-  };
+/** Share sheet copy action */
+export async function copyShareText(text: string): Promise<void> {
+  await copyTextToClipboard(text);
 }
 
 function trackShare(storeName: string, shortCode: string, method: ShareMethod) {
   sendGtagEvent("share_store", {
     store_name: storeName,
     short_code: shortCode,
-    share_method: method,
+    share_method: method
   });
 }
 
-function canSharePayload(data: ShareData): boolean {
-  if (typeof navigator === "undefined" || typeof navigator.canShare !== "function") {
-    return true;
-  }
-  try {
-    return navigator.canShare(data);
-  } catch {
-    return false;
-  }
-}
-
 /**
- * Web Share API when available; otherwise clipboard. Fires GA `share_store` on success.
+ * Prefer Web Share API (native share sheet on mobile).
+ * If unavailable or all attempts fail, return `fallback_ui` and show SNS / Kakao / copy UI.
+ * Does not use `canShare` (unreliable in several in-app browsers).
  */
 export async function shareStoreWithTracking(
   store: Pick<StoreData, "name" | "shortCode" | "roadAddress" | "address">
-): Promise<ShareResult> {
-  if (!isValidShortCode(store.shortCode)) return "invalid";
+): Promise<StoreShareOutcome> {
+  if (!isValidShortCode(store.shortCode)) {
+    return { status: "invalid" };
+  }
+
   const { title, description } = getStoreMetadata(store);
   const shortUrl = getShortShareUrl(store);
   const code = store.shortCode!;
-  const debug = getShareDebugInfo();
+  const lineForChat = [title, description, shortUrl].filter(Boolean).join("\n");
+  const payload: StoreShareFallbackPayload = { title, shortUrl, lineForChat };
 
   const candidates: ShareData[] = [
-    { title, text: description, url: shortUrl },
-    { title, url: shortUrl },
     { url: shortUrl },
+    { title, url: shortUrl },
+    { title, text: description, url: shortUrl }
   ];
 
-  console.log("[share_store] capability", debug);
-
-  if (debug.hasNavigatorShare) {
+  if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
     for (const data of candidates) {
-      if (!canSharePayload(data)) {
-        console.log("[share_store] canShare skip", Object.keys(data).join(","));
-        continue;
-      }
       try {
-        console.log("[share_store] branch try web_share", Object.keys(data).join(","));
         await navigator.share(data);
         trackShare(store.name, code, "web_share");
-        console.log("[share_store] branch", "web_share");
-        return "web_share";
+        return { status: "web_share" };
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") {
-          console.log("[share_store] branch", "aborted");
-          return "aborted";
+          return { status: "aborted" };
         }
-        console.log("[share_store] web_share failed, next candidate", e);
       }
     }
-
-    /* Last resort: some engines mis-report canShare — try URL-only once. */
-    try {
-      console.log("[share_store] branch try web_share url-only (ignore canShare)");
-      await navigator.share({ url: shortUrl });
-      trackShare(store.name, code, "web_share");
-      console.log("[share_store] branch", "web_share");
-      return "web_share";
-    } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") {
-        console.log("[share_store] branch", "aborted");
-        return "aborted";
-      }
-      console.log("[share_store] web_share url-only failed -> clipboard", e);
-    }
-  } else {
-    console.log("[share_store] branch", "clipboard (share unsupported)");
   }
 
-  try {
-    await copyTextToClipboard(shortUrl);
-    trackShare(store.name, code, "clipboard");
-    console.log("[share_store] branch", "clipboard");
-    return "clipboard";
-  } catch (e) {
-    console.log("[share_store] clipboard failed -> manual_fallback", e);
-  }
-
-  if (typeof window !== "undefined") {
-    window.alert(`\uB9C1\uD06C\uB97C \uC9C1\uC811 \uBCF5\uC0AC\uD574\uC8FC\uC138\uC694.\n${shortUrl}`);
-    trackShare(store.name, code, "manual");
-    console.log("[share_store] branch", "manual_fallback");
-    return "manual";
-  }
-
-  return "aborted";
+  return { status: "fallback_ui", payload };
 }
 
-/** Long-press: system share sheet (KakaoTalk, Messages, etc.) or copy link. */
 export function getShareButtonHint(): string {
-  const debug = getShareDebugInfo();
-  if (debug.hasNavigatorShare) {
-    return "카카오톡·메시지 등 원하는 앱으로 공유하거나, 링크만 복사할 수 있어요.";
+  if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+    return "\uC2DC\uC2A4\uD15C \uACF5\uC720\uC5D0\uC11C \uCE74\uCE74\uC624\uD1A1\u00B7\uBA54\uC2DC\uC9C0 \uB4F1\uC744 \uACE0\uB97C \uC218 \uC788\uC5B4\uC694. \uD544\uC694\uD558\uBA74 \uC571\uBCC4 \uACF5\uC720\uB3C4 \uC120\uD0DD\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.";
   }
-  return "이 브라우저에서는 링크가 클립보드에 복사돼요.";
+  return "\uCE74\uCE74\uC624\uD1A1\u00B7\uB77C\uC778\u00B7SNS\uB85C \uC5F4\uAC70\uB098 \uB9C1\uD06C\uB97C \uBCF5\uC0AC\uD560 \uC218 \uC788\uC5B4\uC694.";
 }
-
-

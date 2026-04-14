@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import ShortLinkRedirect from "./ShortLinkRedirect";
 import { getMergedStores } from "@/lib/server/storeDataset";
 import { SITE_BRAND_KO } from "@/lib/seoBrand";
 import { storeSeoMetadata } from "@/lib/storePageMetadata";
@@ -28,7 +28,22 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
+/**
+ * HTTP redirect to `/?s=` so in-app browsers and no-JS opens still land on the map deep link.
+ * (Client-only replace was flaky in some KakaoTalk WebViews.)
+ */
 export default function ShortLinkPage({ params }: Props) {
   const raw = params.shortCode?.trim() ?? "";
-  return <ShortLinkRedirect shortCode={raw} />;
+  if (!isValidShortCode(raw)) {
+    redirect("/");
+  }
+  try {
+    const store = getStoreByShortCode(getMergedStores(), raw);
+    if (!store) {
+      redirect("/");
+    }
+  } catch {
+    redirect("/");
+  }
+  redirect(`/?s=${encodeURIComponent(raw)}`);
 }

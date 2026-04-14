@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import StoreShareFallback from "@/components/StoreShareFallback";
 import { StoreProductChips } from "@/components/StoreProductChips";
 import { StoreData } from "@/hooks/useStores";
 import { formatDatasetUpdateLabel } from "@/lib/datasetDate";
@@ -9,6 +10,7 @@ import { SHOW_STORE_EDIT_REQUEST_BUTTON } from "@/lib/featureFlags";
 import type { LatLng } from "@/lib/types";
 import { resolveKakaoDirectionsUrl } from "@/lib/kakaoDirectionsUrl";
 import { isValidShortCode } from "@/lib/shortLink";
+import type { StoreShareFallbackPayload } from "@/lib/storeShareClient";
 import { getShareButtonHint, shareStoreWithTracking } from "@/lib/storeShareClient";
 
 type Props = {
@@ -33,6 +35,7 @@ export default function StoreDetailSheet({
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [scrolling, setScrolling] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [shareFallback, setShareFallback] = useState<StoreShareFallbackPayload | null>(null);
 
   const handleScroll = useCallback(() => {
     setScrolling(true);
@@ -88,14 +91,10 @@ export default function StoreDetailSheet({
 
   const handleShareStore = useCallback(async () => {
     const result = await shareStoreWithTracking(store);
-    if (result === "clipboard") {
-      showToast("\uB9C1\uD06C\uAC00 \uBCF5\uC0AC\uB418\uC5C8\uC2B5\uB2C8\uB2E4");
-      return;
+    if (result.status === "fallback_ui") {
+      setShareFallback(result.payload);
     }
-    if (result === "manual") {
-      showToast("\uB9C1\uD06C\uB97C \uC9C1\uC811 \uBCF5\uC0AC\uD574\uC8FC\uC138\uC694");
-    }
-  }, [store, showToast]);
+  }, [store]);
 
   const updateLabel = useMemo(
     () => formatDatasetUpdateLabel(store.dataReferenceDate),
@@ -264,6 +263,17 @@ export default function StoreDetailSheet({
             {toastMessage}
           </div>
         </div>
+      ) : null}
+
+      {shareFallback && isValidShortCode(store.shortCode) ? (
+        <StoreShareFallback
+          open
+          onClose={() => setShareFallback(null)}
+          storeName={store.name}
+          shortCode={store.shortCode}
+          payload={shareFallback}
+          onCopied={() => showToast("\uB9C1\uD06C\uAC00 \uBCF5\uC0AC\uB418\uC5C8\uC2B5\uB2C8\uB2E4")}
+        />
       ) : null}
     </div>
   );
