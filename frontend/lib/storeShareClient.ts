@@ -27,13 +27,14 @@ export async function shareStoreWithTracking(
   store: Pick<StoreData, "name" | "shortCode" | "roadAddress" | "address">
 ): Promise<"web_share" | "clipboard" | "aborted" | "invalid"> {
   if (!isValidShortCode(store.shortCode)) return "invalid";
-  const { title, description } = getStoreMetadata(store);
+  const { title } = getStoreMetadata(store);
   const url = getShortShareUrl(store);
   const code = store.shortCode!;
 
   if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
     try {
-      await navigator.share({ title, text: description, url });
+      // Omit `text`: many targets (e.g. Kakao) concatenate text + url so the address looked glued to the link.
+      await navigator.share({ title, url });
       sendGtagEvent("share_store", {
         store_name: store.name,
         short_code: code,
