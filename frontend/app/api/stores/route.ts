@@ -9,6 +9,7 @@ import {
   checkUserAgent,
   getClientIp
 } from "@/lib/server/storesApiSecurity";
+import { getStoreByShortCode, isValidShortCode } from "@/lib/shortLink";
 import type { StoreData } from "@/lib/storeData";
 import { getDistanceKm } from "@/lib/utils";
 
@@ -66,6 +67,7 @@ function toPublicStore(s: StoreData, distanceKm?: number) {
     lng: s.lng,
     roadAddress: road,
     address: road,
+    shortCode: s.shortCode ?? "",
     hasTrashBag: s.hasTrashBag,
     hasSpecialBag: s.hasSpecialBag,
     hasLargeWasteSticker: s.hasLargeWasteSticker,
@@ -124,6 +126,19 @@ export async function GET(request: NextRequest) {
     all = getMergedStores();
   } catch {
     return NextResponse.json({ error: "server_error" }, { status: 500 });
+  }
+
+  const shortParam = searchParams.get("short")?.trim() ?? "";
+  if (isValidShortCode(shortParam)) {
+    const store = getStoreByShortCode(all, shortParam);
+    if (!store) {
+      return NextResponse.json({ mode: "short", stores: [] });
+    }
+    const d = getDistanceKm(origin.lat, origin.lng, store.lat, store.lng);
+    return NextResponse.json({
+      mode: "short",
+      stores: [toPublicStore(store, d)]
+    });
   }
 
   // --- 구 SEO 페이지: 화이트리스트 slug만 허용, 주소 키워드로 필터 ---

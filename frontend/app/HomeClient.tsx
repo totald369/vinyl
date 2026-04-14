@@ -2,13 +2,15 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BottomSheetList from "@/components/BottomSheetList";
 import MapSkeleton from "@/components/MapSkeleton";
 import type { StoreListFilter } from "@/hooks/useStores";
 import type { BottomSheetSnap } from "@/lib/bottomSheetSnap";
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
 import { sendGtagEvent } from "@/lib/gtag";
+import { isValidShortCode } from "@/lib/shortLink";
 import { DEFAULT_REGION, type LatLng } from "@/lib/types";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
 import { StoreData, useStores } from "@/hooks/useStores";
@@ -25,6 +27,8 @@ const LocationPermissionModal = dynamic(() => import("@/components/LocationPermi
 const LayoutShiftObserver = dynamic(() => import("@/components/LayoutShiftObserver"), { ssr: false });
 
 export default function HomeClient() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { isLoading, error } = useKakaoMapLoader();
   const { userLocation, permission, requestLocation } = useUserLocation();
   const [locationModalOpen, setLocationModalOpen] = useState(false);
@@ -38,6 +42,8 @@ export default function HomeClient() {
   const [mapCenterOverride, setMapCenterOverride] = useState<LatLng | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  /** Keep detail when the store is outside the current `stores` list (e.g. /?s= deep link). */
+  const keepSelectedOutsideListRef = useRef(false);
 
   const {
     selectedStore,
@@ -77,6 +83,8 @@ export default function HomeClient() {
     [mapCenterOverride, manualCenter, userLocation]
   );
 
+  const shortFromQuery = searchParams.get("s")?.trim() ?? "";
+
   const handleFilterChange = useCallback((filter: StoreListFilter) => {
     sendGtagEvent("filter_select", { filter });
     setActiveFilter(filter);
@@ -84,24 +92,30 @@ export default function HomeClient() {
 
   /* [INP 최적화] useCallback으로 핸들러 참조 안정화 → 자식 memo 이점 + 불필요 리렌더 방지 */
   const handleMapMarkerSelect = useCallback((store: StoreData) => {
+    keepSelectedOutsideListRef.current = false;
     const resolved = storesById.get(store.id) ?? store;
     sendGtagEvent("click_marker", { store_id: resolved.id });
     setSelectedStore(resolved);
     setSheetView("detail");
   }, [storesById, setSelectedStore]);
 
-  const handleSelectStoreWithPan = useCallback((store: StoreData) => {
-    const resolved = storesById.get(store.id) ?? store;
-    const pos = { lat: Number(resolved.lat), lng: Number(resolved.lng) };
-    setSelectedStore(resolved);
-    setManualCenter(pos);
-    setMapCenterOverride(pos);
-    setCenterVersion((v) => v + 1);
-    setSheetView("detail");
-    setExploreAnchor((prev) => (prev != null ? pos : prev));
-  }, [storesById, setSelectedStore]);
+  const handleSelectStoreWithPan = useCallback(
+    (store: StoreData, fromShortLink = false) => {
+      keepSelectedOutsideListRef.current = fromShortLink;
+      const resolved = storesById.get(store.id) ?? store;
+      const pos = { lat: Number(resolved.lat), lng: Number(resolved.lng) };
+      setSelectedStore(resolved);
+      setManualCenter(pos);
+      setMapCenterOverride(pos);
+      setCenterVersion((v) => v + 1);
+      setSheetView("detail");
+      setExploreAnchor((prev) => (prev != null ? pos : prev));
+    },
+    [storesById, setSelectedStore]
+  );
 
   const handleSearchSelectStore = useCallback((store: StoreData) => {
+    keepSelectedOutsideListRef.current = false;
     const resolved = storesById.get(store.id) ?? store;
     const pos = { lat: Number(resolved.lat), lng: Number(resolved.lng) };
     setSelectedStore(resolved);
@@ -114,6 +128,7 @@ export default function HomeClient() {
   }, [storesById, setSelectedStore]);
 
   const handleMoveToLocation = useCallback(() => {
+    keepSelectedOutsideListRef.current = false;
     sendGtagEvent("click_my_location");
     if (permission !== "granted") {
       setLocationModalOpen(true);
@@ -136,7 +151,10 @@ export default function HomeClient() {
     requestLocation();
   }, [requestLocation]);
 
-  const handleCloseDetail = useCallback(() => setSheetView("list"), []);
+  const handleCloseDetail = useCallback(() => {
+    keepSelectedOutsideListRef.current = false;
+    setSheetView("list");
+  }, []);
   const handleOpenSearch = useCallback(() => setSearchOpen(true), []);
   const handleCloseSearch = useCallback(() => setSearchOpen(false), []);
   const handleCloseLocationModal = useCallback(() => setLocationModalOpen(false), []);
@@ -151,7 +169,7 @@ export default function HomeClient() {
   useEffect(() => {
     if (!selectedStore) return;
     const exists = stores.some((store) => store.id === selectedStore.id);
-    if (!exists) {
+    if (!exists && !keepSelectedOutsideListRef.current) {
       setSelectedStore(null);
     }
   }, [selectedStore, setSelectedStore, stores]);
@@ -161,6 +179,54 @@ export default function HomeClient() {
       setSheetView("list");
     }
   }, [selectedStore]);
+
+  useEffect(() => {
+    if (!isValidShortCode(shortFromQuery)) return;
+    if (loading) return;
+
+    const ac = new AbortController();
+
+    const run = async () => {
+      const fromList = stores.find((s) => s.shortCode === shortFromQuery);
+      if (fromList) {
+        handleSelectStoreWithPan(fromList);
+        router.replace("/", { scroll: false });
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams();
+        params.set("lat", String(center.lat));
+        params.set("lng", String(center.lng));
+        params.set("short", shortFromQuery);
+        const res = await fetch(`/api/stores?${params.toString()}`, { signal: ac.signal });
+        if (!res.ok) {
+          router.replace("/", { scroll: false });
+          return;
+        }
+        const data = (await res.json()) as { stores?: StoreData[] };
+        const row = data.stores?.[0];
+        if (row) {
+          handleSelectStoreWithPan(row, true);
+        }
+        router.replace("/", { scroll: false });
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        router.replace("/", { scroll: false });
+      }
+    };
+
+    void run();
+    return () => ac.abort();
+  }, [
+    shortFromQuery,
+    loading,
+    stores,
+    center.lat,
+    center.lng,
+    handleSelectStoreWithPan,
+    router
+  ]);
 
   if (error) {
     return (

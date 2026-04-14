@@ -8,13 +8,15 @@ import { formatDatasetUpdateLabel } from "@/lib/datasetDate";
 import { SHOW_STORE_EDIT_REQUEST_BUTTON } from "@/lib/featureFlags";
 import type { LatLng } from "@/lib/types";
 import { resolveKakaoDirectionsUrl } from "@/lib/kakaoDirectionsUrl";
+import { isValidShortCode } from "@/lib/shortLink";
+import { shareStoreWithTracking } from "@/lib/storeShareClient";
 
 type Props = {
   store: StoreData;
   onClose: () => void;
-  /** 위치 권한이 허용된 경우에만 전달 → 길찾기 시 출발지가 「내 위치」로 채워짐 */
+  /** When set, directions can use "my location" as start */
   userLocation?: LatLng | null;
-  /** 카카오 SDK 로드 완료 후 true → Wcongnamul 좌표 변환 가능 */
+  /** After Kakao Maps SDK is ready, WGS84 routes use user location precisely */
   kakaoMapsReady?: boolean;
 };
 
@@ -25,9 +27,9 @@ export default function StoreDetailSheet({
   kakaoMapsReady = true
 }: Props) {
   const scrollHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const copyToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [scrolling, setScrolling] = useState(false);
-  const [copyToastVisible, setCopyToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const handleScroll = useCallback(() => {
     setScrolling(true);
@@ -41,8 +43,17 @@ export default function StoreDetailSheet({
   useEffect(() => {
     return () => {
       if (scrollHideTimerRef.current) clearTimeout(scrollHideTimerRef.current);
-      if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
+  }, []);
+
+  const showToast = useCallback((message: string) => {
+    setToastMessage(message);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => {
+      setToastMessage(null);
+      toastTimerRef.current = null;
+    }, 2200);
   }, []);
 
   const addressLine = store.roadAddress?.trim() || store.address?.trim() || "";
@@ -66,16 +77,18 @@ export default function StoreDetailSheet({
     };
     try {
       await write();
-      setCopyToastVisible(true);
-      if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
-      copyToastTimerRef.current = setTimeout(() => {
-        setCopyToastVisible(false);
-        copyToastTimerRef.current = null;
-      }, 2200);
+      showToast("\uC8FC\uC18C\uAC00 \uBCF5\uC0AC\uB418\uC5C8\uC2B5\uB2C8\uB2E4");
     } catch {
       // clipboard denied or unavailable
     }
-  }, [addressLine]);
+  }, [addressLine, showToast]);
+
+  const handleShareStore = useCallback(async () => {
+    const result = await shareStoreWithTracking(store);
+    if (result === "clipboard") {
+      showToast("\uB9C1\uD06C\uAC00 \uBCF5\uC0AC\uB418\uC5C8\uC2B5\uB2C8\uB2E4");
+    }
+  }, [store, showToast]);
 
   const updateLabel = useMemo(
     () => formatDatasetUpdateLabel(store.dataReferenceDate),
@@ -88,10 +101,10 @@ export default function StoreDetailSheet({
     return resolveKakaoDirectionsUrl(store, userLocation);
   }, [store, userLocation, kakaoMapsReady]);
 
-  /*
-   * 모바일 상세: 바닥 고정 오버레이는 높이를 내용에 맞추고(목록 버튼 바로 위),
-   * 시트만 max-h로 캡 → flex-1 스크롤 영역이 뷰포트 안에서 제대로 수축됨.
-   */
+  const canShare = isValidShortCode(store.shortCode);
+  const showMetaSepBeforeEdit =
+    SHOW_STORE_EDIT_REQUEST_BUTTON && (typeof store.distance === "number" || Boolean(updateLabel));
+
   return (
     <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-[25] flex flex-col gap-3">
       <button
@@ -107,7 +120,7 @@ export default function StoreDetailSheet({
           type="button"
           onClick={onClose}
           className="flex w-full shrink-0 flex-col items-center pt-3 pb-4"
-          aria-label="목록으로 닫기"
+          aria-label="Close and return to list"
         >
           <span className="h-1 w-11 rounded-full bg-[rgba(17,17,17,0.15)]" />
         </button>
@@ -120,32 +133,36 @@ export default function StoreDetailSheet({
         >
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-2">
-              <div className="flex flex-wrap items-center gap-1">
+              {store.adminVerified ? (
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-center gap-1">
+                    <img
+                      src="/Img/Icon/confirm_24.svg"
+                      alt=""
+                      width={24}
+                      height={24}
+                      className="size-6 shrink-0"
+                    />
+                    <p className="text-[16px] font-semibold leading-normal tracking-[0.1px] text-[#0130b6]">
+                      {"\uD310\uB9E4\uC5EC\uBD80 \uD655\uC778\uC644\uB8CC"}
+                    </p>
+                  </div>
+                  <h2 className="text-[20px] font-bold leading-normal tracking-[0.1px] text-[#171717]">
+                    {store.name}
+                  </h2>
+                </div>
+              ) : (
                 <h2 className="text-[20px] font-bold leading-normal tracking-[0.1px] text-[#171717]">
                   {store.name}
                 </h2>
-                {store.adminVerified ? (
-                  <img
-                    src="/Img/Icon/confirm_24.svg"
-                    alt=""
-                    width={24}
-                    height={24}
-                    className="size-6 shrink-0"
-                  />
-                ) : null}
-              </div>
-              {store.adminVerified ? (
-                <p className="text-[16px] font-semibold leading-normal tracking-[0.1px] text-[#0130b6]">
-                  판매여부 확인완료
-                </p>
-              ) : null}
+              )}
             </div>
             {addressLine ? (
               <button
                 type="button"
                 onClick={() => void copyAddress()}
                 className="w-full rounded-lg py-1 text-left text-[16px] font-normal leading-[1.4] tracking-[0.1px] text-[#555555] outline-none transition-colors active:bg-[rgba(23,23,23,0.06)] focus-visible:ring-2 focus-visible:ring-brand-500"
-                aria-label="주소 복사"
+                aria-label="Copy address"
               >
                 {addressLine}
               </button>
@@ -165,27 +182,41 @@ export default function StoreDetailSheet({
                   {updateLabel}
                 </p>
               ) : null}
+              {showMetaSepBeforeEdit ? (
+                <span className="h-3 w-px shrink-0 bg-[rgba(23,23,23,0.1)]" aria-hidden />
+              ) : null}
+              {SHOW_STORE_EDIT_REQUEST_BUTTON ? (
+                <Link
+                  href={`/edit-request?storeId=${encodeURIComponent(store.id)}&storeName=${encodeURIComponent(store.name)}&storeAddress=${encodeURIComponent(addressLine)}`}
+                  className="text-[14px] font-semibold leading-normal tracking-[0.1px] text-[#111111] outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                >
+                  정보 수정 요청
+                </Link>
+              ) : null}
             </div>
           </div>
 
-          <div className="flex gap-1 pb-2">
-            {SHOW_STORE_EDIT_REQUEST_BUTTON ? (
-              <Link
-                href={`/edit-request?storeId=${encodeURIComponent(store.id)}&storeName=${encodeURIComponent(store.name)}&storeAddress=${encodeURIComponent(addressLine)}`}
-                className="flex h-12 min-w-[60px] flex-1 items-center justify-center rounded-[8px] border border-[#DDDDDD] px-4 py-2 text-center text-[16px] font-bold leading-[1.5] text-[#171717]"
+          <div className="flex w-full gap-1 pb-2">
+            {canShare ? (
+              <button
+                type="button"
+                onClick={() => void handleShareStore()}
+                className="flex h-12 min-w-0 flex-1 items-center justify-center gap-0.5 rounded-[8px] border border-[#DDDDDD] bg-white px-4 text-[16px] font-bold leading-[1.5] text-[#171717] outline-none transition-colors active:bg-[rgba(23,23,23,0.04)] focus-visible:ring-2 focus-visible:ring-brand-500"
+                aria-label="Share store short link"
               >
-                정보 수정 요청
-              </Link>
+                공유하기
+                <img src="/Img/Icon/share_24.svg" alt="" width={24} height={24} className="size-6 shrink-0" />
+              </button>
             ) : null}
             <a
               href={directionsHref}
               target="_blank"
               rel="noreferrer"
-              className={`flex h-12 min-w-[60px] items-center justify-center rounded-[8px] bg-[#171717] px-4 py-2 text-center text-[16px] font-bold leading-[1.5] text-[#d4fe1c] ${
-                SHOW_STORE_EDIT_REQUEST_BUTTON ? "flex-1" : "w-full"
+              className={`flex h-12 min-w-0 items-center justify-center rounded-[8px] bg-[#171717] px-4 py-2 text-center text-[16px] font-bold leading-[1.5] text-[#d4fe1c] ${
+                canShare ? "flex-1" : "w-full"
               }`}
             >
-              카카오맵으로 길찾기
+              {"\uCE74\uCE74\uC624\uB9F5 \uAE38\uCC3E\uAE30"}
             </a>
           </div>
         </div>
@@ -197,14 +228,14 @@ export default function StoreDetailSheet({
         </div>
       </section>
 
-      {copyToastVisible ? (
+      {toastMessage ? (
         <div
           className="pointer-events-none fixed bottom-[max(100px,calc(18dvh+env(safe-area-inset-bottom,0px)))] left-1/2 z-toast max-w-[min(90vw,320px)] -translate-x-1/2"
           role="status"
           aria-live="polite"
         >
           <div className="rounded-full bg-[#171717] px-4 py-3 text-center text-[14px] font-semibold leading-normal text-white shadow-elevation-3">
-            주소가 복사되었습니다
+            {toastMessage}
           </div>
         </div>
       ) : null}

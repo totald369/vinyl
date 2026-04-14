@@ -3,6 +3,7 @@ import {
   dedupeStoresByNameAndLocation
 } from "@/lib/dedupeStores";
 import { pickDataReferenceDateFromRow } from "@/lib/datasetDate";
+import { ensureShortCodesOnStores, isValidShortCode } from "@/lib/shortLink";
 import {
   collectVerifiedStoreIdsFromReports,
   reportRowsToExtraRawStores,
@@ -25,6 +26,8 @@ export type RawStoreRow = {
   hasTrashBag?: boolean;
   hasSpecialBag?: boolean;
   hasLargeWasteSticker?: boolean;
+  /** 6-char share code from JSON; missing codes filled in merge */
+  shortCode?: string;
 } & Record<string, unknown>;
 
 export type StoreData = {
@@ -41,6 +44,8 @@ export type StoreData = {
   adminVerified?: boolean;
   dataReferenceDate?: string;
   distance?: number;
+  /** Present after mergeStoreSources / API (share link /s/[shortCode]) */
+  shortCode?: string;
 };
 
 export function normalizeRow(raw: RawStoreRow): StoreData {
@@ -56,6 +61,11 @@ export function normalizeRow(raw: RawStoreRow): StoreData {
       ? raw.dataReferenceDate.trim()
       : "";
 
+  const sc =
+    typeof raw.shortCode === "string" && isValidShortCode(raw.shortCode.trim())
+      ? raw.shortCode.trim()
+      : undefined;
+
   return {
     id: String(raw.id ?? ""),
     name: String(raw.name ?? ""),
@@ -68,7 +78,8 @@ export function normalizeRow(raw: RawStoreRow): StoreData {
     hasSpecialBag,
     hasLargeWasteSticker,
     adminVerified: raw.adminVerified === true,
-    dataReferenceDate: fromJson || pickDataReferenceDateFromRow(raw)
+    dataReferenceDate: fromJson || pickDataReferenceDateFromRow(raw),
+    ...(sc ? { shortCode: sc } : {})
   };
 }
 
@@ -103,7 +114,8 @@ export function mergeStoreSources(
     .map((raw) => normalizeRow(raw as RawStoreRow))
     .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng));
 
-  return dedupeStoresByBizNameProximity(
+  const merged = dedupeStoresByBizNameProximity(
     dedupeStoresByNameAndLocation([...normalizedMain, ...normalizedExtra])
   );
+  return ensureShortCodesOnStores(merged);
 }

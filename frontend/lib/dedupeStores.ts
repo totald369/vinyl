@@ -1,4 +1,6 @@
 /** useStores.StoreData 와 호환되는 행(중복 제거·병합용). */
+import { isValidShortCode } from "@/lib/shortLink";
+
 export type MergeableStore = {
   id: string;
   name: string;
@@ -13,6 +15,7 @@ export type MergeableStore = {
   adminVerified?: boolean;
   dataReferenceDate?: string;
   distance?: number;
+  shortCode?: string;
 };
 
 const COORD_DECIMALS = 5;
@@ -165,6 +168,12 @@ function mergeTwoStores<T extends MergeableStore>(a: T, b: T): T {
         ? b.id
         : base.id;
 
+  const shortCode = isValidShortCode(base.shortCode)
+    ? base.shortCode
+    : isValidShortCode(other.shortCode)
+      ? other.shortCode
+      : base.shortCode ?? other.shortCode;
+
   return {
     ...base,
     id: preferId,
@@ -178,7 +187,8 @@ function mergeTwoStores<T extends MergeableStore>(a: T, b: T): T {
     dataReferenceDate: pickNewerDate(
       base.dataReferenceDate,
       other.dataReferenceDate
-    )
+    ),
+    shortCode
   };
 }
 
