@@ -191,7 +191,12 @@ export default function HomeClient() {
   const handleCloseDetail = useCallback(() => {
     keepSelectedOutsideListRef.current = false;
     setSheetView("list");
-  }, []);
+    const s = searchParams.get("s")?.trim() ?? "";
+    if (isValidShortCode(s)) {
+      shortLinkConsumedRef.current = false;
+      router.replace("/", { scroll: false });
+    }
+  }, [router, searchParams]);
   const handleOpenSearch = useCallback(() => setSearchOpen(true), []);
   const handleCloseSearch = useCallback(() => setSearchOpen(false), []);
   const handleCloseLocationModal = useCallback(() => setLocationModalOpen(false), []);
@@ -238,10 +243,10 @@ export default function HomeClient() {
     const run = async () => {
       const fromList = stores.find((s) => s.shortCode === deepLinkShort);
       if (fromList) {
-        shortLinkConsumedRef.current = true;
         handleSelectStoreWithPan(fromList, true);
         clearDeepLinkStorage();
-        router.replace("/", { scroll: false });
+        shortLinkConsumedRef.current = true;
+        /* Keep `?s=` — replacing with `/` can reset client state on desktop and drop the detail sheet. */
         return;
       }
 
@@ -257,10 +262,9 @@ export default function HomeClient() {
         const data = (await res.json()) as { stores?: StoreData[] };
         const row = data.stores?.[0];
         if (row) {
-          shortLinkConsumedRef.current = true;
           handleSelectStoreWithPan(row, true);
           clearDeepLinkStorage();
-          router.replace("/", { scroll: false });
+          shortLinkConsumedRef.current = true;
           return;
         }
         shortLinkConsumedRef.current = true;
