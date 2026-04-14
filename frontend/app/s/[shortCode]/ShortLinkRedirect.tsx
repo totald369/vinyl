@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { isValidShortCode } from "@/lib/shortLink";
+import { DEEPLINK_SHORT_STORAGE_KEY, isValidShortCode } from "@/lib/shortLink";
 
 type Props = {
   shortCode: string;
@@ -16,8 +16,12 @@ export default function ShortLinkRedirect({ shortCode }: Props) {
       router.replace("/");
       return;
     }
-    // Resolve store on the home client (API + list). Do not depend on server `storeExists`:
-    // in-app browsers could still fail the follow-up fetch if we sent users to "/" without ?s=.
+    // Resolve store on the home client (API + list). Persist for desktops that drop `?s=` on replace.
+    try {
+      sessionStorage.setItem(DEEPLINK_SHORT_STORAGE_KEY, shortCode);
+    } catch {
+      /* private mode */
+    }
     router.replace(`/?s=${encodeURIComponent(shortCode)}`, { scroll: false });
   }, [shortCode, router]);
 

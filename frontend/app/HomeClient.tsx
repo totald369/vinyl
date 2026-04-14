@@ -3,14 +3,14 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import BottomSheetList from "@/components/BottomSheetList";
 import MapSkeleton from "@/components/MapSkeleton";
 import type { StoreListFilter } from "@/hooks/useStores";
 import type { BottomSheetSnap } from "@/lib/bottomSheetSnap";
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
 import { sendGtagEvent } from "@/lib/gtag";
-import { isValidShortCode } from "@/lib/shortLink";
+import { DEEPLINK_SHORT_STORAGE_KEY, isValidShortCode } from "@/lib/shortLink";
 import { DEFAULT_REGION, type LatLng } from "@/lib/types";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
 import { StoreData, useStores } from "@/hooks/useStores";
@@ -44,6 +44,8 @@ export default function HomeClient() {
   const [searchQuery, setSearchQuery] = useState("");
   /** Keep detail when the store is outside the current `stores` list (e.g. /?s= deep link). */
   const keepSelectedOutsideListRef = useRef(false);
+  /** Avoid re-running deep-link open while URL still has `s=` but persistence is already cleared. */
+  const shortLinkConsumedRef = useRef(false);
 
   const {
     selectedStore,
@@ -83,7 +85,36 @@ export default function HomeClient() {
     [mapCenterOverride, manualCenter, userLocation]
   );
 
-  const shortFromQuery = searchParams.get("s")?.trim() ?? "";
+  const sFromSearchParams = searchParams.get("s")?.trim() ?? "";
+  /** Next `useSearchParams` can miss `s` on some desktop navigations; merge URL + sessionStorage. */
+  const [deepLinkShort, setDeepLinkShort] = useState("");
+
+  useLayoutEffect(() => {
+    let code = sFromSearchParams;
+    if (!isValidShortCode(code)) {
+      const fromUrl =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("s")?.trim() ?? ""
+          : "";
+      if (isValidShortCode(fromUrl)) code = fromUrl;
+    }
+    if (!isValidShortCode(code)) {
+      try {
+        const st = sessionStorage.getItem(DEEPLINK_SHORT_STORAGE_KEY)?.trim() ?? "";
+        if (isValidShortCode(st)) code = st;
+      } catch {
+        /* private mode */
+      }
+    }
+    if (!isValidShortCode(code)) {
+      setDeepLinkShort("");
+      return;
+    }
+    setDeepLinkShort(code);
+    if (sFromSearchParams !== code) {
+      router.replace(`/?s=${encodeURIComponent(code)}`, { scroll: false });
+    }
+  }, [sFromSearchParams, router]);
 
   const handleFilterChange = useCallback((filter: StoreListFilter) => {
     sendGtagEvent("filter_select", { filter });
@@ -187,15 +218,29 @@ export default function HomeClient() {
   }, [selectedStore]);
 
   useEffect(() => {
-    if (!isValidShortCode(shortFromQuery)) return;
+    if (!isValidShortCode(deepLinkShort)) {
+      shortLinkConsumedRef.current = false;
+      return;
+    }
     if (loading) return;
+    if (shortLinkConsumedRef.current) return;
 
     const ac = new AbortController();
 
+    const clearDeepLinkStorage = () => {
+      try {
+        sessionStorage.removeItem(DEEPLINK_SHORT_STORAGE_KEY);
+      } catch {
+        /* noop */
+      }
+    };
+
     const run = async () => {
-      const fromList = stores.find((s) => s.shortCode === shortFromQuery);
+      const fromList = stores.find((s) => s.shortCode === deepLinkShort);
       if (fromList) {
+        shortLinkConsumedRef.current = true;
         handleSelectStoreWithPan(fromList, true);
+        clearDeepLinkStorage();
         router.replace("/", { scroll: false });
         return;
       }
@@ -204,28 +249,32 @@ export default function HomeClient() {
         const params = new URLSearchParams();
         params.set("lat", String(center.lat));
         params.set("lng", String(center.lng));
-        params.set("short", shortFromQuery);
+        params.set("short", deepLinkShort);
         const res = await fetch(`/api/stores?${params.toString()}`, { signal: ac.signal });
         if (!res.ok) {
-          router.replace("/", { scroll: false });
           return;
         }
         const data = (await res.json()) as { stores?: StoreData[] };
         const row = data.stores?.[0];
         if (row) {
+          shortLinkConsumedRef.current = true;
           handleSelectStoreWithPan(row, true);
+          clearDeepLinkStorage();
+          router.replace("/", { scroll: false });
+          return;
         }
+        shortLinkConsumedRef.current = true;
+        clearDeepLinkStorage();
         router.replace("/", { scroll: false });
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") return;
-        router.replace("/", { scroll: false });
       }
     };
 
     void run();
     return () => ac.abort();
   }, [
-    shortFromQuery,
+    deepLinkShort,
     loading,
     stores,
     center.lat,
