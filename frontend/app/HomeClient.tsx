@@ -109,7 +109,13 @@ export default function HomeClient() {
       setMapCenterOverride(pos);
       setCenterVersion((v) => v + 1);
       setSheetView("detail");
-      setExploreAnchor((prev) => (prev != null ? pos : prev));
+      // Short/deep links: desktop often has no GPS, so list ref stays null — still set anchor so
+      // useStores refetches ~2km around the target store (otherwise selection can break after reload).
+      if (fromShortLink) {
+        setExploreAnchor(pos);
+      } else {
+        setExploreAnchor((prev) => (prev != null ? pos : prev));
+      }
     },
     [storesById, setSelectedStore]
   );
@@ -189,7 +195,7 @@ export default function HomeClient() {
     const run = async () => {
       const fromList = stores.find((s) => s.shortCode === shortFromQuery);
       if (fromList) {
-        handleSelectStoreWithPan(fromList);
+        handleSelectStoreWithPan(fromList, true);
         router.replace("/", { scroll: false });
         return;
       }

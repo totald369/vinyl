@@ -38,10 +38,10 @@ export function checkReferer(request: NextRequest): { ok: true } | { ok: false; 
   if (referer) {
     try {
       const u = new URL(referer);
-      if (!hostAllowed(u.hostname)) {
-        return { ok: false, reason: "referer_host" };
+      if (hostAllowed(u.hostname)) {
+        return { ok: true };
       }
-      return { ok: true };
+      // Some clients send a cross-site navigation referer; same-origin fetch should still target our Host.
     } catch {
       return { ok: false, reason: "referer_parse" };
     }
