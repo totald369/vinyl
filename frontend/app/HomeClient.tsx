@@ -215,6 +215,11 @@ export default function HomeClient() {
     setSheetView("list");
     const s = searchParams.get("s")?.trim() ?? "";
     if (isValidShortCode(s)) {
+      try {
+        sessionStorage.removeItem(DEEPLINK_SHORT_STORAGE_KEY);
+      } catch {
+        /* private mode */
+      }
       router.replace("/", { scroll: false });
     }
   }, [router, searchParams]);
