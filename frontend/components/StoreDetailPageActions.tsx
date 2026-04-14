@@ -53,7 +53,7 @@ export default function StoreDetailPageActions({ store, directionsHref, addressL
           <button
             type="button"
             onClick={() => void handleShare()}
-            className="flex h-12 min-w-0 flex-1 items-center justify-center gap-0.5 rounded-[8px] border border-[#DDDDDD] bg-white px-4 text-[16px] font-bold leading-[1.5] text-[#171717] outline-none transition-colors active:bg-[rgba(23,23,23,0.04)] focus-visible:ring-2 focus-visible:ring-brand-500"
+            className="flex h-12 min-w-0 flex-1 items-center justify-center gap-0.5 rounded-[8px] border border-[#DDDDDD] bg-white px-4 text-[16px] font-bold leading-[1.5] text-[#171717] outline-none transition-colors active:bg-[rgba(23,23,23,0.04)] focus-visible:ring-2 focus-visible:ring-brand-500 md:hidden"
             aria-label="공유 또는 링크 복사"
             title={shareButtonHint}
           >
@@ -66,7 +66,7 @@ export default function StoreDetailPageActions({ store, directionsHref, addressL
           target="_blank"
           rel="noreferrer"
           className={`flex h-12 min-w-0 items-center justify-center rounded-[8px] bg-[#171717] px-4 py-2 text-center text-[16px] font-bold leading-[1.5] text-[#d4fe1c] ${
-            canShare ? "flex-1" : "w-full"
+            canShare ? "flex-1 md:flex-none md:w-full" : "w-full"
           }`}
         >
           {"\uCE74\uCE74\uC624\uB9F5 \uAE38\uCC3E\uAE30"}
