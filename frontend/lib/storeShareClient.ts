@@ -150,13 +150,13 @@ export async function shareStoreWithTracking(
   return "aborted";
 }
 
+/** Long-press: system share sheet (KakaoTalk, Messages, etc.) or copy link. */
 export function getShareButtonHint(): string {
   const debug = getShareDebugInfo();
   if (debug.hasNavigatorShare) {
-    const canShareText = debug.hasNavigatorCanShare
-      ? "지원 브라우저에서 공유"
-      : "공유";
-    return `${canShareText} / 미지원 시 링크 복사`;
+    return "카카오톡·메시지 등 원하는 앱으로 공유하거나, 링크만 복사할 수 있어요.";
   }
-  return "링크 복사";
+  return "이 브라우저에서는 링크가 클립보드에 복사돼요.";
 }
+
+

@@ -207,10 +207,10 @@ export default function StoreDetailSheet({
                 type="button"
                 onClick={() => void handleShareStore()}
                 className="flex h-12 min-w-0 flex-1 items-center justify-center gap-0.5 rounded-[8px] border border-[#DDDDDD] bg-white px-4 text-[16px] font-bold leading-[1.5] text-[#171717] outline-none transition-colors active:bg-[rgba(23,23,23,0.04)] focus-visible:ring-2 focus-visible:ring-brand-500 md:hidden"
-                aria-label="공유 또는 링크 복사"
+                aria-label="공유하기"
                 title={shareButtonHint}
               >
-                공유 / 링크 복사
+                공유하기
                 <img src="/Img/Icon/share_24.svg" alt="" width={24} height={24} className="size-6 shrink-0" />
               </button>
             ) : null}
