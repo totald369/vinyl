@@ -48,6 +48,8 @@ export default function HomeClient() {
   const keepSelectedOutsideListRef = useRef(false);
   /** Prevents duplicate `short` fetches; survives `loading` toggles (must not abort on list refetch). */
   const shortLinkFetchForRef = useRef<string | null>(null);
+  /** Detects new `?s=` navigation vs stable param (for reopen + user-override guard). */
+  const lastSeenDeepLinkShortRef = useRef<string>("");
 
   const {
     selectedStore,
@@ -242,15 +244,33 @@ export default function HomeClient() {
   }, [selectedStore]);
 
   useEffect(() => {
-    if (!isValidShortCode(deepLinkShort)) return;
+    if (!isValidShortCode(deepLinkShort)) {
+      lastSeenDeepLinkShortRef.current = "";
+      return;
+    }
     if (loading) return;
-    /* Already showing this short link target */
-    if (selectedStore?.shortCode === deepLinkShort) return;
+
+    const shortParamChanged = lastSeenDeepLinkShortRef.current !== deepLinkShort;
+    lastSeenDeepLinkShortRef.current = deepLinkShort;
+
     /*
-     * Only skip when the user picked another store that already has a valid short code.
-     * Rows with missing/empty shortCode must not block resolution (common on some API paths; otherwise the effect never completes and UX looks like "home only").
+     * Same store as URL: only bail if already on detail. If user came back to list, reopen detail
+     * when `?s=` just appeared again (shortParamChanged); otherwise keep list (e.g. tapped "목록으로").
+     */
+    if (selectedStore?.shortCode === deepLinkShort) {
+      if (sheetView === "detail") return;
+      if (shortParamChanged) {
+        setSheetView("detail");
+      }
+      return;
+    }
+
+    /*
+     * User chose another store on the map while stale `?s=` remains — do not fight them.
+     * If `?s=` changed to a new code (new share link), always resolve.
      */
     if (
+      !shortParamChanged &&
       selectedStore != null &&
       isValidShortCode(selectedStore.shortCode) &&
       selectedStore.shortCode !== deepLinkShort
@@ -308,7 +328,30 @@ export default function HomeClient() {
         }
       }
     })();
-  }, [deepLinkShort, loading, selectedStore?.shortCode, handleSelectStoreWithPan, router]);
+  }, [deepLinkShort, loading, selectedStore?.shortCode, sheetView, handleSelectStoreWithPan, router]);
+
+  /** In-app browsers often reuse the same `/?s=` URL; second open does not remount — reopen detail on focus. */
+  useEffect(() => {
+    const tryReopenFromUrl = () => {
+      if (typeof window === "undefined") return;
+      const raw = new URLSearchParams(window.location.search).get("s")?.trim() ?? "";
+      if (!isValidShortCode(raw)) return;
+      if (sheetView !== "list") return;
+      const sel = selectedStore;
+      if (!sel || sel.shortCode !== raw) return;
+      setSheetView("detail");
+    };
+
+    const onVis = () => {
+      if (document.visibilityState === "visible") tryReopenFromUrl();
+    };
+    window.addEventListener("pageshow", tryReopenFromUrl);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("pageshow", tryReopenFromUrl);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [selectedStore, sheetView]);
 
   if (error) {
     return (
