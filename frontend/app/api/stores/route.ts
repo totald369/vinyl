@@ -127,6 +127,30 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const districtSlug = searchParams.get("district")?.trim() ?? "";
   const qRaw = searchParams.get("q")?.trim() ?? "";
+  const shortParamEarly = searchParams.get("short")?.trim() ?? "";
+
+  /* shortCode: full-dataset lookup; lat/lng optional (distance only, no radius). */
+  if (isValidShortCode(shortParamEarly)) {
+    let allShort: StoreData[];
+    try {
+      allShort = getMergedStores();
+    } catch {
+      return NextResponse.json({ error: "server_error" }, { status: 500 });
+    }
+    const store = getStoreByShortCode(allShort, shortParamEarly);
+    if (!store) {
+      return jsonOk({ mode: "short", stores: [] });
+    }
+    const originForDist = parseLatLng(searchParams);
+    const d =
+      originForDist != null
+        ? getDistanceKm(originForDist.lat, originForDist.lng, store.lat, store.lng)
+        : undefined;
+    return jsonOk({
+      mode: "short",
+      stores: [{ ...toDetailStore(store, d), shortCode: shortParamEarly }]
+    });
+  }
 
   const origin = parseLatLng(searchParams);
   if (!origin) {
@@ -141,20 +165,6 @@ export async function GET(request: NextRequest) {
     all = getMergedStores();
   } catch {
     return NextResponse.json({ error: "server_error" }, { status: 500 });
-  }
-
-  const shortParam = searchParams.get("short")?.trim() ?? "";
-  if (isValidShortCode(shortParam)) {
-    const store = getStoreByShortCode(all, shortParam);
-    if (!store) {
-      return jsonOk({ mode: "short", stores: [] });
-    }
-    const d = getDistanceKm(origin.lat, origin.lng, store.lat, store.lng);
-    // Always echo the requested code so mobile clients match `?s=` / sessionStorage (avoids empty shortCode breaking deep-link guards).
-    return jsonOk({
-      mode: "short",
-      stores: [{ ...toDetailStore(store, d), shortCode: shortParam }]
-    });
   }
 
   // --- 구 SEO 페이지: 화이트리스트 slug만 허용, 주소 키워드로 필터 ---

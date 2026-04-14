@@ -10,6 +10,10 @@ import type { StoreListFilter } from "@/hooks/useStores";
 import type { BottomSheetSnap } from "@/lib/bottomSheetSnap";
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
 import { sendGtagEvent } from "@/lib/gtag";
+import {
+  DEEPLINK_LOG_PREFIX,
+  fetchStoreByShortCodeOnly
+} from "@/lib/deepLinkShortResolve";
 import { DEEPLINK_SHORT_STORAGE_KEY, isValidShortCode } from "@/lib/shortLink";
 import { DEFAULT_REGION, type LatLng } from "@/lib/types";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
@@ -50,6 +54,7 @@ export default function HomeClient() {
   const shortLinkFetchForRef = useRef<string | null>(null);
   /** Detects new `?s=` navigation vs stable param (for reopen + user-override guard). */
   const lastSeenDeepLinkShortRef = useRef<string>("");
+  const [deepLinkResolveError, setDeepLinkResolveError] = useState<string | null>(null);
 
   const {
     selectedStore,
@@ -89,11 +94,9 @@ export default function HomeClient() {
     [mapCenterOverride, manualCenter, userLocation]
   );
 
-  /** Deep-link fetch must not abort when `stores`/`center` change (list refetch after exploreAnchor). */
+  /** Deep-link fetch must not abort when `stores` change (list refetch after exploreAnchor). */
   const storesRef = useRef(stores);
   storesRef.current = stores;
-  const centerRef = useRef(center);
-  centerRef.current = center;
 
   const detailAugmenting = useStoreDetailAugment(
     sheetView,
@@ -227,6 +230,19 @@ export default function HomeClient() {
   const handleCloseSearch = useCallback(() => setSearchOpen(false), []);
   const handleCloseLocationModal = useCallback(() => setLocationModalOpen(false), []);
 
+  const dismissDeepLinkError = useCallback(() => {
+    setDeepLinkResolveError(null);
+    const s = searchParams.get("s")?.trim() ?? "";
+    if (isValidShortCode(s)) {
+      try {
+        sessionStorage.removeItem(DEEPLINK_SHORT_STORAGE_KEY);
+      } catch {
+        /* noop */
+      }
+      router.replace("/", { scroll: false });
+    }
+  }, [router, searchParams]);
+
   useEffect(() => {
     if (permission === "granted" && userLocation && !mapCenterOverride) {
       setManualCenter(userLocation);
@@ -251,20 +267,38 @@ export default function HomeClient() {
   useEffect(() => {
     if (!isValidShortCode(deepLinkShort)) {
       lastSeenDeepLinkShortRef.current = "";
+      setDeepLinkResolveError(null);
       return;
     }
     if (loading) return;
 
+    console.info(DEEPLINK_LOG_PREFIX, "effect", {
+      deepLinkShort,
+      loading,
+      selectedShort: selectedStore?.shortCode ?? null,
+      sheetView
+    });
+
     const shortParamChanged = lastSeenDeepLinkShortRef.current !== deepLinkShort;
     lastSeenDeepLinkShortRef.current = deepLinkShort;
+
+    const clearDeepLinkStorage = () => {
+      try {
+        sessionStorage.removeItem(DEEPLINK_SHORT_STORAGE_KEY);
+      } catch {
+        /* noop */
+      }
+    };
 
     /*
      * Same store as URL: only bail if already on detail. If user came back to list, reopen detail
      * when `?s=` just appeared again (shortParamChanged); otherwise keep list (e.g. tapped "목록으로").
      */
     if (selectedStore?.shortCode === deepLinkShort) {
+      setDeepLinkResolveError(null);
       if (sheetView === "detail") return;
       if (shortParamChanged) {
+        console.info(DEEPLINK_LOG_PREFIX, "reopen detail (same store, param changed)");
         setSheetView("detail");
       }
       return;
@@ -280,60 +314,72 @@ export default function HomeClient() {
       isValidShortCode(selectedStore.shortCode) &&
       selectedStore.shortCode !== deepLinkShort
     ) {
+      console.info(DEEPLINK_LOG_PREFIX, "skip: user selected different store, stale ?s=");
       return;
     }
 
-    const clearDeepLinkStorage = () => {
-      try {
-        sessionStorage.removeItem(DEEPLINK_SHORT_STORAGE_KEY);
-      } catch {
-        /* noop */
-      }
-    };
-
     const list = storesRef.current;
     const fromList = list.find((s) => s.shortCode === deepLinkShort);
+    console.info(DEEPLINK_LOG_PREFIX, "fromList", { found: Boolean(fromList), listLen: list.length });
+
     if (fromList) {
       shortLinkFetchForRef.current = null;
+      setDeepLinkResolveError(null);
       handleSelectStoreWithPan({ ...fromList, shortCode: deepLinkShort }, true);
       clearDeepLinkStorage();
       return;
     }
 
     const code = deepLinkShort;
-    if (shortLinkFetchForRef.current === code) return;
+    if (shortLinkFetchForRef.current === code) {
+      console.info(DEEPLINK_LOG_PREFIX, "skip fetch: already in flight", code);
+      return;
+    }
     shortLinkFetchForRef.current = code;
 
     void (async () => {
       try {
-        const c = centerRef.current;
-        const params = new URLSearchParams();
-        params.set("lat", String(c.lat));
-        params.set("lng", String(c.lng));
-        params.set("short", code);
-        const res = await fetch(`/api/stores?${params.toString()}`);
-        if (shortLinkFetchForRef.current !== code) return;
-        if (!res.ok) {
+        const { row, requestUrl, httpOk, httpStatus } = await fetchStoreByShortCodeOnly(code);
+        if (shortLinkFetchForRef.current !== code) {
+          console.info(DEEPLINK_LOG_PREFIX, "stale response ignored", { code });
           return;
         }
-        const data = (await res.json()) as { stores?: StoreData[] };
-        const row = data.stores?.[0];
-        if (row) {
-          handleSelectStoreWithPan({ ...row, shortCode: code }, true);
+        if (!httpOk) {
+          console.error(DEEPLINK_LOG_PREFIX, "fallback: API failed", { code, requestUrl, httpStatus });
+          setDeepLinkResolveError(
+            "\uC5C5\uCCB4 \uC815\uBCF4\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694."
+          );
           clearDeepLinkStorage();
           return;
         }
+        if (row) {
+          setDeepLinkResolveError(null);
+          handleSelectStoreWithPan({ ...row, shortCode: code }, true);
+          clearDeepLinkStorage();
+          console.info(DEEPLINK_LOG_PREFIX, "resolved via API", { code, id: row.id });
+          return;
+        }
+        console.error(DEEPLINK_LOG_PREFIX, "fallback: empty stores[] for shortCode", {
+          code,
+          requestUrl
+        });
+        setDeepLinkResolveError(
+          "\uD574\uB2F9 \uC5C5\uCCB4\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+        );
         clearDeepLinkStorage();
-        router.replace("/", { scroll: false });
-      } catch {
-        /* network */
+      } catch (e) {
+        console.error(DEEPLINK_LOG_PREFIX, "unexpected error", e);
+        setDeepLinkResolveError(
+          "\uC5C5\uCCB4 \uC815\uBCF4\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4."
+        );
+        clearDeepLinkStorage();
       } finally {
         if (shortLinkFetchForRef.current === code) {
           shortLinkFetchForRef.current = null;
         }
       }
     })();
-  }, [deepLinkShort, loading, selectedStore?.shortCode, sheetView, handleSelectStoreWithPan, router]);
+  }, [deepLinkShort, loading, selectedStore?.shortCode, sheetView, handleSelectStoreWithPan]);
 
   /** In-app browsers often reuse the same `/?s=` URL; second open does not remount — reopen detail on focus. */
   useEffect(() => {
@@ -369,6 +415,20 @@ export default function HomeClient() {
   return (
     <main className="relative mx-auto h-[100dvh] max-w-md overflow-hidden bg-bg-canvas">
       <LayoutShiftObserver />
+      {deepLinkResolveError ? (
+        <div className="pointer-events-auto absolute inset-x-0 top-[calc(8px+env(safe-area-inset-top,0px))] z-[45] px-[15px]">
+          <div className="rounded-xl border border-danger-500/30 bg-danger-50 px-4 py-3 shadow-elevation-2">
+            <p className="text-body-sm text-danger-700">{deepLinkResolveError}</p>
+            <button
+              type="button"
+              onClick={dismissDeepLinkError}
+              className="mt-3 w-full rounded-lg bg-[#171717] py-2.5 text-center text-[15px] font-bold text-[#d4fe1c] outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            >
+              {"\uD648\uC73C\uB85C"}
+            </button>
+          </div>
+        </div>
+      ) : null}
       <div className="fixed inset-y-0 left-0 right-0 z-0 flex h-[100dvh] justify-center">
         <div className="relative h-full min-h-0 w-full max-w-md">
           <div
