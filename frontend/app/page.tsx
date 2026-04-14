@@ -1,35 +1,10 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import HomeClient from "./HomeClient";
-import {
-  DEFAULT_OG_IMAGE_ALT,
-  defaultOpenGraphImage,
-  seoAbsoluteMetaTitleForPath,
-  seoMetaDescriptionForPath,
-  SITE_BRAND_KO
-} from "@/lib/seoBrand";
+import { getHomePageMetadata } from "@/lib/storePageMetadata";
+import { SITE_BRAND_KO } from "@/lib/seoBrand";
 
-const HOME_TITLE = seoAbsoluteMetaTitleForPath("/");
-const HOME_DESCRIPTION = seoMetaDescriptionForPath("/");
-
-export const metadata: Metadata = {
-  alternates: { canonical: "/" },
-  title: { absolute: HOME_TITLE },
-  description: HOME_DESCRIPTION,
-  openGraph: {
-    title: HOME_TITLE,
-    description: HOME_DESCRIPTION,
-    url: "/",
-    siteName: SITE_BRAND_KO,
-    images: [{ ...defaultOpenGraphImage, alt: DEFAULT_OG_IMAGE_ALT }],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: HOME_TITLE,
-    description: HOME_DESCRIPTION,
-    images: [defaultOpenGraphImage.url],
-  },
-};
+export const metadata: Metadata = getHomePageMetadata();
 
 export default function HomePage() {
   return (

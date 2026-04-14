@@ -32,7 +32,12 @@ const StoreDetailSheet = dynamic(() => import("@/components/StoreDetailSheet"), 
 const LocationPermissionModal = dynamic(() => import("@/components/LocationPermissionModal"), { ssr: false });
 const LayoutShiftObserver = dynamic(() => import("@/components/LayoutShiftObserver"), { ssr: false });
 
-export default function HomeClient() {
+export type HomeClientProps = {
+  /** Server entry from `/s/{shortCode}` when the URL has no `?s=` query. */
+  initialShortCode?: string | null;
+};
+
+export default function HomeClient({ initialShortCode = null }: HomeClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isLoading, error } = useKakaoMapLoader();
@@ -111,8 +116,11 @@ export default function HomeClient() {
   );
 
   const sFromSearchParams = searchParams.get("s")?.trim() ?? "";
-  /** Next `useSearchParams` can miss `s` on some desktop navigations; merge URL + sessionStorage. */
-  const [deepLinkShort, setDeepLinkShort] = useState("");
+  /** Next `useSearchParams` can miss `s` on some desktop navigations; merge URL + prop + sessionStorage. */
+  const [deepLinkShort, setDeepLinkShort] = useState(() => {
+    const p = initialShortCode?.trim() ?? "";
+    return isValidShortCode(p) ? p : "";
+  });
 
   useLayoutEffect(() => {
     let code = sFromSearchParams;
@@ -122,6 +130,10 @@ export default function HomeClient() {
           ? new URLSearchParams(window.location.search).get("s")?.trim() ?? ""
           : "";
       if (isValidShortCode(fromUrl)) code = fromUrl;
+    }
+    if (!isValidShortCode(code)) {
+      const fromProp = initialShortCode?.trim() ?? "";
+      if (isValidShortCode(fromProp)) code = fromProp;
     }
     if (!isValidShortCode(code)) {
       try {
@@ -136,10 +148,14 @@ export default function HomeClient() {
       return;
     }
     setDeepLinkShort(code);
-    if (sFromSearchParams !== code) {
+
+    const onShareShortPath =
+      typeof window !== "undefined" && /^\/s\/[a-zA-Z0-9]{6}$/.test(window.location.pathname);
+
+    if (sFromSearchParams !== code && !onShareShortPath) {
       router.replace(`/?s=${encodeURIComponent(code)}`, { scroll: false });
     }
-  }, [sFromSearchParams, router]);
+  }, [sFromSearchParams, router, initialShortCode]);
 
   const handleFilterChange = useCallback((filter: StoreListFilter) => {
     sendGtagEvent("filter_select", { filter });
