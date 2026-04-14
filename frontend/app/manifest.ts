@@ -14,9 +14,8 @@ export default function manifest(): MetadataRoute.Manifest {
       {
         src: "/Img/Icon/trash_bag_24.svg",
         type: "image/svg+xml",
-        sizes: "any",
-        purpose: "any",
-      },
+        sizes: "any"
+      }
     ],
   };
 }

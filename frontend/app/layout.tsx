@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import ChunkLoadRecovery from "@/components/ChunkLoadRecovery";
 import { GoogleAnalyticsScripts } from "@/components/GoogleAnalyticsScripts";
 import { GtagRouteTracker } from "@/components/GtagRouteTracker";
 import { MicrosoftClarityScripts } from "@/components/MicrosoftClarityScripts";
@@ -103,6 +104,7 @@ export default function RootLayout({
         {isProd && CLARITY_PROJECT_ID ? <MicrosoftClarityScripts /> : null}
       </head>
       <body>
+        <ChunkLoadRecovery />
         {isProd && GA_MEASUREMENT_ID && GA_ROUTE_TRACKER_ENABLED ? <GtagRouteTracker /> : null}
         {children}
       </body>
