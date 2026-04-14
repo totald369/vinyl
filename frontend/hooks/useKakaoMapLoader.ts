@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { perfTimeEnd, perfTimeStart } from "@/lib/perfMarks";
 
 type LoaderState = "idle" | "loading" | "ready" | "error";
 
@@ -110,13 +111,16 @@ export function useKakaoMapLoader(): UseKakaoMapLoaderResult {
     setState("loading");
     setError(null);
 
+    perfTimeStart("[perf] kakao-sdk-load");
     void loadKakaoSdk(appKey)
       .then(() => {
         console.info("[KakaoMap] sdk ready");
+        perfTimeEnd("[perf] kakao-sdk-load");
         setState("ready");
       })
       .catch((e) => {
         console.error("[KakaoMap] sdk failed", e);
+        perfTimeEnd("[perf] kakao-sdk-load");
         setState("error");
         setError(e instanceof Error ? e.message : "카카오맵 로드 오류");
       });

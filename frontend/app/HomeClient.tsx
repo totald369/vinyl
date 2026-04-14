@@ -13,8 +13,10 @@ import { sendGtagEvent } from "@/lib/gtag";
 import { DEEPLINK_SHORT_STORAGE_KEY, isValidShortCode } from "@/lib/shortLink";
 import { DEFAULT_REGION, type LatLng } from "@/lib/types";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
+import { useStoreDetailAugment } from "@/hooks/useStoreDetailAugment";
 import { StoreData, useStores } from "@/hooks/useStores";
 import { useUserLocation } from "@/hooks/useUserLocation";
+import { prefetchStoreDetail } from "@/lib/storeDetailClient";
 
 /*
  * [LCP 최적화] 조건부로만 표시되는 무거운 컴포넌트를 dynamic import로 분리.
@@ -44,8 +46,6 @@ export default function HomeClient() {
   const [searchQuery, setSearchQuery] = useState("");
   /** Keep detail when the store is outside the current `stores` list (e.g. /?s= deep link). */
   const keepSelectedOutsideListRef = useRef(false);
-  /** Avoid re-running deep-link open while URL still has `s=` but persistence is already cleared. */
-  const shortLinkConsumedRef = useRef(false);
 
   const {
     selectedStore,
@@ -83,6 +83,18 @@ export default function HomeClient() {
   const center = useMemo(
     () => mapCenterOverride ?? userLocation ?? manualCenter,
     [mapCenterOverride, manualCenter, userLocation]
+  );
+
+  const detailAugmenting = useStoreDetailAugment(
+    sheetView,
+    selectedStore,
+    center,
+    setSelectedStore
+  );
+
+  const onPrefetchStore = useCallback(
+    (store: StoreData) => prefetchStoreDetail(store.id, center),
+    [center]
   );
 
   const sFromSearchParams = searchParams.get("s")?.trim() ?? "";
@@ -193,7 +205,6 @@ export default function HomeClient() {
     setSheetView("list");
     const s = searchParams.get("s")?.trim() ?? "";
     if (isValidShortCode(s)) {
-      shortLinkConsumedRef.current = false;
       router.replace("/", { scroll: false });
     }
   }, [router, searchParams]);
@@ -223,12 +234,21 @@ export default function HomeClient() {
   }, [selectedStore]);
 
   useEffect(() => {
-    if (!isValidShortCode(deepLinkShort)) {
-      shortLinkConsumedRef.current = false;
+    if (!isValidShortCode(deepLinkShort)) return;
+    if (loading) return;
+    /* Already showing this short link target */
+    if (selectedStore?.shortCode === deepLinkShort) return;
+    /*
+     * Only skip when the user picked another store that already has a valid short code.
+     * Rows with missing/empty shortCode must not block resolution (common on some API paths; otherwise the effect never completes and UX looks like "home only").
+     */
+    if (
+      selectedStore != null &&
+      isValidShortCode(selectedStore.shortCode) &&
+      selectedStore.shortCode !== deepLinkShort
+    ) {
       return;
     }
-    if (loading) return;
-    if (shortLinkConsumedRef.current) return;
 
     const ac = new AbortController();
 
@@ -243,10 +263,8 @@ export default function HomeClient() {
     const run = async () => {
       const fromList = stores.find((s) => s.shortCode === deepLinkShort);
       if (fromList) {
-        handleSelectStoreWithPan(fromList, true);
+        handleSelectStoreWithPan({ ...fromList, shortCode: deepLinkShort }, true);
         clearDeepLinkStorage();
-        shortLinkConsumedRef.current = true;
-        /* Keep `?s=` — replacing with `/` can reset client state on desktop and drop the detail sheet. */
         return;
       }
 
@@ -262,12 +280,10 @@ export default function HomeClient() {
         const data = (await res.json()) as { stores?: StoreData[] };
         const row = data.stores?.[0];
         if (row) {
-          handleSelectStoreWithPan(row, true);
+          handleSelectStoreWithPan({ ...row, shortCode: deepLinkShort }, true);
           clearDeepLinkStorage();
-          shortLinkConsumedRef.current = true;
           return;
         }
-        shortLinkConsumedRef.current = true;
         clearDeepLinkStorage();
         router.replace("/", { scroll: false });
       } catch (e) {
@@ -283,6 +299,7 @@ export default function HomeClient() {
     stores,
     center.lat,
     center.lng,
+    selectedStore?.shortCode,
     handleSelectStoreWithPan,
     router
   ]);
@@ -393,6 +410,7 @@ export default function HomeClient() {
               onClose={handleCloseDetail}
               userLocation={permission === "granted" && userLocation ? userLocation : null}
               kakaoMapsReady={!isLoading && !error}
+              isAugmentingDetail={detailAugmenting}
             />
           ) : (
             <BottomSheetList
@@ -405,6 +423,7 @@ export default function HomeClient() {
               onSnapChange={setBottomSheetSnap}
               onDragActiveChange={setSheetBlocksMapPointer}
               listLoading={loading}
+              onPrefetchStore={onPrefetchStore}
             />
           )}
         </div>

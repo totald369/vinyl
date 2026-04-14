@@ -57,8 +57,8 @@ function matchesProductFilter(s: StoreData, filter: ProductFilter): boolean {
   return s.hasTrashBag;
 }
 
-/** 클라이언트에 노출하는 최소 필드 */
-function toPublicStore(s: StoreData, distanceKm?: number) {
+/** List: lean JSON. Detail: use GET ?id= for dataReferenceDate + businessStatus */
+function toListStore(s: StoreData, distanceKm?: number) {
   const road = (s.roadAddress ?? s.address ?? "").trim();
   return {
     id: s.id,
@@ -72,9 +72,24 @@ function toPublicStore(s: StoreData, distanceKm?: number) {
     hasSpecialBag: s.hasSpecialBag,
     hasLargeWasteSticker: s.hasLargeWasteSticker,
     adminVerified: s.adminVerified === true,
-    dataReferenceDate: s.dataReferenceDate,
     ...(distanceKm != null ? { distance: distanceKm } : {})
   };
+}
+
+function toDetailStore(s: StoreData, distanceKm?: number) {
+  return {
+    ...toListStore(s, distanceKm),
+    dataReferenceDate: s.dataReferenceDate,
+    businessStatus: s.businessStatus
+  };
+}
+
+function jsonOk(data: unknown) {
+  return NextResponse.json(data, {
+    headers: {
+      "Cache-Control": "private, max-age=60, stale-while-revalidate=120"
+    }
+  });
 }
 
 function parseLatLng(searchParams: URLSearchParams): { lat: number; lng: number } | null {
@@ -132,12 +147,13 @@ export async function GET(request: NextRequest) {
   if (isValidShortCode(shortParam)) {
     const store = getStoreByShortCode(all, shortParam);
     if (!store) {
-      return NextResponse.json({ mode: "short", stores: [] });
+      return jsonOk({ mode: "short", stores: [] });
     }
     const d = getDistanceKm(origin.lat, origin.lng, store.lat, store.lng);
-    return NextResponse.json({
+    // Always echo the requested code so mobile clients match `?s=` / sessionStorage (avoids empty shortCode breaking deep-link guards).
+    return jsonOk({
       mode: "short",
-      stores: [toPublicStore(store, d)]
+      stores: [{ ...toDetailStore(store, d), shortCode: shortParam }]
     });
   }
 
@@ -157,17 +173,27 @@ export async function GET(request: NextRequest) {
       d: getDistanceKm(origin.lat, origin.lng, s.lat, s.lng)
     }));
     withDist.sort((a, b) => a.d - b.d);
-    return NextResponse.json({
+    return jsonOk({
       mode: "district",
-      stores: withDist.map(({ store, d }) => toPublicStore(store, d))
+      stores: withDist.map(({ store, d }) => toListStore(store, d))
     });
+  }
+
+  const detailId = searchParams.get("id")?.trim() ?? "";
+  if (detailId) {
+    const store = all.find((s) => s.id === detailId);
+    if (!store) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+    const d = getDistanceKm(origin.lat, origin.lng, store.lat, store.lng);
+    return jsonOk({ mode: "detail", store: toDetailStore(store, d) });
   }
 
   // --- 검색: 토큰 매칭 + 상품 필터 후 거리순, total 노출·offset/limit 페이지 ---
   if (qRaw) {
     const tokens = parseSearchTokens(qRaw);
     if (!tokens.length) {
-      return NextResponse.json({
+      return jsonOk({
         mode: "search",
         total: 0,
         offset: 0,
@@ -197,13 +223,13 @@ export async function GET(request: NextRequest) {
     const page = capped.slice(offset, offset + limit);
     const hasMore = offset + page.length < capped.length;
 
-    return NextResponse.json({
+    return jsonOk({
       mode: "search",
       total,
       offset,
       limit,
       hasMore,
-      stores: page.map(({ store, d }) => toPublicStore(store, d))
+      stores: page.map(({ store, d }) => toListStore(store, d))
     });
   }
 
@@ -220,9 +246,9 @@ export async function GET(request: NextRequest) {
     .filter(({ d }) => d <= radiusKm)
     .sort((a, b) => a.d - b.d);
 
-  return NextResponse.json({
+  return jsonOk({
     mode: "radius",
     radiusKm,
-    stores: inRadius.map(({ store, d }) => toPublicStore(store, d))
+    stores: inRadius.map(({ store, d }) => toListStore(store, d))
   });
 }

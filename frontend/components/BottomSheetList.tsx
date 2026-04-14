@@ -1,6 +1,15 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import { StoreProductChips } from "@/components/StoreProductChips";
 import { StoreData, StoreListFilter } from "@/hooks/useStores";
 import {
@@ -26,6 +35,7 @@ type Props = {
   onDragActiveChange?: (active: boolean) => void;
   /** 목록 API 로딩 중(빈 목록일 때 스켈레톤으로 높이 유지) */
   listLoading?: boolean;
+  onPrefetchStore?: (store: StoreData) => void;
 };
 
 /** 접힘 상태에서 화면에 보이는 시트 높이 ≈ 뷰포트 높이의 비율 */
@@ -73,6 +83,90 @@ function rubberClampTy(ty: number, maxTy: number, rubber: boolean): number {
 
 const SNAP_ORDER: BottomSheetSnap[] = ["expanded", "collapsed"];
 
+/** Long lists: first chunk only; scroll near end reveals more (avoids huge DOM on first paint). */
+const LIST_CHUNK_FIRST = 42;
+const LIST_CHUNK_STEP = 48;
+
+type StoreRowProps = {
+  store: StoreData;
+  selected: boolean;
+  index: number;
+  total: number;
+  onSelectStore: (store: StoreData) => void;
+  onPrefetchStore?: (store: StoreData) => void;
+  itemRef: (id: string, el: HTMLLIElement | null) => void;
+};
+
+const BottomSheetStoreRow = memo(function BottomSheetStoreRow({
+  store,
+  selected,
+  index,
+  total,
+  onSelectStore,
+  onPrefetchStore,
+  itemRef
+}: StoreRowProps) {
+  return (
+    <Fragment>
+      <li
+        ref={(el) => itemRef(store.id, el)}
+        role="button"
+        tabIndex={0}
+        aria-current={selected ? "true" : undefined}
+        className="cursor-pointer rounded-[8px] bg-transparent px-4 py-4 transition-colors hover:bg-[#eff3f4] active:bg-[#eff3f4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+        onClick={() => onSelectStore(store)}
+        onPointerEnter={() => onPrefetchStore?.(store)}
+        onTouchStart={() => onPrefetchStore?.(store)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelectStore(store);
+          }
+        }}
+      >
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-0.5">
+              <p className="text-[18px] font-semibold leading-normal tracking-[0.1px] text-[#171717]">
+                {store.name}
+              </p>
+              {store.adminVerified ? (
+                <img
+                  src="/Img/Icon/confirm_24.svg"
+                  alt="판매여부 확인완료"
+                  width={20}
+                  height={20}
+                  className="size-5 shrink-0"
+                />
+              ) : null}
+            </div>
+            <div className="flex min-w-0 items-center gap-2">
+              <p className="min-w-0 truncate text-[14px] font-normal leading-normal tracking-[0.1px] text-[#555555]">
+                {shortRegion(store.roadAddress || store.address || "")}
+              </p>
+              {typeof store.distance === "number" ? (
+                <>
+                  <span
+                    className="h-3 w-px shrink-0 bg-[rgba(23,23,23,0.1)]"
+                    aria-hidden
+                  />
+                  <p className="shrink-0 text-[14px] font-normal leading-normal tracking-[0.1px] text-[#999999]">
+                    {store.distance.toFixed(1)}km
+                  </p>
+                </>
+              ) : null}
+            </div>
+          </div>
+          <StoreProductChips store={store} />
+        </div>
+      </li>
+      {index < total - 1 ? (
+        <div className="h-px w-full shrink-0 bg-[#f5f5f5]" aria-hidden />
+      ) : null}
+    </Fragment>
+  );
+});
+
 export default function BottomSheetList({
   stores,
   selectedStoreId,
@@ -82,7 +176,8 @@ export default function BottomSheetList({
   snap,
   onSnapChange,
   onDragActiveChange,
-  listLoading = false
+  listLoading = false,
+  onPrefetchStore
 }: Props) {
   const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
   const scrollHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -159,6 +254,21 @@ export default function BottomSheetList({
 
   const SCROLLBAR_HIDE_MS = 700;
 
+  const [listCap, setListCap] = useState(LIST_CHUNK_FIRST);
+
+  useEffect(() => {
+    setListCap(LIST_CHUNK_FIRST);
+  }, [stores]);
+
+  const cappedStores = useMemo(() => {
+    if (stores.length <= listCap) return stores;
+    return stores.slice(0, listCap);
+  }, [stores, listCap]);
+
+  const setItemRef = useCallback((id: string, el: HTMLLIElement | null) => {
+    itemRefs.current[id] = el;
+  }, []);
+
   const handleListScroll = useCallback(() => {
     setListScrolling(true);
     if (scrollHideTimerRef.current) {
@@ -168,7 +278,12 @@ export default function BottomSheetList({
       setListScrolling(false);
       scrollHideTimerRef.current = null;
     }, SCROLLBAR_HIDE_MS);
-  }, []);
+
+    const el = listUlRef.current;
+    if (el && listCap < stores.length && el.scrollTop + el.clientHeight > el.scrollHeight - 120) {
+      setListCap((c) => Math.min(c + LIST_CHUNK_STEP, stores.length));
+    }
+  }, [listCap, stores.length]);
 
   useEffect(() => {
     return () => {
@@ -597,68 +712,18 @@ export default function BottomSheetList({
               주변에 표시할 판매처가 없습니다.
             </li>
           ) : (
-            stores.map((store, index) => {
-              const selected = selectedStoreId === store.id;
-              return (
-                <Fragment key={store.id}>
-                  <li
-                    ref={(el) => {
-                      itemRefs.current[store.id] = el;
-                    }}
-                    role="button"
-                    tabIndex={0}
-                    aria-current={selected ? "true" : undefined}
-                    className="cursor-pointer rounded-[8px] bg-transparent px-4 py-4 transition-colors hover:bg-[#eff3f4] active:bg-[#eff3f4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                    onClick={() => onSelectStore(store)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        onSelectStore(store);
-                      }
-                    }}
-                  >
-                    <div className="flex flex-col gap-3">
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex items-center gap-0.5">
-                          <p className="text-[18px] font-semibold leading-normal tracking-[0.1px] text-[#171717]">
-                            {store.name}
-                          </p>
-                          {store.adminVerified ? (
-                            <img
-                              src="/Img/Icon/confirm_24.svg"
-                              alt="판매여부 확인완료"
-                              width={20}
-                              height={20}
-                              className="size-5 shrink-0"
-                            />
-                          ) : null}
-                        </div>
-                        <div className="flex min-w-0 items-center gap-2">
-                          <p className="min-w-0 truncate text-[14px] font-normal leading-normal tracking-[0.1px] text-[#555555]">
-                            {shortRegion(store.roadAddress || store.address || "")}
-                          </p>
-                          {typeof store.distance === "number" ? (
-                            <>
-                              <span
-                                className="h-3 w-px shrink-0 bg-[rgba(23,23,23,0.1)]"
-                                aria-hidden
-                              />
-                              <p className="shrink-0 text-[14px] font-normal leading-normal tracking-[0.1px] text-[#999999]">
-                                {store.distance.toFixed(1)}km
-                              </p>
-                            </>
-                          ) : null}
-                        </div>
-                      </div>
-                      <StoreProductChips store={store} />
-                    </div>
-                  </li>
-                  {index < stores.length - 1 ? (
-                    <div className="h-px w-full shrink-0 bg-[#f5f5f5]" aria-hidden />
-                  ) : null}
-                </Fragment>
-              );
-            })
+            cappedStores.map((store, index) => (
+              <BottomSheetStoreRow
+                key={store.id}
+                store={store}
+                selected={selectedStoreId === store.id}
+                index={index}
+                total={cappedStores.length}
+                onSelectStore={onSelectStore}
+                onPrefetchStore={onPrefetchStore}
+                itemRef={setItemRef}
+              />
+            ))
           )}
         </ul>
       </div>

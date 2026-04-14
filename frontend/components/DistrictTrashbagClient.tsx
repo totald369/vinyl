@@ -16,8 +16,10 @@ import { sendGtagEvent } from "@/lib/gtag";
 import { filterStoresForSearch } from "@/lib/storeSearch";
 import type { LatLng } from "@/lib/types";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
+import { useStoreDetailAugment } from "@/hooks/useStoreDetailAugment";
 import { StoreData, useStores } from "@/hooks/useStores";
 import { useUserLocation } from "@/hooks/useUserLocation";
+import { prefetchStoreDetail } from "@/lib/storeDetailClient";
 
 const SEARCH_LIST_BATCH = 100;
 
@@ -119,6 +121,18 @@ export default function DistrictTrashbagClient({ config }: Props) {
   const center = useMemo(
     () => mapCenterOverride ?? userLocation ?? manualCenter,
     [mapCenterOverride, manualCenter, userLocation]
+  );
+
+  const detailAugmenting = useStoreDetailAugment(
+    sheetView,
+    selectedStore,
+    center,
+    setSelectedStore
+  );
+
+  const onPrefetchStore = useCallback(
+    (store: StoreData) => prefetchStoreDetail(store.id, center),
+    [center]
   );
 
   const handleFilterChange = useCallback((filter: StoreListFilter) => {
@@ -293,6 +307,7 @@ export default function DistrictTrashbagClient({ config }: Props) {
               onClose={() => setSheetView("list")}
               userLocation={permission === "granted" && userLocation ? userLocation : null}
               kakaoMapsReady={!isLoading && !error}
+              isAugmentingDetail={detailAugmenting}
             />
           ) : (
             <BottomSheetList
@@ -305,6 +320,7 @@ export default function DistrictTrashbagClient({ config }: Props) {
               onSnapChange={setBottomSheetSnap}
               onDragActiveChange={setSheetBlocksMapPointer}
               listLoading={loading}
+              onPrefetchStore={onPrefetchStore}
             />
           )}
       </div>

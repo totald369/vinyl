@@ -1,14 +1,15 @@
 "use client";
 
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { StoreData, StoreListFilter } from "@/hooks/useStores";
 import type { KakaoCustomOverlay, KakaoMap, KakaoMapPoint, KakaoMarker } from "@/lib/kakao";
+import { perfTimeEnd, perfTimeStart } from "@/lib/perfMarks";
 import { LatLng } from "@/lib/types";
+import { getDistanceKm } from "@/lib/utils";
 
 type Props = {
   center: LatLng;
   centerVersion?: number;
-  /** 탐색 모드 등에서 지도 확대 단계(1~14, 숫자가 클수록 더 넓게). center 이동 시 한 번 적용 */
   preferredMapLevel?: number | null;
   stores: StoreData[];
   activeFilter: StoreListFilter;
@@ -20,13 +21,15 @@ type Props = {
 const USER_MARKER_SRC = "/Img/Icon/User_marker.svg";
 const USER_MARKER_SIZE = 64;
 
-/** 지도에 그리는 아이콘(px). SVG 에셋과 동일하게 유지 */
 const STORE_MARKER_DISPLAY_PX = 80;
-/**
- * 지도 클릭/탭을 MapProjection으로 픽셀화한 뒤, 이 거리(px) 안의 마커만 후보로 두고
- * 가장 가까운 매장을 선택. 80×80 아이콘 모서리(≈56.6px) + 소폭 여유.
- */
 const STORE_PICK_MAX_DISTANCE_PX = 58;
+
+/** Before first `idle`, avoid drawing every pin — closest N to map center only */
+const PRIORITIZE_NEAR_CENTER = 96;
+/** Hard cap on DOM overlays (CustomOverlay) per rebuild */
+const MAX_MAP_MARKERS = 240;
+
+type MapBoundsBox = { swLat: number; swLng: number; neLat: number; neLng: number };
 
 function mapPointToXY(pt: KakaoMapPoint | { x: number; y: number }): { x: number; y: number } {
   if ("getX" in pt && typeof pt.getX === "function" && typeof pt.getY === "function") {
@@ -34,6 +37,54 @@ function mapPointToXY(pt: KakaoMapPoint | { x: number; y: number }): { x: number
   }
   const p = pt as { x: number; y: number };
   return { x: p.x, y: p.y };
+}
+
+/** Subset of stores to draw as markers (bounds + cap). */
+function pickStoresForMapMarkers(
+  stores: StoreData[],
+  mapCenter: LatLng,
+  bounds: MapBoundsBox | null,
+  selectedId: string | null
+): StoreData[] {
+  const selected = selectedId ? stores.find((s) => s.id === selectedId) : undefined;
+
+  const inPad = (lat: number, lng: number, b: MapBoundsBox) =>
+    lat >= b.swLat && lat <= b.neLat && lng >= b.swLng && lng <= b.neLng;
+
+  let pool =
+    bounds == null
+      ? stores
+      : stores.filter((s) => inPad(Number(s.lat), Number(s.lng), bounds));
+
+  if (bounds == null && pool.length > PRIORITIZE_NEAR_CENTER) {
+    pool = [...stores]
+      .map((s) => ({
+        s,
+        d: getDistanceKm(mapCenter.lat, mapCenter.lng, s.lat, s.lng)
+      }))
+      .sort((a, b) => a.d - b.d)
+      .slice(0, PRIORITIZE_NEAR_CENTER)
+      .map((x) => x.s);
+  }
+
+  if (pool.length > MAX_MAP_MARKERS) {
+    pool = [...pool]
+      .map((s) => ({
+        s,
+        d: getDistanceKm(mapCenter.lat, mapCenter.lng, s.lat, s.lng)
+      }))
+      .sort((a, b) => a.d - b.d)
+      .slice(0, MAX_MAP_MARKERS)
+      .map((x) => x.s);
+  }
+
+  if (selected && !pool.some((s) => s.id === selected.id)) {
+    pool = [selected, ...pool];
+    if (pool.length > MAX_MAP_MARKERS) {
+      pool = pool.slice(0, MAX_MAP_MARKERS);
+    }
+  }
+  return pool;
 }
 
 const FILTER_MARKER_MAP: Record<StoreListFilter, { src: string; selectedSrc: string }> = {
@@ -80,7 +131,6 @@ function createStoreMarkerElements(
   return { root, img };
 }
 
-/* [INP 최적화] memo로 부모 리렌더 시 불필요한 지도 리렌더 차단 */
 function MapViewInner({
   center,
   centerVersion = 0,
@@ -106,8 +156,18 @@ function MapViewInner({
   const onSelectStoreRef = useRef(onSelectStore);
   onSelectStoreRef.current = onSelectStore;
 
-  const storesPickRef = useRef<StoreData[]>(stores);
-  storesPickRef.current = stores;
+  const [mapBounds, setMapBounds] = useState<MapBoundsBox | null>(null);
+  const idleBoundTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const idleHandlerRef = useRef<(() => void) | null>(null);
+  const idleAttachedRef = useRef(false);
+
+  const visibleForMarkers = useMemo(
+    () => pickStoresForMapMarkers(stores, center, mapBounds, selectedStoreId ?? null),
+    [stores, center, mapBounds, selectedStoreId]
+  );
+
+  const storesPickRef = useRef<StoreData[]>(visibleForMarkers);
+  storesPickRef.current = visibleForMarkers;
 
   const pickListenerAttachedRef = useRef(false);
 
@@ -124,10 +184,56 @@ function MapViewInner({
       prevCenterRef.current = { lat: Number(center.lat), lng: Number(center.lng) };
     }
 
+    const map = mapRef.current;
+
+    if (!idleAttachedRef.current) {
+      idleAttachedRef.current = true;
+      const onIdle = () => {
+        if (idleBoundTimerRef.current) clearTimeout(idleBoundTimerRef.current);
+        idleBoundTimerRef.current = setTimeout(() => {
+          try {
+            const b = map.getBounds();
+            const sw = b.getSouthWest();
+            const ne = b.getNorthEast();
+            const swLat = sw.getLat();
+            const swLng = sw.getLng();
+            const neLat = ne.getLat();
+            const neLng = ne.getLng();
+            const pad = 0.11;
+            const dLat = (neLat - swLat) * pad;
+            const dLng = (neLng - swLng) * pad;
+            const round = (v: number) => Math.round(v * 1e5) / 1e5;
+            const next: MapBoundsBox = {
+              swLat: round(swLat - dLat),
+              swLng: round(swLng - dLng),
+              neLat: round(neLat + dLat),
+              neLng: round(neLng + dLng)
+            };
+            setMapBounds((prev) => {
+              if (
+                prev &&
+                prev.swLat === next.swLat &&
+                prev.swLng === next.swLng &&
+                prev.neLat === next.neLat &&
+                prev.neLng === next.neLng
+              ) {
+                return prev;
+              }
+              return next;
+            });
+          } catch {
+            /* bounds not ready */
+          }
+        }, 90);
+      };
+      idleHandlerRef.current = onIdle;
+      kakao.event.addListener(map, "idle", onIdle);
+      onIdle();
+    }
+
     if (pickListenerAttachedRef.current) return;
     pickListenerAttachedRef.current = true;
 
-    const map = mapRef.current;
     const onMapClick = (...args: unknown[]) => {
       const mouseEvent = args[0] as { latLng: { getLat: () => number; getLng: () => number } };
       if (!mouseEvent?.latLng) return;
@@ -171,6 +277,19 @@ function MapViewInner({
   }, [center.lat, center.lng]);
 
   useEffect(() => {
+    return () => {
+      if (idleBoundTimerRef.current) clearTimeout(idleBoundTimerRef.current);
+      const map = mapRef.current;
+      const h = idleHandlerRef.current;
+      if (map && h && typeof window !== "undefined" && window.kakao?.maps) {
+        window.kakao.maps.event.removeListener(map, "idle", h);
+      }
+      idleAttachedRef.current = false;
+      idleHandlerRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!mapRef.current || !window.kakao?.maps) return;
     const lat = Number(center.lat);
     const lng = Number(center.lng);
@@ -194,13 +313,14 @@ function MapViewInner({
     const map = mapRef.current;
     if (!map || !window.kakao?.maps) return;
 
+    perfTimeStart("[perf] map-markers-rebuild");
     storeOverlayMapRef.current.forEach(({ overlay }) => overlay.setMap(null));
     storeOverlayMapRef.current.clear();
     prevSelectedIdRef.current = null;
 
     const kakao = window.kakao.maps;
 
-    stores.forEach((store) => {
+    visibleForMarkers.forEach((store) => {
       const lat = Number(store.lat);
       const lng = Number(store.lng);
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
@@ -223,9 +343,10 @@ function MapViewInner({
         prevSelectedIdRef.current = store.id;
       }
     });
-    // selectedStoreId is intentionally excluded — selection visual is handled separately below
+    perfTimeEnd("[perf] map-markers-rebuild");
+    // selectedStoreId handled in separate effect for icon swap
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFilter, stores]);
+  }, [activeFilter, visibleForMarkers]);
 
   useEffect(() => {
     if (!window.kakao?.maps) return;

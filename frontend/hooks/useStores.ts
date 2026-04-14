@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseSearchTokens, textMatchesAllTokens } from "@/lib/searchTokens";
 import type { StoreData } from "@/lib/storeData";
+import { perfTimeEnd, perfTimeStart } from "@/lib/perfMarks";
 import { DEFAULT_REGION, LatLng } from "@/lib/types";
 
 const LIST_RADIUS_KM = 2;
@@ -144,6 +145,8 @@ export function useStores(
     }
 
     const url = `/api/stores?${params.toString()}`;
+    const perfLabel = `[perf] stores-list:${fetchDepsKey}`;
+    perfTimeStart(perfLabel);
 
     fetch(url)
       .then((res) => {
@@ -166,6 +169,7 @@ export function useStores(
           setStores(rows);
         }
         setLoading(false);
+        perfTimeEnd(perfLabel);
       })
       .catch((e) => {
         if (!mounted || gen !== searchFetchGen.current) return;
@@ -174,6 +178,7 @@ export function useStores(
         setSearchTotal(0);
         setSearchHasMore(false);
         setLoading(false);
+        perfTimeEnd(perfLabel);
       });
 
     return () => {
@@ -188,6 +193,8 @@ export function useStores(
 
     const gen = searchFetchGen.current;
     setSearchLoadingMore(true);
+    const moreLabel = `[perf] stores-search-more:${stores.length}`;
+    perfTimeStart(moreLabel);
 
     const params = new URLSearchParams();
     params.set("lat", String(fetchCenter.lat));
@@ -224,6 +231,7 @@ export function useStores(
         setSearchHasMore(false);
       }
     } finally {
+      perfTimeEnd(moreLabel);
       if (gen === searchFetchGen.current) {
         setSearchLoadingMore(false);
       }

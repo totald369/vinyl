@@ -18,13 +18,16 @@ type Props = {
   userLocation?: LatLng | null;
   /** After Kakao Maps SDK is ready, WGS84 routes use user location precisely */
   kakaoMapsReady?: boolean;
+  /** True while lazy `/api/stores?id=` is filling list-only row (shows layout placeholders). */
+  isAugmentingDetail?: boolean;
 };
 
 export default function StoreDetailSheet({
   store,
   onClose,
   userLocation = null,
-  kakaoMapsReady = true
+  kakaoMapsReady = true,
+  isAugmentingDetail = false
 }: Props) {
   const scrollHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -162,43 +165,60 @@ export default function StoreDetailSheet({
                 </h2>
               )}
             </div>
-            {addressLine ? (
-              <button
-                type="button"
-                onClick={() => void copyAddress()}
-                className="w-full rounded-lg py-1 text-left text-[16px] font-normal leading-[1.4] tracking-[0.1px] text-[#555555] outline-none transition-colors active:bg-[rgba(23,23,23,0.06)] focus-visible:ring-2 focus-visible:ring-brand-500"
-                aria-label="Copy address"
-              >
-                {addressLine}
-              </button>
-            ) : null}
-            <StoreProductChips store={store} />
-            <div className="flex flex-wrap items-center gap-2">
-              {typeof store.distance === "number" ? (
-                <p className="text-[14px] font-normal leading-normal tracking-[0.1px] text-[#999999]">
-                  {store.distance.toFixed(1)}km
-                </p>
-              ) : null}
-              {typeof store.distance === "number" && updateLabel ? (
-                <span className="h-3 w-px shrink-0 bg-[rgba(23,23,23,0.1)]" aria-hidden />
-              ) : null}
-              {updateLabel ? (
-                <p className="text-[14px] font-normal leading-normal tracking-[0.1px] text-[#999999]">
-                  {updateLabel}
-                </p>
-              ) : null}
-              {showMetaSepBeforeEdit ? (
-                <span className="h-3 w-px shrink-0 bg-[rgba(23,23,23,0.1)]" aria-hidden />
-              ) : null}
-              {SHOW_STORE_EDIT_REQUEST_BUTTON ? (
-                <Link
-                  href={`/edit-request?storeId=${encodeURIComponent(store.id)}&storeName=${encodeURIComponent(store.name)}&storeAddress=${encodeURIComponent(addressLine)}`}
-                  className="text-[14px] font-semibold leading-normal tracking-[0.1px] text-[#111111] outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                >
-                  정보 수정 요청
-                </Link>
-              ) : null}
-            </div>
+            {isAugmentingDetail ? (
+              <div className="flex flex-col gap-3" aria-hidden>
+                <div className="h-[22px] w-[88%] max-w-md animate-pulse rounded-[6px] bg-neutral-200" />
+                <div className="h-10 w-full animate-pulse rounded-[8px] bg-neutral-100" />
+                <div className="flex gap-2">
+                  <div className="h-8 w-24 animate-pulse rounded-md bg-neutral-100" />
+                  <div className="h-8 w-28 animate-pulse rounded-md bg-neutral-100" />
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <div className="h-4 w-16 animate-pulse rounded bg-neutral-100" />
+                  <div className="h-4 w-32 animate-pulse rounded bg-neutral-100" />
+                </div>
+              </div>
+            ) : (
+              <>
+                {addressLine ? (
+                  <button
+                    type="button"
+                    onClick={() => void copyAddress()}
+                    className="w-full rounded-lg py-1 text-left text-[16px] font-normal leading-[1.4] tracking-[0.1px] text-[#555555] outline-none transition-colors active:bg-[rgba(23,23,23,0.06)] focus-visible:ring-2 focus-visible:ring-brand-500"
+                    aria-label="Copy address"
+                  >
+                    {addressLine}
+                  </button>
+                ) : null}
+                <StoreProductChips store={store} />
+                <div className="flex flex-wrap items-center gap-2">
+                  {typeof store.distance === "number" ? (
+                    <p className="text-[14px] font-normal leading-normal tracking-[0.1px] text-[#999999]">
+                      {store.distance.toFixed(1)}km
+                    </p>
+                  ) : null}
+                  {typeof store.distance === "number" && updateLabel ? (
+                    <span className="h-3 w-px shrink-0 bg-[rgba(23,23,23,0.1)]" aria-hidden />
+                  ) : null}
+                  {updateLabel ? (
+                    <p className="text-[14px] font-normal leading-normal tracking-[0.1px] text-[#999999]">
+                      {updateLabel}
+                    </p>
+                  ) : null}
+                  {showMetaSepBeforeEdit ? (
+                    <span className="h-3 w-px shrink-0 bg-[rgba(23,23,23,0.1)]" aria-hidden />
+                  ) : null}
+                  {SHOW_STORE_EDIT_REQUEST_BUTTON ? (
+                    <Link
+                      href={`/edit-request?storeId=${encodeURIComponent(store.id)}&storeName=${encodeURIComponent(store.name)}&storeAddress=${encodeURIComponent(addressLine)}`}
+                      className="text-[14px] font-semibold leading-normal tracking-[0.1px] text-[#111111] outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                    >
+                      정보 수정 요청
+                    </Link>
+                  ) : null}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="flex w-full gap-1 pb-2">
