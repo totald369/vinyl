@@ -16,8 +16,12 @@ type ShareDebugInfo = {
 
 async function copyTextToClipboard(text: string) {
   if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      /* writeText can throw (permissions, gesture); fall through */
+    }
   }
   const ta = document.createElement("textarea");
   ta.value = text;
@@ -26,8 +30,11 @@ async function copyTextToClipboard(text: string) {
   ta.style.left = "-9999px";
   document.body.appendChild(ta);
   ta.select();
-  document.execCommand("copy");
+  const ok = document.execCommand("copy");
   document.body.removeChild(ta);
+  if (!ok) {
+    throw new Error("execCommand copy failed");
+  }
 }
 
 function getShareDebugInfo(): ShareDebugInfo {
@@ -54,35 +61,71 @@ function trackShare(storeName: string, shortCode: string, method: ShareMethod) {
   });
 }
 
+function canSharePayload(data: ShareData): boolean {
+  if (typeof navigator === "undefined" || typeof navigator.canShare !== "function") {
+    return true;
+  }
+  try {
+    return navigator.canShare(data);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Web Share API when available; otherwise clipboard. Fires GA `share_store` on success.
  */
 export async function shareStoreWithTracking(
   store: Pick<StoreData, "name" | "shortCode" | "roadAddress" | "address">
-) : Promise<ShareResult> {
+): Promise<ShareResult> {
   if (!isValidShortCode(store.shortCode)) return "invalid";
   const { title, description } = getStoreMetadata(store);
   const shortUrl = getShortShareUrl(store);
   const code = store.shortCode!;
-  const shareData = { title, text: description, url: shortUrl };
   const debug = getShareDebugInfo();
+
+  const candidates: ShareData[] = [
+    { title, text: description, url: shortUrl },
+    { title, url: shortUrl },
+    { url: shortUrl },
+  ];
 
   console.log("[share_store] capability", debug);
 
   if (debug.hasNavigatorShare) {
-    const canShareData = debug.hasNavigatorCanShare ? navigator.canShare(shareData) : true;
-    console.log("[share_store] canShare(data)", canShareData);
-    try {
-      if (canShareData) {
-        console.log("[share_store] branch", "web_share");
-        await navigator.share(shareData);
-        trackShare(store.name, code, "web_share");
-        return "web_share";
+    for (const data of candidates) {
+      if (!canSharePayload(data)) {
+        console.log("[share_store] canShare skip", Object.keys(data).join(","));
+        continue;
       }
-      console.log("[share_store] branch", "clipboard (canShare false)");
+      try {
+        console.log("[share_store] branch try web_share", Object.keys(data).join(","));
+        await navigator.share(data);
+        trackShare(store.name, code, "web_share");
+        console.log("[share_store] branch", "web_share");
+        return "web_share";
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") {
+          console.log("[share_store] branch", "aborted");
+          return "aborted";
+        }
+        console.log("[share_store] web_share failed, next candidate", e);
+      }
+    }
+
+    /* Last resort: some engines mis-report canShare — try URL-only once. */
+    try {
+      console.log("[share_store] branch try web_share url-only (ignore canShare)");
+      await navigator.share({ url: shortUrl });
+      trackShare(store.name, code, "web_share");
+      console.log("[share_store] branch", "web_share");
+      return "web_share";
     } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") return "aborted";
-      console.log("[share_store] web_share failed -> fallback", e);
+      if (e instanceof DOMException && e.name === "AbortError") {
+        console.log("[share_store] branch", "aborted");
+        return "aborted";
+      }
+      console.log("[share_store] web_share url-only failed -> clipboard", e);
     }
   } else {
     console.log("[share_store] branch", "clipboard (share unsupported)");
@@ -97,9 +140,8 @@ export async function shareStoreWithTracking(
     console.log("[share_store] clipboard failed -> manual_fallback", e);
   }
 
-  // Final fallback: always show a usable link to users on blocked clipboard environments.
   if (typeof window !== "undefined") {
-    window.alert(`링크를 직접 복사해주세요.\n${shortUrl}`);
+    window.alert(`\uB9C1\uD06C\uB97C \uC9C1\uC811 \uBCF5\uC0AC\uD574\uC8FC\uC138\uC694.\n${shortUrl}`);
     trackShare(store.name, code, "manual");
     console.log("[share_store] branch", "manual_fallback");
     return "manual";
@@ -111,7 +153,9 @@ export async function shareStoreWithTracking(
 export function getShareButtonHint(): string {
   const debug = getShareDebugInfo();
   if (debug.hasNavigatorShare) {
-    const canShareText = debug.hasNavigatorCanShare ? "지원 브라우저에서 공유" : "공유";
+    const canShareText = debug.hasNavigatorCanShare
+      ? "지원 브라우저에서 공유"
+      : "공유";
     return `${canShareText} / 미지원 시 링크 복사`;
   }
   return "링크 복사";
