@@ -6,19 +6,20 @@ import { isValidShortCode } from "@/lib/shortLink";
 
 type Props = {
   shortCode: string;
-  storeExists: boolean;
 };
 
-export default function ShortLinkRedirect({ shortCode, storeExists }: Props) {
+export default function ShortLinkRedirect({ shortCode }: Props) {
   const router = useRouter();
 
   useEffect(() => {
-    if (!isValidShortCode(shortCode) || !storeExists) {
+    if (!isValidShortCode(shortCode)) {
       router.replace("/");
       return;
     }
+    // Resolve store on the home client (API + list). Do not depend on server `storeExists`:
+    // in-app browsers could still fail the follow-up fetch if we sent users to "/" without ?s=.
     router.replace(`/?s=${encodeURIComponent(shortCode)}`, { scroll: false });
-  }, [shortCode, storeExists, router]);
+  }, [shortCode, router]);
 
   return (
     <main className="mx-auto flex min-h-[40vh] max-w-md items-center justify-center px-4 text-center text-sm text-[#555555]">

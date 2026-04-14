@@ -35,18 +35,24 @@ export function checkReferer(request: NextRequest): { ok: true } | { ok: false; 
   }
 
   const referer = request.headers.get("referer");
-  if (!referer) {
-    return { ok: false, reason: "missing_referer" };
-  }
-  try {
-    const u = new URL(referer);
-    if (!hostAllowed(u.hostname)) {
-      return { ok: false, reason: "referer_host" };
+  if (referer) {
+    try {
+      const u = new URL(referer);
+      if (!hostAllowed(u.hostname)) {
+        return { ok: false, reason: "referer_host" };
+      }
+      return { ok: true };
+    } catch {
+      return { ok: false, reason: "referer_parse" };
     }
-    return { ok: true };
-  } catch {
-    return { ok: false, reason: "referer_parse" };
   }
+
+  const reqHost = request.headers.get("host")?.split(":")[0]?.toLowerCase() ?? "";
+  if (reqHost && hostAllowed(reqHost)) {
+    return { ok: true };
+  }
+
+  return { ok: false, reason: "missing_referer" };
 }
 
 export function checkRateLimit(ip: string): { ok: true } | { ok: false } {

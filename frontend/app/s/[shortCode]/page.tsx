@@ -30,14 +30,5 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default function ShortLinkPage({ params }: Props) {
   const raw = params.shortCode?.trim() ?? "";
-  let storeExists = false;
-  if (isValidShortCode(raw)) {
-    try {
-      storeExists = Boolean(getStoreByShortCode(getMergedStores(), raw));
-    } catch {
-      storeExists = false;
-    }
-  }
-
-  return <ShortLinkRedirect shortCode={raw} storeExists={storeExists} />;
+  return <ShortLinkRedirect shortCode={raw} />;
 }
