@@ -46,6 +46,8 @@ export default function HomeClient() {
   const [searchQuery, setSearchQuery] = useState("");
   /** Keep detail when the store is outside the current `stores` list (e.g. /?s= deep link). */
   const keepSelectedOutsideListRef = useRef(false);
+  /** Prevents duplicate `short` fetches; survives `loading` toggles (must not abort on list refetch). */
+  const shortLinkFetchForRef = useRef<string | null>(null);
 
   const {
     selectedStore,
@@ -84,6 +86,12 @@ export default function HomeClient() {
     () => mapCenterOverride ?? userLocation ?? manualCenter,
     [mapCenterOverride, manualCenter, userLocation]
   );
+
+  /** Deep-link fetch must not abort when `stores`/`center` change (list refetch after exploreAnchor). */
+  const storesRef = useRef(stores);
+  storesRef.current = stores;
+  const centerRef = useRef(center);
+  centerRef.current = center;
 
   const detailAugmenting = useStoreDetailAugment(
     sheetView,
@@ -250,8 +258,6 @@ export default function HomeClient() {
       return;
     }
 
-    const ac = new AbortController();
-
     const clearDeepLinkStorage = () => {
       try {
         sessionStorage.removeItem(DEEPLINK_SHORT_STORAGE_KEY);
@@ -260,49 +266,49 @@ export default function HomeClient() {
       }
     };
 
-    const run = async () => {
-      const fromList = stores.find((s) => s.shortCode === deepLinkShort);
-      if (fromList) {
-        handleSelectStoreWithPan({ ...fromList, shortCode: deepLinkShort }, true);
-        clearDeepLinkStorage();
-        return;
-      }
+    const list = storesRef.current;
+    const fromList = list.find((s) => s.shortCode === deepLinkShort);
+    if (fromList) {
+      shortLinkFetchForRef.current = null;
+      handleSelectStoreWithPan({ ...fromList, shortCode: deepLinkShort }, true);
+      clearDeepLinkStorage();
+      return;
+    }
 
+    const code = deepLinkShort;
+    if (shortLinkFetchForRef.current === code) return;
+    shortLinkFetchForRef.current = code;
+
+    void (async () => {
       try {
+        const c = centerRef.current;
         const params = new URLSearchParams();
-        params.set("lat", String(center.lat));
-        params.set("lng", String(center.lng));
-        params.set("short", deepLinkShort);
-        const res = await fetch(`/api/stores?${params.toString()}`, { signal: ac.signal });
+        params.set("lat", String(c.lat));
+        params.set("lng", String(c.lng));
+        params.set("short", code);
+        const res = await fetch(`/api/stores?${params.toString()}`);
+        if (shortLinkFetchForRef.current !== code) return;
         if (!res.ok) {
           return;
         }
         const data = (await res.json()) as { stores?: StoreData[] };
         const row = data.stores?.[0];
         if (row) {
-          handleSelectStoreWithPan({ ...row, shortCode: deepLinkShort }, true);
+          handleSelectStoreWithPan({ ...row, shortCode: code }, true);
           clearDeepLinkStorage();
           return;
         }
         clearDeepLinkStorage();
         router.replace("/", { scroll: false });
-      } catch (e) {
-        if (e instanceof DOMException && e.name === "AbortError") return;
+      } catch {
+        /* network */
+      } finally {
+        if (shortLinkFetchForRef.current === code) {
+          shortLinkFetchForRef.current = null;
+        }
       }
-    };
-
-    void run();
-    return () => ac.abort();
-  }, [
-    deepLinkShort,
-    loading,
-    stores,
-    center.lat,
-    center.lng,
-    selectedStore?.shortCode,
-    handleSelectStoreWithPan,
-    router
-  ]);
+    })();
+  }, [deepLinkShort, loading, selectedStore?.shortCode, handleSelectStoreWithPan, router]);
 
   if (error) {
     return (

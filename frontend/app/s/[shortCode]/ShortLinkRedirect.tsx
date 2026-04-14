@@ -8,6 +8,10 @@ type Props = {
   shortCode: string;
 };
 
+/**
+ * Mobile in-app browsers (KakaoTalk, etc.) sometimes drop `?s=` after client-side router.replace.
+ * Hard navigation keeps the query in the location bar and avoids a broken deep-link chain.
+ */
 export default function ShortLinkRedirect({ shortCode }: Props) {
   const router = useRouter();
 
@@ -16,13 +20,15 @@ export default function ShortLinkRedirect({ shortCode }: Props) {
       router.replace("/");
       return;
     }
-    // Resolve store on the home client (API + list). Persist for desktops that drop `?s=` on replace.
     try {
       sessionStorage.setItem(DEEPLINK_SHORT_STORAGE_KEY, shortCode);
     } catch {
       /* private mode */
     }
-    router.replace(`/?s=${encodeURIComponent(shortCode)}`, { scroll: false });
+    if (typeof window === "undefined") return;
+    window.location.replace(
+      `${window.location.origin}/?s=${encodeURIComponent(shortCode)}`
+    );
   }, [shortCode, router]);
 
   return (

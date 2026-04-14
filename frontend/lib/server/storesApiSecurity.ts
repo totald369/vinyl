@@ -34,6 +34,18 @@ export function checkReferer(request: NextRequest): { ok: true } | { ok: false; 
     return { ok: true };
   }
 
+  const origin = request.headers.get("origin");
+  if (origin) {
+    try {
+      const u = new URL(origin);
+      if (hostAllowed(u.hostname)) {
+        return { ok: true };
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
   const referer = request.headers.get("referer");
   if (referer) {
     try {
