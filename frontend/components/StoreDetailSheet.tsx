@@ -9,7 +9,7 @@ import { SHOW_STORE_EDIT_REQUEST_BUTTON } from "@/lib/featureFlags";
 import type { LatLng } from "@/lib/types";
 import { resolveKakaoDirectionsUrl } from "@/lib/kakaoDirectionsUrl";
 import { isValidShortCode } from "@/lib/shortLink";
-import { shareStoreWithTracking } from "@/lib/storeShareClient";
+import { getShareButtonHint, shareStoreWithTracking } from "@/lib/storeShareClient";
 
 type Props = {
   store: StoreData;
@@ -87,6 +87,10 @@ export default function StoreDetailSheet({
     const result = await shareStoreWithTracking(store);
     if (result === "clipboard") {
       showToast("\uB9C1\uD06C\uAC00 \uBCF5\uC0AC\uB418\uC5C8\uC2B5\uB2C8\uB2E4");
+      return;
+    }
+    if (result === "manual") {
+      showToast("\uB9C1\uD06C\uB97C \uC9C1\uC811 \uBCF5\uC0AC\uD574\uC8FC\uC138\uC694");
     }
   }, [store, showToast]);
 
@@ -102,6 +106,7 @@ export default function StoreDetailSheet({
   }, [store, userLocation, kakaoMapsReady]);
 
   const canShare = isValidShortCode(store.shortCode);
+  const shareButtonHint = getShareButtonHint();
   const showMetaSepBeforeEdit =
     SHOW_STORE_EDIT_REQUEST_BUTTON && (typeof store.distance === "number" || Boolean(updateLabel));
 
@@ -202,9 +207,10 @@ export default function StoreDetailSheet({
                 type="button"
                 onClick={() => void handleShareStore()}
                 className="flex h-12 min-w-0 flex-1 items-center justify-center gap-0.5 rounded-[8px] border border-[#DDDDDD] bg-white px-4 text-[16px] font-bold leading-[1.5] text-[#171717] outline-none transition-colors active:bg-[rgba(23,23,23,0.04)] focus-visible:ring-2 focus-visible:ring-brand-500"
-                aria-label="Share store short link"
+                aria-label="공유 또는 링크 복사"
+                title={shareButtonHint}
               >
-                공유하기
+                공유 / 링크 복사
                 <img src="/Img/Icon/share_24.svg" alt="" width={24} height={24} className="size-6 shrink-0" />
               </button>
             ) : null}
