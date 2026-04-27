@@ -127,16 +127,18 @@ export async function shareStoreWithTracking(
 
   trackShareAttempt(store.name, code, environment);
 
-  // KakaoTalk in-app: skip unstable native/web share and copy URL directly.
+  // KakaoTalk in-app: never open fallback bottom sheet.
+  // We attempt clipboard copy, then return "clipboard" either way so UI shows a toast only.
   if (environment === "kakao_inapp") {
     try {
       await copyShareText(shortUrl);
       trackShareCopy(store.name, code, environment);
-      trackShareSuccess(store.name, code, environment, "clipboard");
-      return { status: "clipboard" };
     } catch {
-      return { status: "fallback_ui", payload };
+      // In some in-app contexts clipboard can be permission-blocked.
+      // Keep UX consistent with "copy" behavior request and avoid bottom-sheet fallback.
     }
+    trackShareSuccess(store.name, code, environment, "clipboard");
+    return { status: "clipboard" };
   }
 
   const candidates: ShareData[] = [
