@@ -91,6 +91,10 @@ export default function StoreDetailSheet({
 
   const handleShareStore = useCallback(async () => {
     const result = await shareStoreWithTracking(store);
+    if (result.status === "clipboard") {
+      showToast("링크가 복사되었습니다");
+      return;
+    }
     if (result.status === "fallback_ui") {
       setShareFallback(result.payload);
       return;

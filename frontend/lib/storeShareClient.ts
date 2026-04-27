@@ -20,6 +20,7 @@ export type StoreShareFallbackPayload = {
 
 export type StoreShareOutcome =
   | { status: "web_share" }
+  | { status: "clipboard" }
   | { status: "aborted" }
   | { status: "invalid" }
   | { status: "fallback_ui"; payload: StoreShareFallbackPayload };
@@ -125,6 +126,18 @@ export async function shareStoreWithTracking(
   };
 
   trackShareAttempt(store.name, code, environment);
+
+  // KakaoTalk in-app: skip unstable native/web share and copy URL directly.
+  if (environment === "kakao_inapp") {
+    try {
+      await copyShareText(shortUrl);
+      trackShareCopy(store.name, code, environment);
+      trackShareSuccess(store.name, code, environment, "clipboard");
+      return { status: "clipboard" };
+    } catch {
+      return { status: "fallback_ui", payload };
+    }
+  }
 
   const candidates: ShareData[] = [
     { url: shortUrl },
