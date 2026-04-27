@@ -2,12 +2,16 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import StoreShareFallback from "@/components/StoreShareFallback";
 import { StoreProductChips } from "@/components/StoreProductChips";
 import { StoreData } from "@/hooks/useStores";
 import { formatDatasetUpdateLabel } from "@/lib/datasetDate";
 import { SHOW_STORE_EDIT_REQUEST_BUTTON } from "@/lib/featureFlags";
 import type { LatLng } from "@/lib/types";
 import { resolveKakaoDirectionsUrl } from "@/lib/kakaoDirectionsUrl";
+import { isValidShortCode } from "@/lib/shortLink";
+import type { StoreShareFallbackPayload } from "@/lib/storeShareClient";
+import { getShareButtonHint, shareStoreWithTracking } from "@/lib/storeShareClient";
 
 type Props = {
   store: StoreData;
@@ -31,6 +35,7 @@ export default function StoreDetailSheet({
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [scrolling, setScrolling] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [shareFallback, setShareFallback] = useState<StoreShareFallbackPayload | null>(null);
 
   const handleScroll = useCallback(() => {
     setScrolling(true);
@@ -84,6 +89,13 @@ export default function StoreDetailSheet({
     }
   }, [addressLine, showToast]);
 
+  const handleShareStore = useCallback(async () => {
+    const result = await shareStoreWithTracking(store);
+    if (result.status === "fallback_ui") {
+      setShareFallback(result.payload);
+    }
+  }, [store]);
+
   const updateLabel = useMemo(
     () => formatDatasetUpdateLabel(store.dataReferenceDate),
     [store.dataReferenceDate]
@@ -94,6 +106,8 @@ export default function StoreDetailSheet({
     }
     return resolveKakaoDirectionsUrl(store, userLocation);
   }, [store, userLocation, kakaoMapsReady]);
+  const canShare = isValidShortCode(store.shortCode);
+  const shareButtonHint = getShareButtonHint();
 
   const showMetaSepBeforeEdit =
     SHOW_STORE_EDIT_REQUEST_BUTTON && (typeof store.distance === "number" || Boolean(updateLabel));
@@ -207,11 +221,25 @@ export default function StoreDetailSheet({
           </div>
 
           <div className="flex w-full gap-1 pb-2">
+            {canShare ? (
+              <button
+                type="button"
+                onClick={() => void handleShareStore()}
+                className="flex h-12 min-w-0 flex-1 items-center justify-center gap-0.5 rounded-[8px] border border-[#DDDDDD] bg-white px-4 text-[16px] font-bold leading-[1.5] text-[#171717] outline-none transition-colors active:bg-[rgba(23,23,23,0.04)] focus-visible:ring-2 focus-visible:ring-brand-500"
+                aria-label="공유하기"
+                title={shareButtonHint}
+              >
+                공유하기
+                <img src="/Img/Icon/share_24.svg" alt="" width={24} height={24} className="size-6 shrink-0" />
+              </button>
+            ) : null}
             <a
               href={directionsHref}
               target="_blank"
               rel="noreferrer"
-              className="flex h-12 w-full items-center justify-center rounded-[8px] bg-[#171717] px-4 py-2 text-center text-[16px] font-bold leading-[1.5] text-[#d4fe1c]"
+              className={`flex h-12 min-w-0 items-center justify-center rounded-[8px] bg-[#171717] px-4 py-2 text-center text-[16px] font-bold leading-[1.5] text-[#d4fe1c] ${
+                canShare ? "flex-1" : "w-full"
+              }`}
             >
               {"\uCE74\uCE74\uC624\uB9F5 \uAE38\uCC3E\uAE30"}
             </a>
@@ -235,6 +263,17 @@ export default function StoreDetailSheet({
             {toastMessage}
           </div>
         </div>
+      ) : null}
+
+      {shareFallback && isValidShortCode(store.shortCode) ? (
+        <StoreShareFallback
+          open
+          onClose={() => setShareFallback(null)}
+          storeName={store.name}
+          shortCode={store.shortCode}
+          payload={shareFallback}
+          onCopied={() => showToast("\uB9C1\uD06C\uAC00 \uBCF5\uC0AC\uB418\uC5C8\uC2B5\uB2C8\uB2E4")}
+        />
       ) : null}
 
     </div>

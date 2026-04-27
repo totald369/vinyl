@@ -34,44 +34,32 @@ export function generateShortCode(): string {
 }
 
 /**
- * After merge/dedupe: keep valid unique codes from JSON, assign new ones for missing/collisions.
+ * Runtime must not generate new shortCode.
+ * Missing/invalid/duplicate codes should be fixed by `npm run shortcodes:assign`.
  */
 export function ensureShortCodesOnStores<T extends WithOptionalShortCode>(
   stores: T[]
-): (T & { shortCode: string })[] {
+): T[] {
   const counts = new Map<string, number>();
+  let missingOrInvalid = 0;
   for (const s of stores) {
     const c = s.shortCode?.trim();
     if (isValidShortCode(c)) {
       counts.set(c, (counts.get(c) ?? 0) + 1);
+    } else {
+      missingOrInvalid++;
     }
   }
+  const duplicates = [...counts.values()].filter((v) => v > 1).length;
 
-  const used = new Set<string>();
-  for (const s of stores) {
-    const c = s.shortCode?.trim();
-    if (isValidShortCode(c) && counts.get(c) === 1) {
-      used.add(c);
-    }
+  if (missingOrInvalid > 0 || duplicates > 0) {
+    console.warn(
+      `ensureShortCodesOnStores: missing/invalid=${missingOrInvalid}, duplicate=${duplicates}. ` +
+        `No runtime shortCode generation is performed. Run: npm run shortcodes:assign`
+    );
   }
 
-  return stores.map((s) => {
-    const c = s.shortCode?.trim();
-    if (isValidShortCode(c) && counts.get(c) === 1) {
-      return { ...s, shortCode: c };
-    }
-    let next: string;
-    let guard = 0;
-    do {
-      next = generateShortCode();
-      guard++;
-      if (guard > 10_000) {
-        throw new Error("ensureShortCodesOnStores: could not allocate unique shortCode");
-      }
-    } while (used.has(next));
-    used.add(next);
-    return { ...s, shortCode: next };
-  });
+  return stores;
 }
 
 export function getStoreByShortCode<T extends WithOptionalShortCode>(

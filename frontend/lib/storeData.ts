@@ -26,7 +26,7 @@ export type RawStoreRow = {
   hasTrashBag?: boolean;
   hasSpecialBag?: boolean;
   hasLargeWasteSticker?: boolean;
-  /** 6-char share code from JSON; missing codes filled in merge */
+  /** 6-char share code from JSON (must be pre-assigned by scripts/assignShortCodes.ts) */
   shortCode?: string;
 } & Record<string, unknown>;
 

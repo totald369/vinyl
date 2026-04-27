@@ -35,12 +35,13 @@ export default async function ShortLinkPage({ params }: Props) {
   if (!isValidShortCode(raw)) {
     redirect("/");
   }
+  let store = null;
   try {
-    const store = getStoreByShortCode(getMergedStores(), raw);
-    if (!store) {
-      redirect("/");
-    }
+    store = getStoreByShortCode(getMergedStores(), raw) ?? null;
   } catch {
+    store = null;
+  }
+  if (!store) {
     redirect("/");
   }
 
