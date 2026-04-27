@@ -65,7 +65,11 @@ export type GtagCustomEventName =
   | "click_report"
   | "click_marker"
   | "filter_select"
-  | "share_store";
+  | "share_store"
+  | "share_store_attempt"
+  | "share_store_success"
+  | "share_store_copy"
+  | "share_store_kakao";
 
 declare global {
   interface Window {
