@@ -39,10 +39,14 @@ export default function StoreDetailPageActions({ store, directionsHref, addressL
     const result = await shareStoreWithTracking(store);
     if (result.status === "fallback_ui") {
       setShareFallback(result.payload);
+      return;
     }
-  }, [store]);
+    if (result.status === "invalid") {
+      showToast("공유 링크를 준비 중입니다. 잠시 후 다시 시도해 주세요");
+    }
+  }, [showToast, store]);
 
-  const canShare = isValidShortCode(store.shortCode);
+  const canShare = true;
   const shareButtonHint = getShareButtonHint();
 
   return (

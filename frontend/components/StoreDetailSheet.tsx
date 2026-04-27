@@ -93,8 +93,12 @@ export default function StoreDetailSheet({
     const result = await shareStoreWithTracking(store);
     if (result.status === "fallback_ui") {
       setShareFallback(result.payload);
+      return;
     }
-  }, [store]);
+    if (result.status === "invalid") {
+      showToast("공유 링크를 준비 중입니다. 잠시 후 다시 시도해 주세요");
+    }
+  }, [showToast, store]);
 
   const updateLabel = useMemo(
     () => formatDatasetUpdateLabel(store.dataReferenceDate),
@@ -106,7 +110,7 @@ export default function StoreDetailSheet({
     }
     return resolveKakaoDirectionsUrl(store, userLocation);
   }, [store, userLocation, kakaoMapsReady]);
-  const canShare = isValidShortCode(store.shortCode);
+  const canShare = true;
   const shareButtonHint = getShareButtonHint();
 
   const showMetaSepBeforeEdit =
