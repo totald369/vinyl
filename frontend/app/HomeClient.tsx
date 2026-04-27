@@ -21,6 +21,7 @@ import { useStoreDetailAugment } from "@/hooks/useStoreDetailAugment";
 import { StoreData, useStores } from "@/hooks/useStores";
 import { useUserLocation } from "@/hooks/useUserLocation";
 import { prefetchStoreDetail } from "@/lib/storeDetailClient";
+import { perfTimeEnd, perfTimeStart } from "@/lib/perfMarks";
 
 /*
  * [LCP 최적화] 조건부로만 표시되는 무거운 컴포넌트를 dynamic import로 분리.
@@ -31,6 +32,7 @@ const HomeSearchOverlay = dynamic(() => import("@/components/HomeSearchOverlay")
 const StoreDetailSheet = dynamic(() => import("@/components/StoreDetailSheet"), { ssr: false });
 const LocationPermissionModal = dynamic(() => import("@/components/LocationPermissionModal"), { ssr: false });
 const LayoutShiftObserver = dynamic(() => import("@/components/LayoutShiftObserver"), { ssr: false });
+const DETAIL_OPEN_PERF_LABEL = "[perf] detail-open";
 
 export type HomeClientProps = {
   /** Server entry from `/s/{shortCode}` when the URL has no `?s=` query. */
@@ -60,6 +62,7 @@ export default function HomeClient({ initialShortCode = null }: HomeClientProps)
   /** Detects new `?s=` navigation vs stable param (for reopen + user-override guard). */
   const lastSeenDeepLinkShortRef = useRef<string>("");
   const [deepLinkResolveError, setDeepLinkResolveError] = useState<string | null>(null);
+  const detailOpenInFlightRef = useRef(false);
 
   const {
     selectedStore,
@@ -164,6 +167,8 @@ export default function HomeClient({ initialShortCode = null }: HomeClientProps)
 
   /* [INP 최적화] useCallback으로 핸들러 참조 안정화 → 자식 memo 이점 + 불필요 리렌더 방지 */
   const handleMapMarkerSelect = useCallback((store: StoreData) => {
+    perfTimeStart(DETAIL_OPEN_PERF_LABEL);
+    detailOpenInFlightRef.current = true;
     keepSelectedOutsideListRef.current = false;
     const resolved = storesById.get(store.id) ?? store;
     sendGtagEvent("click_marker", { store_id: resolved.id });
@@ -173,6 +178,8 @@ export default function HomeClient({ initialShortCode = null }: HomeClientProps)
 
   const handleSelectStoreWithPan = useCallback(
     (store: StoreData, fromShortLink = false) => {
+      perfTimeStart(DETAIL_OPEN_PERF_LABEL);
+      detailOpenInFlightRef.current = true;
       keepSelectedOutsideListRef.current = fromShortLink;
       const resolved = storesById.get(store.id) ?? store;
       const pos = { lat: Number(resolved.lat), lng: Number(resolved.lng) };
@@ -193,6 +200,8 @@ export default function HomeClient({ initialShortCode = null }: HomeClientProps)
   );
 
   const handleSearchSelectStore = useCallback((store: StoreData) => {
+    perfTimeStart(DETAIL_OPEN_PERF_LABEL);
+    detailOpenInFlightRef.current = true;
     keepSelectedOutsideListRef.current = false;
     const resolved = storesById.get(store.id) ?? store;
     const pos = { lat: Number(resolved.lat), lng: Number(resolved.lng) };
@@ -204,6 +213,15 @@ export default function HomeClient({ initialShortCode = null }: HomeClientProps)
     setSheetView("detail");
     setSearchOpen(false);
   }, [storesById, setSelectedStore]);
+
+  useEffect(() => {
+    if (!detailOpenInFlightRef.current) return;
+    if (sheetView === "detail" && selectedStore) {
+      // [perf] detail open end: first render state with selected store + detail sheet
+      perfTimeEnd(DETAIL_OPEN_PERF_LABEL);
+      detailOpenInFlightRef.current = false;
+    }
+  }, [sheetView, selectedStore]);
 
   const handleMoveToLocation = useCallback(() => {
     keepSelectedOutsideListRef.current = false;

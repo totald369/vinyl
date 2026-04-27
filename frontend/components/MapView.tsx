@@ -170,6 +170,8 @@ function MapViewInner({
   storesPickRef.current = visibleForMarkers;
 
   const pickListenerAttachedRef = useRef(false);
+  const mapInitMeasuredRef = useRef(false);
+  const mapFirstIdleMeasuredRef = useRef(false);
 
   useEffect(() => {
     if (!containerRef.current || typeof window === "undefined" || !window.kakao?.maps) return;
@@ -177,10 +179,15 @@ function MapViewInner({
     const kakao = window.kakao.maps;
 
     if (!mapRef.current) {
+      // [perf] map init start/end: constructor + first idle
+      perfTimeStart("[perf] map-init");
+      perfTimeStart("[perf] map-first-idle");
       mapRef.current = new kakao.Map(containerRef.current, {
         center: new kakao.LatLng(Number(center.lat), Number(center.lng)),
         level: 5
       });
+      perfTimeEnd("[perf] map-init");
+      mapInitMeasuredRef.current = true;
       prevCenterRef.current = { lat: Number(center.lat), lng: Number(center.lng) };
     }
 
@@ -189,6 +196,10 @@ function MapViewInner({
     if (!idleAttachedRef.current) {
       idleAttachedRef.current = true;
       const onIdle = () => {
+        if (!mapFirstIdleMeasuredRef.current) {
+          perfTimeEnd("[perf] map-first-idle");
+          mapFirstIdleMeasuredRef.current = true;
+        }
         if (idleBoundTimerRef.current) clearTimeout(idleBoundTimerRef.current);
         idleBoundTimerRef.current = setTimeout(() => {
           try {
