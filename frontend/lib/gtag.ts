@@ -69,7 +69,8 @@ export type GtagCustomEventName =
   | "share_store_attempt"
   | "share_store_success"
   | "share_store_copy"
-  | "share_store_kakao";
+  | "share_store_kakao"
+  | "share_store_error";
 
 declare global {
   interface Window {

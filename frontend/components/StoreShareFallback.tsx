@@ -8,6 +8,7 @@ import {
   isWebShareAvailable,
   shareViaKakaoSdk,
   trackShareCopy,
+  trackShareError,
   trackShareKakao,
   trackShareSuccess
 } from "@/lib/storeShareClient";
@@ -15,6 +16,7 @@ import {
 type Props = {
   open: boolean;
   onClose: () => void;
+  storeId: string;
   storeName: string;
   shortCode: string;
   payload: StoreShareFallbackPayload;
@@ -24,6 +26,7 @@ type Props = {
 export default function StoreShareFallback({
   open,
   onClose,
+  storeId,
   storeName,
   shortCode,
   payload,
@@ -33,67 +36,151 @@ export default function StoreShareFallback({
     if (!isWebShareAvailable()) return;
     try {
       await navigator.share({ url: payload.shortUrl });
-      trackShareSuccess(storeName, shortCode, payload.environment, "web_share");
+      trackShareSuccess({
+        storeId,
+        storeName,
+        shortCode,
+        shareUrl: payload.shortUrl,
+        shareMethod: "web_share",
+        environment: payload.environment
+      });
       onClose();
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
         onClose();
+        return;
       }
+      trackShareError(
+        {
+          storeId,
+          storeName,
+          shortCode,
+          shareUrl: payload.shortUrl,
+          shareMethod: "web_share",
+          environment: payload.environment
+        },
+        e instanceof Error ? e.message : String(e)
+      );
     }
-  }, [onClose, payload.environment, payload.shortUrl, shortCode, storeName]);
+  }, [onClose, payload.environment, payload.shortUrl, shortCode, storeId, storeName]);
 
   const openKakaoTalk = useCallback(() => {
     void (async () => {
       const shared = await shareViaKakaoSdk(payload);
       if (shared) {
-        trackShareKakao(storeName, shortCode, payload.environment);
-        trackShareSuccess(storeName, shortCode, payload.environment, "kakao_share");
+        const kakaoCtx = {
+          storeId,
+          storeName,
+          shortCode,
+          shareUrl: payload.shortUrl,
+          shareMethod: "kakao_share" as const,
+          environment: payload.environment
+        };
+        trackShareKakao(kakaoCtx);
+        trackShareSuccess(kakaoCtx);
         onClose();
         return;
       }
       // Kakao SDK unavailable/uninitialized: copy fallback by requirement.
       try {
         await copyShareText(payload.shortUrl);
-        trackShareCopy(storeName, shortCode, payload.environment);
-        trackShareSuccess(storeName, shortCode, payload.environment, "clipboard");
+        const copyCtx = {
+          storeId,
+          storeName,
+          shortCode,
+          shareUrl: payload.shortUrl,
+          shareMethod: "clipboard" as const,
+          environment: payload.environment
+        };
+        trackShareCopy(copyCtx);
+        trackShareSuccess(copyCtx);
         onCopied();
         onClose();
       } catch {
-        /* noop */
+        trackShareError(
+          {
+            storeId,
+            storeName,
+            shortCode,
+            shareUrl: payload.shortUrl,
+            shareMethod: "clipboard",
+            environment: payload.environment
+          },
+          "clipboard copy failed after kakao sdk unavailable"
+        );
       }
     })();
-  }, [onClose, onCopied, payload, shortCode, storeName]);
+  }, [onClose, onCopied, payload, shortCode, storeId, storeName]);
 
   const openLine = useCallback(() => {
     const u = `https://line.me/R/msg/text/?${encodeURIComponent(payload.lineForChat)}`;
     window.open(u, "_blank", "noopener,noreferrer");
-    trackShareSuccess(storeName, shortCode, payload.environment, "web_share");
-  }, [payload.lineForChat, shortCode, storeName]);
+    trackShareSuccess({
+      storeId,
+      storeName,
+      shortCode,
+      shareUrl: payload.shortUrl,
+      shareMethod: "web_share",
+      environment: payload.environment
+    });
+  }, [payload.environment, payload.lineForChat, payload.shortUrl, shortCode, storeId, storeName]);
 
   const openTwitter = useCallback(() => {
     const q = new URLSearchParams();
     q.set("text", `${payload.title}\n${payload.shortUrl}`);
     window.open(`https://twitter.com/intent/tweet?${q.toString()}`, "_blank", "noopener,noreferrer");
-    trackShareSuccess(storeName, shortCode, payload.environment, "web_share");
-  }, [payload.shortUrl, payload.title, shortCode, storeName]);
+    trackShareSuccess({
+      storeId,
+      storeName,
+      shortCode,
+      shareUrl: payload.shortUrl,
+      shareMethod: "web_share",
+      environment: payload.environment
+    });
+  }, [payload.environment, payload.shortUrl, payload.title, shortCode, storeId, storeName]);
 
   const openFacebook = useCallback(() => {
     const u = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(payload.shortUrl)}`;
     window.open(u, "_blank", "noopener,noreferrer");
-    trackShareSuccess(storeName, shortCode, payload.environment, "web_share");
-  }, [payload.shortUrl, shortCode, storeName]);
+    trackShareSuccess({
+      storeId,
+      storeName,
+      shortCode,
+      shareUrl: payload.shortUrl,
+      shareMethod: "web_share",
+      environment: payload.environment
+    });
+  }, [payload.environment, payload.shortUrl, shortCode, storeId, storeName]);
 
   const handleCopy = useCallback(async () => {
     try {
       await copyShareText(payload.shortUrl);
-      trackShareCopy(storeName, shortCode, payload.environment);
-      trackShareSuccess(storeName, shortCode, payload.environment, "clipboard");
+      const copyCtx = {
+        storeId,
+        storeName,
+        shortCode,
+        shareUrl: payload.shortUrl,
+        shareMethod: "clipboard" as const,
+        environment: payload.environment
+      };
+      trackShareCopy(copyCtx);
+      trackShareSuccess(copyCtx);
       onCopied();
       onClose();
     } catch {
-      /* noop */
+      trackShareError(
+        {
+          storeId,
+          storeName,
+          shortCode,
+          shareUrl: payload.shortUrl,
+          shareMethod: "clipboard",
+          environment: payload.environment
+        },
+        "clipboard copy failed"
+      );
     }
-  }, [onClose, onCopied, payload.environment, payload.shortUrl, shortCode, storeName]);
+  }, [onClose, onCopied, payload.environment, payload.shortUrl, shortCode, storeId, storeName]);
 
   if (!open) return null;
 

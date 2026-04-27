@@ -107,6 +107,7 @@ export default function StoreDetailPageActions({ store, directionsHref, addressL
         <StoreShareFallback
           open
           onClose={() => setShareFallback(null)}
+          storeId={store.id}
           storeName={store.name}
           shortCode={store.shortCode}
           payload={shareFallback}

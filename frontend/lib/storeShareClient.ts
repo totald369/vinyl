@@ -1,12 +1,16 @@
 "use client";
 
 import type { StoreData } from "@/hooks/useStores";
-import { sendGtagEvent } from "@/lib/gtag";
+import type {
+  ShareAnalyticsEnvironment,
+  ShareAnalyticsMethod
+} from "@/lib/analytics";
+import { trackShareEvent } from "@/lib/analytics";
 import { getShortShareUrl, getStoreMetadata, isValidShortCode } from "@/lib/shortLink";
 import { SITE_URL } from "@/lib/site";
 
-export type ShareEnvironment = "kakao_inapp" | "browser";
-export type ShareMethod = "web_share" | "kakao_share" | "clipboard";
+export type ShareEnvironment = ShareAnalyticsEnvironment;
+export type ShareMethod = ShareAnalyticsMethod;
 
 export type StoreShareFallbackPayload = {
   title: string;
@@ -54,46 +58,56 @@ export async function copyShareText(text: string): Promise<void> {
 }
 
 function getShareEnvironment(): ShareEnvironment {
+  if (typeof navigator === "undefined") return "unknown";
   return isKakaoInAppBrowser() ? "kakao_inapp" : "browser";
 }
 
-export function trackShareAttempt(storeName: string, shortCode: string, environment: ShareEnvironment) {
-  sendGtagEvent("share_store_attempt", {
-    store_name: storeName,
-    short_code: shortCode,
-    environment
-  });
+type ShareTrackContext = {
+  storeId: string;
+  storeName: string;
+  shortCode: string;
+  shareUrl: string;
+  environment: ShareEnvironment;
+  shareMethod: ShareMethod;
+};
+
+function getCurrentPagePath(): string {
+  if (typeof window === "undefined") return "/";
+  return `${window.location.pathname}${window.location.search}`;
 }
 
-export function trackShareSuccess(
-  storeName: string,
-  shortCode: string,
-  environment: ShareEnvironment,
-  method: ShareMethod
-) {
-  sendGtagEvent("share_store_success", {
-    store_name: storeName,
-    short_code: shortCode,
-    environment,
-    method
-  });
+function baseShareParams(ctx: ShareTrackContext) {
+  return {
+    store_id: ctx.storeId,
+    store_name: ctx.storeName,
+    short_code: ctx.shortCode,
+    share_url: ctx.shareUrl,
+    share_method: ctx.shareMethod,
+    environment: ctx.environment,
+    page_path: getCurrentPagePath()
+  };
 }
 
-export function trackShareCopy(storeName: string, shortCode: string, environment: ShareEnvironment) {
-  sendGtagEvent("share_store_copy", {
-    store_name: storeName,
-    short_code: shortCode,
-    environment,
-    method: "clipboard"
-  });
+export function trackShareAttempt(ctx: ShareTrackContext) {
+  trackShareEvent("share_store_attempt", baseShareParams(ctx));
 }
 
-export function trackShareKakao(storeName: string, shortCode: string, environment: ShareEnvironment) {
-  sendGtagEvent("share_store_kakao", {
-    store_name: storeName,
-    short_code: shortCode,
-    environment,
-    method: "kakao_share"
+export function trackShareSuccess(ctx: ShareTrackContext) {
+  trackShareEvent("share_store_success", baseShareParams(ctx));
+}
+
+export function trackShareCopy(ctx: ShareTrackContext) {
+  trackShareEvent("share_store_copy", baseShareParams(ctx));
+}
+
+export function trackShareKakao(ctx: ShareTrackContext) {
+  trackShareEvent("share_store_kakao", baseShareParams(ctx));
+}
+
+export function trackShareError(ctx: ShareTrackContext, errorMessage?: string) {
+  trackShareEvent("share_store_error", {
+    ...baseShareParams(ctx),
+    error_message: errorMessage
   });
 }
 
@@ -103,9 +117,21 @@ export function trackShareKakao(storeName: string, shortCode: string, environmen
  * Does not use `canShare` (unreliable in several in-app browsers).
  */
 export async function shareStoreWithTracking(
-  store: Pick<StoreData, "name" | "shortCode" | "roadAddress" | "address">
+  store: Pick<StoreData, "id" | "name" | "shortCode" | "roadAddress" | "address">
 ): Promise<StoreShareOutcome> {
   if (!isValidShortCode(store.shortCode)) {
+    const environment = getShareEnvironment();
+    trackShareError(
+      {
+        storeId: store.id,
+        storeName: store.name,
+        shortCode: "invalid",
+        shareUrl: "",
+        shareMethod: "clipboard",
+        environment
+      },
+      "invalid shortCode"
+    );
     return { status: "invalid" };
   }
 
@@ -115,6 +141,14 @@ export async function shareStoreWithTracking(
   const code = store.shortCode!;
   const lineForChat = [title, description, shortUrl].filter(Boolean).join("\n");
   const environment = getShareEnvironment();
+  const baseCtx: ShareTrackContext = {
+    storeId: store.id,
+    storeName: store.name,
+    shortCode: code,
+    shareUrl: shortUrl,
+    shareMethod: environment === "kakao_inapp" ? "clipboard" : "web_share",
+    environment
+  };
   const payload: StoreShareFallbackPayload = {
     title,
     description,
@@ -125,19 +159,21 @@ export async function shareStoreWithTracking(
     kakaoOnly: environment === "kakao_inapp"
   };
 
-  trackShareAttempt(store.name, code, environment);
+  trackShareAttempt(baseCtx);
 
   // KakaoTalk in-app: never open fallback bottom sheet.
   // We attempt clipboard copy, then return "clipboard" either way so UI shows a toast only.
   if (environment === "kakao_inapp") {
+    const copyCtx: ShareTrackContext = { ...baseCtx, shareMethod: "clipboard" };
     try {
       await copyShareText(shortUrl);
-      trackShareCopy(store.name, code, environment);
-    } catch {
+      trackShareCopy(copyCtx);
+    } catch (e) {
       // In some in-app contexts clipboard can be permission-blocked.
       // Keep UX consistent with "copy" behavior request and avoid bottom-sheet fallback.
+      trackShareError(copyCtx, e instanceof Error ? e.message : String(e));
     }
-    trackShareSuccess(store.name, code, environment, "clipboard");
+    trackShareSuccess(copyCtx);
     return { status: "clipboard" };
   }
 
@@ -147,16 +183,18 @@ export async function shareStoreWithTracking(
     { title, text: description, url: shortUrl }
   ];
 
+  const webShareCtx: ShareTrackContext = { ...baseCtx, shareMethod: "web_share" };
   if (isWebShareAvailable()) {
     for (const data of candidates) {
       try {
         await navigator.share(data);
-        trackShareSuccess(store.name, code, environment, "web_share");
+        trackShareSuccess(webShareCtx);
         return { status: "web_share" };
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") {
           return { status: "aborted" };
         }
+        trackShareError(webShareCtx, e instanceof Error ? e.message : String(e));
       }
     }
   }

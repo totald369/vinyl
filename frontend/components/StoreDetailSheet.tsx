@@ -277,6 +277,7 @@ export default function StoreDetailSheet({
         <StoreShareFallback
           open
           onClose={() => setShareFallback(null)}
+          storeId={store.id}
           storeName={store.name}
           shortCode={store.shortCode}
           payload={shareFallback}
