@@ -52,7 +52,11 @@ export function middleware(request: NextRequest) {
   return res;
 }
 
-/** 정적 에셋은 제외, 그 외(HTML·robots·sitemap·/data 포함) apex 리다이렉트 가능 */
+/**
+ * 변경 전: 광매처(/Img/*)·robots·sitemap까지 미들웨어가 실행되어 엣지 지연 발생.
+ * 변경 후: 정적·메타 라우트는 스킵 — 엣지 CPU·cold path 지연 최소화.
+ */
 export const config = {
-  matcher: "/((?!_next/static|_next/image|favicon.ico).*)"
+  matcher:
+    "/((?!_next/static|_next/image|favicon.ico|robots\\.txt|sitemap\\.xml|img/|Img/).*)"
 };

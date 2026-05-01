@@ -1,15 +1,27 @@
+/**
+ * /api/stores — 목록·반경·검색·디테일·숏코드 분기.
+ *
+ * 변경 전: 매 요청 getMergedStores() 후 전 배열 filter/sort, Cache-Control private만 사용 →
+ *          엣지 캐시 불가 + CPU 풀스캔 반복.
+ * 변경 후: storeIndex(그리드·Map·검색 blob)로 후보 축소 및 O(1) 조회,
+ *          검색/radius/district는 public s-maxage로 CDN·Vercel Data Cache 활용.
+ * 측정: radius/search p95 응답 시간, Vercel Edge cached 응답 비율(Cache status), 서버 CPU time.
+ */
 import { NextResponse, type NextRequest } from "next/server";
 
 import { getDistrictTrashbagConfig } from "@/lib/districtTrashbagSeo";
 import { parseSearchTokens, textMatchesAllTokens } from "@/lib/searchTokens";
-import { getMergedStores } from "@/lib/server/storeDataset";
+import {
+  collectGridBucketStores,
+  getStoreSearchIndexes
+} from "@/lib/server/storeIndex";
 import {
   checkRateLimit,
   checkReferer,
   checkUserAgent,
   getClientIp
 } from "@/lib/server/storesApiSecurity";
-import { getStoreByShortCode, isValidShortCode } from "@/lib/shortLink";
+import { isValidShortCode } from "@/lib/shortLink";
 import type { StoreData } from "@/lib/storeData";
 import { getDistanceKm } from "@/lib/utils";
 
@@ -18,7 +30,11 @@ export const runtime = "nodejs";
 const DEFAULT_RADIUS_KM = 2;
 const MAX_RADIUS_KM = 2;
 
-/** 검색(q) 매칭 후 거리순으로 잘라 보내는 상한. 경기도 등 광역 검색 시 수만 건이 필요해 150은 부족함. */
+/** short/detail: 개인화·민감 가능 → private. 그 외 공개 캐시로 엣지 재사용 */
+const CACHE_PRIVATE = "private, max-age=60, stale-while-revalidate=120";
+const CACHE_PUBLIC = "public, s-maxage=60, stale-while-revalidate=300";
+
+/** 검색(q) 매칭 후 거리순으로 잘라 보내는 상한. */
 function getSearchLimit(): number {
   const raw = process.env.STORES_SEARCH_LIMIT;
   if (raw != null && raw !== "") {
@@ -30,7 +46,8 @@ function getSearchLimit(): number {
   return 25000;
 }
 
-const SEARCH_PAGE_DEFAULT = 100;
+/** 클라이언트 무한 스크롤 페이지 크기( useStores SEARCH_PAGE_SIZE )와 맞춤 */
+const SEARCH_PAGE_DEFAULT = 30;
 const SEARCH_PAGE_MAX = 200;
 
 function parseSearchOffsetLimit(searchParams: URLSearchParams): { offset: number; limit: number } {
@@ -57,7 +74,6 @@ function matchesProductFilter(s: StoreData, filter: ProductFilter): boolean {
   return s.hasTrashBag;
 }
 
-/** List: lean JSON. Detail: use GET ?id= for dataReferenceDate + businessStatus */
 function toListStore(s: StoreData, distanceKm?: number) {
   const road = (s.roadAddress ?? s.address ?? "").trim();
   return {
@@ -86,10 +102,10 @@ function toDetailStore(s: StoreData, distanceKm?: number) {
   };
 }
 
-function jsonOk(data: unknown) {
+function jsonCached(data: unknown, visibility: "private" | "public") {
   return NextResponse.json(data, {
     headers: {
-      "Cache-Control": "private, max-age=60, stale-while-revalidate=120"
+      "Cache-Control": visibility === "public" ? CACHE_PUBLIC : CACHE_PRIVATE
     }
   });
 }
@@ -131,27 +147,31 @@ export async function GET(request: NextRequest) {
   const qRaw = searchParams.get("q")?.trim() ?? "";
   const shortParamEarly = searchParams.get("short")?.trim() ?? "";
 
-  /* shortCode: full-dataset lookup; lat/lng optional (distance only, no radius). */
+  let idx: ReturnType<typeof getStoreSearchIndexes>;
+  try {
+    idx = getStoreSearchIndexes();
+  } catch {
+    return NextResponse.json({ error: "server_error" }, { status: 500 });
+  }
+
+  /** 숏코드: 인덱스 O(1) — 기존 .find/full scan 제거 */
   if (isValidShortCode(shortParamEarly)) {
-    let allShort: StoreData[];
-    try {
-      allShort = getMergedStores();
-    } catch {
-      return NextResponse.json({ error: "server_error" }, { status: 500 });
-    }
-    const store = getStoreByShortCode(allShort, shortParamEarly);
+    const store = idx.byShortCode.get(shortParamEarly);
     if (!store) {
-      return jsonOk({ mode: "short", stores: [] });
+      return jsonCached({ mode: "short", stores: [] }, "private");
     }
     const originForDist = parseLatLng(searchParams);
     const d =
       originForDist != null
         ? getDistanceKm(originForDist.lat, originForDist.lng, store.lat, store.lng)
         : undefined;
-    return jsonOk({
-      mode: "short",
-      stores: [{ ...toDetailStore(store, d), shortCode: shortParamEarly }]
-    });
+    return jsonCached(
+      {
+        mode: "short",
+        stores: [{ ...toDetailStore(store, d), shortCode: shortParamEarly }]
+      },
+      "private"
+    );
   }
 
   const origin = parseLatLng(searchParams);
@@ -162,67 +182,65 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  let all: StoreData[];
-  try {
-    all = getMergedStores();
-  } catch {
-    return NextResponse.json({ error: "server_error" }, { status: 500 });
-  }
-
-  // --- 구 SEO 페이지: 화이트리스트 slug만 허용, 주소 키워드로 필터 ---
   if (districtSlug) {
     const cfg = getDistrictTrashbagConfig(districtSlug);
     if (!cfg) {
       return NextResponse.json({ error: "invalid_district" }, { status: 400 });
     }
     const needle = cfg.addressKeyword.toLowerCase();
-    const filtered = all.filter((s) => {
-      const blob = `${s.roadAddress ?? ""} ${s.address ?? ""}`.toLowerCase();
-      return blob.includes(needle);
-    });
+    const filtered: StoreData[] = [];
+    for (const s of idx.byId.values()) {
+      const blob = idx.addressBlobLowerById.get(s.id) ?? "";
+      if (blob.includes(needle)) filtered.push(s);
+    }
     const withDist = filtered.map((s) => ({
       store: s,
       d: getDistanceKm(origin.lat, origin.lng, s.lat, s.lng)
     }));
     withDist.sort((a, b) => a.d - b.d);
-    return jsonOk({
+    return jsonCached({
       mode: "district",
       stores: withDist.map(({ store, d }) => toListStore(store, d))
-    });
+    }, "public");
   }
 
   const detailId = searchParams.get("id")?.trim() ?? "";
   if (detailId) {
-    const store = all.find((s) => s.id === detailId);
+    const store = idx.byId.get(detailId);
     if (!store) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
     const d = getDistanceKm(origin.lat, origin.lng, store.lat, store.lng);
-    return jsonOk({ mode: "detail", store: toDetailStore(store, d) });
+    return jsonCached({ mode: "detail", store: toDetailStore(store, d) }, "private");
   }
 
-  // --- 검색: 토큰 매칭 + 상품 필터 후 거리순, total 노출·offset/limit 페이지 ---
   if (qRaw) {
     const tokens = parseSearchTokens(qRaw);
     if (!tokens.length) {
-      return jsonOk({
-        mode: "search",
-        total: 0,
-        offset: 0,
-        limit: SEARCH_PAGE_DEFAULT,
-        hasMore: false,
-        stores: []
-      });
+      return jsonCached(
+        {
+          mode: "search",
+          total: 0,
+          offset: 0,
+          limit: SEARCH_PAGE_DEFAULT,
+          hasMore: false,
+          stores: []
+        },
+        "public"
+      );
     }
     const productFilter = parseProductFilter(searchParams);
     const { offset: rawOffset, limit } = parseSearchOffsetLimit(searchParams);
     const maxServe = getSearchLimit();
 
-    const candidates = all.filter((s) => {
-      if (!matchesProductFilter(s, productFilter)) return false;
-      const blob = `${s.name} ${s.roadAddress ?? ""} ${s.address ?? ""}`.toLowerCase();
-      return textMatchesAllTokens(blob, tokens);
-    });
+    const candidates: StoreData[] = [];
+    for (const s of idx.byId.values()) {
+      if (!matchesProductFilter(s, productFilter)) continue;
+      const blob = idx.searchBlobLowerById.get(s.id) ?? "";
+      if (!textMatchesAllTokens(blob, tokens)) continue;
+      candidates.push(s);
+    }
+
     const withDist = candidates.map((s) => ({
       store: s,
       d: getDistanceKm(origin.lat, origin.lng, s.lat, s.lng)
@@ -235,22 +253,23 @@ export async function GET(request: NextRequest) {
     const page = capped.slice(offset, offset + limit);
     const hasMore = offset + page.length < capped.length;
 
-    return jsonOk({
+    return jsonCached({
       mode: "search",
       total,
       offset,
       limit,
       hasMore,
       stores: page.map(({ store, d }) => toListStore(store, d))
-    });
+    }, "public");
   }
 
-  // --- 기본: 반경(최대 2km) ---
   let radiusKm = Number(searchParams.get("radiusKm"));
   if (!Number.isFinite(radiusKm)) radiusKm = DEFAULT_RADIUS_KM;
   radiusKm = Math.min(Math.max(radiusKm, 0.1), MAX_RADIUS_KM);
 
-  const inRadius = all
+  /** 반경: 그리드 9버킷 후보만 거리 계산 — 기존 전 배열 map+filter 제거 */
+  const candidates = collectGridBucketStores(idx, origin.lat, origin.lng);
+  const inRadius = candidates
     .map((s) => ({
       store: s,
       d: getDistanceKm(origin.lat, origin.lng, s.lat, s.lng)
@@ -258,9 +277,9 @@ export async function GET(request: NextRequest) {
     .filter(({ d }) => d <= radiusKm)
     .sort((a, b) => a.d - b.d);
 
-  return jsonOk({
+  return jsonCached({
     mode: "radius",
     radiusKm,
     stores: inRadius.map(({ store, d }) => toListStore(store, d))
-  });
+  }, "public");
 }

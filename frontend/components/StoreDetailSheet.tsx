@@ -1,7 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import StoreShareFallback from "@/components/StoreShareFallback";
 import { StoreProductChips } from "@/components/StoreProductChips";
 import { StoreData } from "@/hooks/useStores";
@@ -24,7 +25,12 @@ type Props = {
   isAugmentingDetail?: boolean;
 };
 
-export default function StoreDetailSheet({
+/**
+ * 변경 전: 상위(홈) state 변경 시 시트 본문까지 매번 리커밋.
+ * 변경 후: React.memo로 id·거리·보강 상태 등 시각 동등 시 reconcile 생략.
+ * 측정: React Profiler(Fire)에서 시트 subtree render count.
+ */
+function StoreDetailSheetInner({
   store,
   onClose,
   userLocation = null,
@@ -217,12 +223,13 @@ export default function StoreDetailSheet({
                         href={telHref}
                         className="flex w-full items-center gap-1 rounded-lg py-0 outline-none transition-colors active:bg-[rgba(23,23,23,0.06)] focus-visible:ring-2 focus-visible:ring-brand-500"
                       >
-                        <img
+                        <Image
                           src="/Img/Icon/phone_16.png"
                           alt=""
                           width={16}
                           height={16}
                           className="size-4 shrink-0"
+                          sizes="16px"
                         />
                         <span className="text-[16px] font-normal leading-[1.4] tracking-[0.1px] text-[#555555]">
                           {phoneLine}
@@ -322,3 +329,24 @@ export default function StoreDetailSheet({
     </div>
   );
 }
+
+export default memo(
+  StoreDetailSheetInner,
+  (prev, next) =>
+    prev.store.id === next.store.id &&
+    prev.isAugmentingDetail === next.isAugmentingDetail &&
+    prev.kakaoMapsReady === next.kakaoMapsReady &&
+    prev.userLocation?.lat === next.userLocation?.lat &&
+    prev.userLocation?.lng === next.userLocation?.lng &&
+    prev.store.distance === next.store.distance &&
+    prev.store.name === next.store.name &&
+    (prev.store.roadAddress ?? prev.store.address) === (next.store.roadAddress ?? next.store.address) &&
+    (prev.store.phone ?? "") === (next.store.phone ?? "") &&
+    prev.store.adminVerified === next.store.adminVerified &&
+    prev.store.hasTrashBag === next.store.hasTrashBag &&
+    prev.store.hasSpecialBag === next.store.hasSpecialBag &&
+    prev.store.hasLargeWasteSticker === next.store.hasLargeWasteSticker &&
+    prev.store.lat === next.store.lat &&
+    prev.store.lng === next.store.lng &&
+    prev.store.shortCode === next.store.shortCode
+);

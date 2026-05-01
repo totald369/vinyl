@@ -83,6 +83,7 @@ export type KakaoMarker = {
 export type KakaoCustomOverlay = {
   setMap: (map: KakaoMap | null) => void;
   setZIndex: (z: number) => void;
+  setPosition: (latlng: { getLat: () => number; getLng: () => number }) => void;
 };
 
 export {};

@@ -1,21 +1,31 @@
 "use client";
 
+/**
+ * 매장 목록 패칭 훅 (/api/stores 연동).
+ *
+ * 변경 전: 같은 URL도 매번 로딩 스피너 + 전량 fetch, 지도 이동 시 요청 폭주.
+ * 변경 후: 동일 쿼리키 60초 LRU + in-flight 디듀프 + AbortController로 교체,
+ *          캐시 히트 시 즉시 렌더 후 백그라운드 SWR 갱신,
+ *          반경 모드만 지도 중심 200ms 디바운스로 idle 후 트리거 감소.
+ * 측정: Network 탭 요청 수·중복률, 검색/지도 이동 후 목록 표시까지 시간(ms),
+ *       sortedStores에서 불필요한 haversine 재계산 제거 시 메인 스레드 시간.
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseSearchTokens, textMatchesAllTokens } from "@/lib/searchTokens";
 import type { StoreData } from "@/lib/storeData";
 import { perfTimeEnd, perfTimeStart } from "@/lib/perfMarks";
 import { DEFAULT_REGION, LatLng } from "@/lib/types";
 
+/** 변경 전 100 → 변경 후 30: 페이지 크기 축소로 페이로드 감소, 무한스크롤로 보충 */
+export const SEARCH_PAGE_SIZE = 30;
+
 const LIST_RADIUS_KM = 2;
-const SEARCH_PAGE_SIZE = 100;
 
 export type StoreListFilter = "payBag" | "nonBurnable" | "largeSticker";
 
-/** 구 단위 SEO 페이지: 주소 키워드로 한정하고, 구 중심 기준 거리순(반경 제한 선택) */
 export type DistrictListScope = {
   addressContains: string;
   sortFrom: LatLng;
-  /** 미지정·null 이면 반경 제한 없음(전 구간) */
   listRadiusKm?: number | null;
 };
 
@@ -42,10 +52,59 @@ function haversineKm(from: LatLng, to: LatLng) {
 function useDebounced<T>(value: T, ms: number): T {
   const [d, setD] = useState(value);
   useEffect(() => {
+    if (ms <= 0) {
+      setD(value);
+      return;
+    }
     const t = setTimeout(() => setD(value), ms);
     return () => clearTimeout(t);
   }, [value, ms]);
-  return d;
+  return ms <= 0 ? value : d;
+}
+
+type CachedPayload = {
+  stores: StoreData[];
+  total?: number;
+  hasMore?: boolean;
+};
+
+type FlightEntry = {
+  ts: number;
+  data?: CachedPayload;
+  promise?: Promise<CachedPayload>;
+};
+
+const CACHE_TTL_MS = 60_000;
+const MAX_CACHE_KEYS = 64;
+const flightCache = new Map<string, FlightEntry>();
+
+function touchCache(key: string, e: FlightEntry) {
+  flightCache.delete(key);
+  flightCache.set(key, e);
+  while (flightCache.size > MAX_CACHE_KEYS) {
+    const first = flightCache.keys().next().value as string | undefined;
+    if (first === undefined) break;
+    flightCache.delete(first);
+  }
+}
+
+async function fetchStoresPayload(url: string, signal: AbortSignal): Promise<CachedPayload> {
+  const res = await fetch(url, { signal });
+  if (!res.ok) throw new Error(`매장 데이터를 불러오지 못했습니다 (${res.status})`);
+  const data = (await res.json()) as {
+    stores: StoreData[];
+    total?: number;
+    hasMore?: boolean;
+  };
+  return {
+    stores: Array.isArray(data.stores) ? data.stores : [],
+    total: typeof data.total === "number" ? data.total : undefined,
+    hasMore: typeof data.hasMore === "boolean" ? data.hasMore : undefined
+  };
+}
+
+function coordsMatch(a: LatLng, b: LatLng, eps = 1e-5): boolean {
+  return Math.abs(a.lat - b.lat) < eps && Math.abs(a.lng - b.lng) < eps;
 }
 
 export function useStores(
@@ -54,9 +113,7 @@ export function useStores(
     activeFilter: StoreListFilter;
     listReference?: LatLng | null;
     districtScope?: DistrictListScope | null;
-    /** 구 SEO 페이지일 때만 설정 — API에서 해당 구 매장만 로드 */
     districtSlug?: string;
-    /** 검색 오버레이 입력값(홈·구 공통). 비어 있으면 반경 API 사용 */
     searchQuery?: string;
   }
 ) {
@@ -64,11 +121,11 @@ export function useStores(
   const [selectedStore, setSelectedStore] = useState<StoreData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  /** 검색(q) API: 전체 매칭 건수(표시용) */
   const [searchTotal, setSearchTotal] = useState(0);
   const [searchHasMore, setSearchHasMore] = useState(false);
   const [searchLoadingMore, setSearchLoadingMore] = useState(false);
   const searchFetchGen = useRef(0);
+  const mainAbortRef = useRef<AbortController | null>(null);
 
   const searchQuery = options?.searchQuery ?? "";
   const debouncedSearch = useDebounced(searchQuery.trim(), 320);
@@ -98,7 +155,12 @@ export function useStores(
     userLocation?.lng
   ]);
 
-  /** 구 페이지는 검색 입력으로 API를 다시 부르지 않고(클라이언트 필터만), 홈은 반경/검색에 따라 재요청 */
+  const isRadiusMode = !districtSlug && !debouncedSearch;
+  const debouncedRadiusCenter = useDebounced(fetchCenter, isRadiusMode ? 200 : 0);
+
+  const centerForFetch =
+    districtSlug || debouncedSearch ? fetchCenter : debouncedRadiusCenter;
+
   const fetchDepsKey = useMemo(() => {
     if (districtSlug && districtScope) {
       return `district:${districtSlug}:${districtScope.sortFrom.lat}:${districtScope.sortFrom.lng}`;
@@ -107,31 +169,23 @@ export function useStores(
       const f = options?.activeFilter ?? "payBag";
       return `search:${fetchCenter.lat}:${fetchCenter.lng}:q:${debouncedSearch}:f:${f}`;
     }
-    return `home:${fetchCenter.lat}:${fetchCenter.lng}:radius`;
+    return `home:${centerForFetch.lat}:${centerForFetch.lng}:radius`;
   }, [
     districtSlug,
     districtScope?.sortFrom.lat,
     districtScope?.sortFrom.lng,
     fetchCenter.lat,
     fetchCenter.lng,
+    centerForFetch.lat,
+    centerForFetch.lng,
     debouncedSearch,
     options?.activeFilter
   ]);
 
-  useEffect(() => {
-    let mounted = true;
-    const gen = ++searchFetchGen.current;
-    setLoading(true);
-    setError(null);
-    setSearchLoadingMore(false);
-    setSearchHasMore(false);
-    if (debouncedSearch) {
-      setSearchTotal(0);
-    }
-
+  const listUrl = useMemo(() => {
     const params = new URLSearchParams();
-    params.set("lat", String(fetchCenter.lat));
-    params.set("lng", String(fetchCenter.lng));
+    params.set("lat", String(centerForFetch.lat));
+    params.set("lng", String(centerForFetch.lng));
 
     if (districtSlug && districtScope) {
       params.set("district", districtSlug);
@@ -143,48 +197,134 @@ export function useStores(
     } else {
       params.set("radiusKm", String(LIST_RADIUS_KM));
     }
+    return `/api/stores?${params.toString()}`;
+  }, [
+    centerForFetch.lat,
+    centerForFetch.lng,
+    debouncedSearch,
+    districtScope,
+    districtSlug,
+    options?.activeFilter
+  ]);
 
-    const url = `/api/stores?${params.toString()}`;
+  useEffect(() => {
+    mainAbortRef.current?.abort();
+    const ac = new AbortController();
+    mainAbortRef.current = ac;
+
+    const gen = ++searchFetchGen.current;
+    setError(null);
+    setSearchLoadingMore(false);
+    if (debouncedSearch) {
+      setSearchTotal(0);
+      setSearchHasMore(false);
+    } else {
+      setSearchTotal(0);
+      setSearchHasMore(false);
+    }
+
+    const url = listUrl;
     const perfLabel = `[perf] stores-list:${fetchDepsKey}`;
     perfTimeStart(perfLabel);
 
-    fetch(url)
-      .then((res) => {
-        if (!res.ok) throw new Error(`매장 데이터를 불러오지 못했습니다 (${res.status})`);
-        return res.json() as Promise<{
-          stores: StoreData[];
-          mode?: string;
-          total?: number;
-          hasMore?: boolean;
-        }>;
-      })
-      .then((data) => {
-        if (!mounted || gen !== searchFetchGen.current) return;
-        const rows = Array.isArray(data.stores) ? data.stores : [];
-        if (debouncedSearch) {
-          setStores(rows);
-          setSearchTotal(typeof data.total === "number" ? data.total : rows.length);
-          setSearchHasMore(Boolean(data.hasMore));
-        } else {
-          setStores(rows);
-        }
-        setLoading(false);
-        perfTimeEnd(perfLabel);
+    const applyPayload = (payload: CachedPayload, g: number) => {
+      if (g !== searchFetchGen.current) return;
+      const rows = payload.stores;
+      if (debouncedSearch) {
+        setStores(rows);
+        setSearchTotal(typeof payload.total === "number" ? payload.total : rows.length);
+        setSearchHasMore(Boolean(payload.hasMore));
+      } else {
+        setStores(rows);
+      }
+    };
+
+    const now = Date.now();
+    const entry = flightCache.get(url);
+    const fresh = entry?.data && now - entry.ts < CACHE_TTL_MS;
+
+    /** 캐시 히트: 로딩 플래그 생략 가능 — 체감 FCP·리스트 표시 지연 감소 */
+    if (fresh && entry!.data) {
+      touchCache(url, entry!);
+      applyPayload(entry!.data, gen);
+      setLoading(false);
+
+      const bg = new AbortController();
+      void fetchStoresPayload(url, bg.signal)
+        .then((payload) => {
+          if (gen !== searchFetchGen.current) return;
+          touchCache(url, { ts: Date.now(), data: payload });
+          applyPayload(payload, gen);
+          perfTimeEnd(perfLabel);
+        })
+        .catch(() => {
+          perfTimeEnd(perfLabel);
+        });
+
+      return () => {
+        ac.abort();
+        bg.abort();
+      };
+    }
+
+    /** in-flight 디듀프: 동일 URL 동시 요청 합류 → 네트워크 경합 감소 */
+    if (entry?.promise && !entry.data) {
+      setLoading(true);
+      entry.promise
+        .then((payload) => {
+          if (gen !== searchFetchGen.current) return;
+          applyPayload(payload, gen);
+          setLoading(false);
+          perfTimeEnd(perfLabel);
+        })
+        .catch((e) => {
+          if ((e as Error)?.name === "AbortError") return;
+          if (gen !== searchFetchGen.current) return;
+          setError(e instanceof Error ? e.message : "데이터 로드 오류");
+          setStores([]);
+          setSearchTotal(0);
+          setSearchHasMore(false);
+          setLoading(false);
+          perfTimeEnd(perfLabel);
+        });
+      return () => ac.abort();
+    }
+
+    setLoading(true);
+
+    const p = fetchStoresPayload(url, ac.signal)
+      .then((payload) => {
+        touchCache(url, { ts: Date.now(), data: payload });
+        return payload;
       })
       .catch((e) => {
-        if (!mounted || gen !== searchFetchGen.current) return;
-        setError(e instanceof Error ? e.message : "데이터 로드 오류");
-        setStores([]);
-        setSearchTotal(0);
-        setSearchHasMore(false);
-        setLoading(false);
-        perfTimeEnd(perfLabel);
+        flightCache.delete(url);
+        throw e;
       });
 
+    touchCache(url, { ts: 0, promise: p });
+
+    p.then((payload) => {
+      touchCache(url, { ts: Date.now(), data: payload, promise: undefined });
+      if (gen !== searchFetchGen.current) return;
+      applyPayload(payload, gen);
+      setLoading(false);
+      perfTimeEnd(perfLabel);
+    }).catch((e) => {
+      if ((e as Error)?.name === "AbortError") return;
+      if (gen !== searchFetchGen.current) return;
+      setError(e instanceof Error ? e.message : "데이터 로드 오류");
+      setStores([]);
+      setSearchTotal(0);
+      setSearchHasMore(false);
+      setLoading(false);
+      perfTimeEnd(perfLabel);
+    });
+
     return () => {
-      mounted = false;
+      ac.abort();
     };
-  }, [fetchDepsKey]);
+  }, [fetchDepsKey, listUrl, debouncedSearch]);
 
   const loadMoreSearchStores = useCallback(async () => {
     if (districtSlug) return;
@@ -268,10 +408,20 @@ export function useStores(
           : ds.listRadiusKm
         : LIST_RADIUS_KM;
 
+    /**
+     * 서버가 distance를 내려준 경우(반경·검색·구), 기준점이 API 기준점과 같을 때
+     * 클라이언트 haversine 재계산 생략 — 메인 스레드 CPU·배터리 절감.
+     */
+    const canReuseApiDistance =
+      stores.every((s) => typeof s.distance === "number") &&
+      coordsMatch(referencePoint, fetchCenter);
+
     return [...stores]
       .map((store) => ({
         ...store,
-        distance: haversineKm(referencePoint, { lat: store.lat, lng: store.lng })
+        distance: canReuseApiDistance
+          ? (store.distance as number)
+          : haversineKm(referencePoint, { lat: store.lat, lng: store.lng })
       }))
       .filter((store) => {
         if (!addrTokens.length) return true;
@@ -290,7 +440,9 @@ export function useStores(
     options?.districtScope,
     options?.listReference,
     stores,
-    userLocation
+    userLocation,
+    fetchCenter.lat,
+    fetchCenter.lng
   ]);
 
   const defaultCenter = useMemo(

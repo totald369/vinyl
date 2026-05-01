@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -69,7 +70,14 @@ export default function StoreDetailPage({ params }: Props) {
             ) : null}
             {phoneLine ? (
               <a href={telHref} className="flex items-center gap-1 outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
-                <img src="/Img/Icon/phone_16.png" alt="" width={16} height={16} className="size-4 shrink-0" />
+                <Image
+                  src="/Img/Icon/phone_16.png"
+                  alt=""
+                  width={16}
+                  height={16}
+                  className="size-4 shrink-0"
+                  sizes="16px"
+                />
                 <span className="text-base font-normal leading-[1.4] text-[#555555]">{phoneLine}</span>
               </a>
             ) : null}

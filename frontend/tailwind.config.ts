@@ -5,7 +5,14 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Pretendard", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"]
+        sans: [
+          "var(--font-pretendard)",
+          "Pretendard",
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "Segoe UI",
+          "sans-serif"
+        ]
       },
       colors: {
         // Base palette

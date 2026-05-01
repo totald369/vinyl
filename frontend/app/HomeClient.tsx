@@ -3,31 +3,29 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BottomSheetList from "@/components/BottomSheetList";
-import MapSkeleton from "@/components/MapSkeleton";
+import HomeMapStage from "@/components/home/HomeMapStage";
 import type { StoreListFilter } from "@/hooks/useStores";
-import type { BottomSheetSnap } from "@/lib/bottomSheetSnap";
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
 import { sendGtagEvent } from "@/lib/gtag";
-import {
-  DEEPLINK_LOG_PREFIX,
-  fetchStoreByShortCodeOnly
-} from "@/lib/deepLinkShortResolve";
 import { DEEPLINK_SHORT_STORAGE_KEY, isValidShortCode } from "@/lib/shortLink";
-import { DEFAULT_REGION, type LatLng } from "@/lib/types";
+import { DEFAULT_REGION } from "@/lib/types";
+import { useDeepLinkResolver } from "@/hooks/useDeepLinkResolver";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
+import { useMapCenterController } from "@/hooks/useMapCenterController";
 import { useStoreDetailAugment } from "@/hooks/useStoreDetailAugment";
+import { useSheetController } from "@/hooks/useSheetController";
 import { StoreData, useStores } from "@/hooks/useStores";
 import { useUserLocation } from "@/hooks/useUserLocation";
 import { prefetchStoreDetail } from "@/lib/storeDetailClient";
 import { perfTimeEnd, perfTimeStart } from "@/lib/perfMarks";
 
 /*
- * [LCP 최적화] 조건부로만 표시되는 무거운 컴포넌트를 dynamic import로 분리.
- * 초기 JS 번들에서 제외하여 파싱·실행 비용을 줄입니다.
+ * [항목 8·성능] 상태: useSheetController / useMapCenterController / useDeepLinkResolver 분리,
+ * 지도 영역: memo된 HomeMapStage — 부모 리렌더와 지도 커밋 경계 분리.
+ * [LCP] 조건부 UI는 dynamic import로 초기 번들에서 분리.
  */
-const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 const HomeSearchOverlay = dynamic(() => import("@/components/HomeSearchOverlay"), { ssr: false });
 const StoreDetailSheet = dynamic(() => import("@/components/StoreDetailSheet"), { ssr: false });
 const LocationPermissionModal = dynamic(() => import("@/components/LocationPermissionModal"), { ssr: false });
@@ -44,25 +42,32 @@ export default function HomeClient({ initialShortCode = null }: HomeClientProps)
   const searchParams = useSearchParams();
   const { isLoading, error } = useKakaoMapLoader();
   const { userLocation, permission, requestLocation } = useUserLocation();
-  const [locationModalOpen, setLocationModalOpen] = useState(false);
+  const {
+    locationModalOpen,
+    setLocationModalOpen,
+    bottomSheetSnap,
+    setBottomSheetSnap,
+    sheetBlocksMapPointer,
+    setSheetBlocksMapPointer,
+    sheetView,
+    setSheetView,
+    searchOpen,
+    setSearchOpen,
+    searchQuery,
+    setSearchQuery
+  } = useSheetController();
   const [activeFilter, setActiveFilter] = useState<StoreListFilter>("payBag");
-  const [bottomSheetSnap, setBottomSheetSnap] = useState<BottomSheetSnap>("collapsed");
-  const [sheetBlocksMapPointer, setSheetBlocksMapPointer] = useState(false);
-  const [sheetView, setSheetView] = useState<"list" | "detail">("list");
-  /** 검색으로 상점을 고른 뒤: 목록·지도 기준점을 해당 매장으로 두고 반경 2km(기존 LIST_RADIUS) 표시 */
-  const [exploreAnchor, setExploreAnchor] = useState<LatLng | null>(null);
-  /** 위치 권한이 있어도 검색/목록에서 선택한 지점으로 지도 중심 이동 */
-  const [mapCenterOverride, setMapCenterOverride] = useState<LatLng | null>(null);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  /** Keep detail when the store is outside the current `stores` list (e.g. /?s= deep link). */
-  const keepSelectedOutsideListRef = useRef(false);
-  /** Prevents duplicate `short` fetches; survives `loading` toggles (must not abort on list refetch). */
-  const shortLinkFetchForRef = useRef<string | null>(null);
-  /** Detects new `?s=` navigation vs stable param (for reopen + user-override guard). */
-  const lastSeenDeepLinkShortRef = useRef<string>("");
-  const [deepLinkResolveError, setDeepLinkResolveError] = useState<string | null>(null);
+  const {
+    exploreAnchor,
+    setExploreAnchor,
+    mapCenterOverride,
+    setMapCenterOverride
+  } = useMapCenterController();
   const detailOpenInFlightRef = useRef(false);
+  const keepSelectedOutsideListRef = useRef(false);
+  const handleSelectStoreWithPanRef = useRef<(store: StoreData, fromShort?: boolean) => void>(
+    () => undefined
+  );
 
   const {
     selectedStore,
@@ -118,48 +123,6 @@ export default function HomeClient({ initialShortCode = null }: HomeClientProps)
     [center]
   );
 
-  const sFromSearchParams = searchParams.get("s")?.trim() ?? "";
-  /** Next `useSearchParams` can miss `s` on some desktop navigations; merge URL + prop + sessionStorage. */
-  const [deepLinkShort, setDeepLinkShort] = useState(() => {
-    const p = initialShortCode?.trim() ?? "";
-    return isValidShortCode(p) ? p : "";
-  });
-
-  useLayoutEffect(() => {
-    let code = sFromSearchParams;
-    if (!isValidShortCode(code)) {
-      const fromUrl =
-        typeof window !== "undefined"
-          ? new URLSearchParams(window.location.search).get("s")?.trim() ?? ""
-          : "";
-      if (isValidShortCode(fromUrl)) code = fromUrl;
-    }
-    if (!isValidShortCode(code)) {
-      const fromProp = initialShortCode?.trim() ?? "";
-      if (isValidShortCode(fromProp)) code = fromProp;
-    }
-    if (!isValidShortCode(code)) {
-      try {
-        const st = sessionStorage.getItem(DEEPLINK_SHORT_STORAGE_KEY)?.trim() ?? "";
-        if (isValidShortCode(st)) code = st;
-      } catch {
-        /* private mode */
-      }
-    }
-    if (!isValidShortCode(code)) {
-      setDeepLinkShort("");
-      return;
-    }
-    setDeepLinkShort(code);
-
-    const onShareShortPath =
-      typeof window !== "undefined" && /^\/s\/[a-zA-Z0-9]{6}$/.test(window.location.pathname);
-
-    if (sFromSearchParams !== code && !onShareShortPath) {
-      router.replace(`/?s=${encodeURIComponent(code)}`, { scroll: false });
-    }
-  }, [sFromSearchParams, router, initialShortCode]);
-
   const handleFilterChange = useCallback((filter: StoreListFilter) => {
     sendGtagEvent("filter_select", { filter });
     setActiveFilter(filter);
@@ -174,7 +137,7 @@ export default function HomeClient({ initialShortCode = null }: HomeClientProps)
     sendGtagEvent("click_marker", { store_id: resolved.id });
     setSelectedStore(resolved);
     setSheetView("detail");
-  }, [storesById, setSelectedStore]);
+  }, [storesById, setSelectedStore, setSheetView]);
 
   const handleSelectStoreWithPan = useCallback(
     (store: StoreData, fromShortLink = false) => {
@@ -196,8 +159,30 @@ export default function HomeClient({ initialShortCode = null }: HomeClientProps)
         setExploreAnchor((prev) => (prev != null ? pos : prev));
       }
     },
-    [storesById, setSelectedStore]
+    [
+      storesById,
+      setSelectedStore,
+      setSheetView,
+      setManualCenter,
+      setMapCenterOverride,
+      setCenterVersion,
+      setExploreAnchor
+    ]
   );
+
+  handleSelectStoreWithPanRef.current = handleSelectStoreWithPan;
+
+  const { deepLinkResolveError, dismissDeepLinkError } = useDeepLinkResolver({
+    router,
+    searchParams,
+    initialShortCode,
+    loading,
+    selectedStore,
+    sheetView,
+    setSheetView,
+    storesRef,
+    handlePanRef: handleSelectStoreWithPanRef
+  });
 
   const handleSearchSelectStore = useCallback((store: StoreData) => {
     perfTimeStart(DETAIL_OPEN_PERF_LABEL);
@@ -212,7 +197,16 @@ export default function HomeClient({ initialShortCode = null }: HomeClientProps)
     setCenterVersion((v) => v + 1);
     setSheetView("detail");
     setSearchOpen(false);
-  }, [storesById, setSelectedStore]);
+  }, [
+    storesById,
+    setSelectedStore,
+    setSearchOpen,
+    setSheetView,
+    setManualCenter,
+    setMapCenterOverride,
+    setExploreAnchor,
+    setCenterVersion
+  ]);
 
   useEffect(() => {
     if (!detailOpenInFlightRef.current) return;
@@ -240,12 +234,20 @@ export default function HomeClient({ initialShortCode = null }: HomeClientProps)
       setManualCenter({ lat: DEFAULT_REGION.lat, lng: DEFAULT_REGION.lng });
     }
     setCenterVersion((v) => v + 1);
-  }, [permission, userLocation, setSelectedStore]);
+  }, [
+    permission,
+    userLocation,
+    setSelectedStore,
+    setLocationModalOpen,
+    setSheetView,
+    setExploreAnchor,
+    setMapCenterOverride
+  ]);
 
   const handleLocationPermissionAllow = useCallback(() => {
     setLocationModalOpen(false);
     requestLocation();
-  }, [requestLocation]);
+  }, [requestLocation, setLocationModalOpen]);
 
   const handleCloseDetail = useCallback(() => {
     keepSelectedOutsideListRef.current = false;
@@ -259,23 +261,10 @@ export default function HomeClient({ initialShortCode = null }: HomeClientProps)
       }
       router.replace("/", { scroll: false });
     }
-  }, [router, searchParams]);
-  const handleOpenSearch = useCallback(() => setSearchOpen(true), []);
-  const handleCloseSearch = useCallback(() => setSearchOpen(false), []);
-  const handleCloseLocationModal = useCallback(() => setLocationModalOpen(false), []);
-
-  const dismissDeepLinkError = useCallback(() => {
-    setDeepLinkResolveError(null);
-    const s = searchParams.get("s")?.trim() ?? "";
-    if (isValidShortCode(s)) {
-      try {
-        sessionStorage.removeItem(DEEPLINK_SHORT_STORAGE_KEY);
-      } catch {
-        /* noop */
-      }
-      router.replace("/", { scroll: false });
-    }
-  }, [router, searchParams]);
+  }, [router, searchParams, setSheetView]);
+  const handleOpenSearch = useCallback(() => setSearchOpen(true), [setSearchOpen]);
+  const handleCloseSearch = useCallback(() => setSearchOpen(false), [setSearchOpen]);
+  const handleCloseLocationModal = useCallback(() => setLocationModalOpen(false), [setLocationModalOpen]);
 
   useEffect(() => {
     if (permission === "granted" && userLocation && !mapCenterOverride) {
@@ -296,147 +285,7 @@ export default function HomeClient({ initialShortCode = null }: HomeClientProps)
     if (!selectedStore) {
       setSheetView("list");
     }
-  }, [selectedStore]);
-
-  useEffect(() => {
-    if (!isValidShortCode(deepLinkShort)) {
-      lastSeenDeepLinkShortRef.current = "";
-      setDeepLinkResolveError(null);
-      return;
-    }
-    if (loading) return;
-
-    console.info(DEEPLINK_LOG_PREFIX, "effect", {
-      deepLinkShort,
-      loading,
-      selectedShort: selectedStore?.shortCode ?? null,
-      sheetView
-    });
-
-    const shortParamChanged = lastSeenDeepLinkShortRef.current !== deepLinkShort;
-    lastSeenDeepLinkShortRef.current = deepLinkShort;
-
-    const clearDeepLinkStorage = () => {
-      try {
-        sessionStorage.removeItem(DEEPLINK_SHORT_STORAGE_KEY);
-      } catch {
-        /* noop */
-      }
-    };
-
-    /*
-     * Same store as URL: only bail if already on detail. If user came back to list, reopen detail
-     * when `?s=` just appeared again (shortParamChanged); otherwise keep list (e.g. tapped "목록으로").
-     */
-    if (selectedStore?.shortCode === deepLinkShort) {
-      setDeepLinkResolveError(null);
-      if (sheetView === "detail") return;
-      if (shortParamChanged) {
-        console.info(DEEPLINK_LOG_PREFIX, "reopen detail (same store, param changed)");
-        setSheetView("detail");
-      }
-      return;
-    }
-
-    /*
-     * User chose another store on the map while stale `?s=` remains — do not fight them.
-     * If `?s=` changed to a new code (new share link), always resolve.
-     */
-    if (
-      !shortParamChanged &&
-      selectedStore != null &&
-      isValidShortCode(selectedStore.shortCode) &&
-      selectedStore.shortCode !== deepLinkShort
-    ) {
-      console.info(DEEPLINK_LOG_PREFIX, "skip: user selected different store, stale ?s=");
-      return;
-    }
-
-    const list = storesRef.current;
-    const fromList = list.find((s) => s.shortCode === deepLinkShort);
-    console.info(DEEPLINK_LOG_PREFIX, "fromList", { found: Boolean(fromList), listLen: list.length });
-
-    if (fromList) {
-      shortLinkFetchForRef.current = null;
-      setDeepLinkResolveError(null);
-      handleSelectStoreWithPan({ ...fromList, shortCode: deepLinkShort }, true);
-      clearDeepLinkStorage();
-      return;
-    }
-
-    const code = deepLinkShort;
-    if (shortLinkFetchForRef.current === code) {
-      console.info(DEEPLINK_LOG_PREFIX, "skip fetch: already in flight", code);
-      return;
-    }
-    shortLinkFetchForRef.current = code;
-
-    void (async () => {
-      try {
-        const { row, requestUrl, httpOk, httpStatus } = await fetchStoreByShortCodeOnly(code);
-        if (shortLinkFetchForRef.current !== code) {
-          console.info(DEEPLINK_LOG_PREFIX, "stale response ignored", { code });
-          return;
-        }
-        if (!httpOk) {
-          console.error(DEEPLINK_LOG_PREFIX, "fallback: API failed", { code, requestUrl, httpStatus });
-          setDeepLinkResolveError(
-            "\uC5C5\uCCB4 \uC815\uBCF4\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694."
-          );
-          clearDeepLinkStorage();
-          return;
-        }
-        if (row) {
-          setDeepLinkResolveError(null);
-          handleSelectStoreWithPan({ ...row, shortCode: code }, true);
-          clearDeepLinkStorage();
-          console.info(DEEPLINK_LOG_PREFIX, "resolved via API", { code, id: row.id });
-          return;
-        }
-        console.error(DEEPLINK_LOG_PREFIX, "fallback: empty stores[] for shortCode", {
-          code,
-          requestUrl
-        });
-        setDeepLinkResolveError(
-          "\uD574\uB2F9 \uC5C5\uCCB4\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
-        );
-        clearDeepLinkStorage();
-      } catch (e) {
-        console.error(DEEPLINK_LOG_PREFIX, "unexpected error", e);
-        setDeepLinkResolveError(
-          "\uC5C5\uCCB4 \uC815\uBCF4\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4."
-        );
-        clearDeepLinkStorage();
-      } finally {
-        if (shortLinkFetchForRef.current === code) {
-          shortLinkFetchForRef.current = null;
-        }
-      }
-    })();
-  }, [deepLinkShort, loading, selectedStore?.shortCode, sheetView, handleSelectStoreWithPan]);
-
-  /** In-app browsers often reuse the same `/?s=` URL; second open does not remount — reopen detail on focus. */
-  useEffect(() => {
-    const tryReopenFromUrl = () => {
-      if (typeof window === "undefined") return;
-      const raw = new URLSearchParams(window.location.search).get("s")?.trim() ?? "";
-      if (!isValidShortCode(raw)) return;
-      if (sheetView !== "list") return;
-      const sel = selectedStore;
-      if (!sel || sel.shortCode !== raw) return;
-      setSheetView("detail");
-    };
-
-    const onVis = () => {
-      if (document.visibilityState === "visible") tryReopenFromUrl();
-    };
-    window.addEventListener("pageshow", tryReopenFromUrl);
-    document.addEventListener("visibilitychange", onVis);
-    return () => {
-      window.removeEventListener("pageshow", tryReopenFromUrl);
-      document.removeEventListener("visibilitychange", onVis);
-    };
-  }, [selectedStore, sheetView]);
+  }, [selectedStore, setSheetView]);
 
   if (error) {
     return (
@@ -468,20 +317,17 @@ export default function HomeClient({ initialShortCode = null }: HomeClientProps)
           <div
             className={`absolute inset-0 z-0 ${sheetBlocksMapPointer ? "pointer-events-none" : ""}`}
           >
-            {isLoading ? (
-              <MapSkeleton />
-            ) : (
-              <MapView
-                center={center}
-                centerVersion={centerVersion}
-                preferredMapLevel={exploreAnchor != null ? 6 : 5}
-                stores={loading ? [] : mapStores}
-                activeFilter={activeFilter}
-                selectedStoreId={selectedStore?.id}
-                onSelectStore={handleMapMarkerSelect}
-                userMarkerPosition={permission === "granted" && userLocation ? userLocation : null}
-              />
-            )}
+            <HomeMapStage
+              kakaoLoading={isLoading}
+              center={center}
+              centerVersion={centerVersion}
+              preferredMapLevel={exploreAnchor != null ? 6 : 5}
+              stores={loading ? [] : mapStores}
+              activeFilter={activeFilter}
+              selectedStoreId={selectedStore?.id}
+              onSelectStore={handleMapMarkerSelect}
+              userMarkerPosition={permission === "granted" && userLocation ? userLocation : null}
+            />
           </div>
 
           <section className="pointer-events-none absolute left-[15px] right-[15px] top-[calc(16px+env(safe-area-inset-top,0px))] z-sheet flex flex-col gap-2">

@@ -1,5 +1,15 @@
 import "./globals.css";
+import localFont from "next/font/local";
 import type { Metadata } from "next";
+
+const pretendard = localFont({
+  src: "../public/fonts/Pretendard-Regular.subset.woff2",
+  weight: "400",
+  style: "normal",
+  display: "swap",
+  variable: "--font-pretendard",
+  preload: true
+});
 import ChunkLoadRecovery from "@/components/ChunkLoadRecovery";
 import GlobalSeoNav from "@/components/GlobalSeoNav";
 import { GoogleAnalyticsScripts } from "@/components/GoogleAnalyticsScripts";
@@ -81,30 +91,17 @@ export default function RootLayout({
   const isProd = process.env.NODE_ENV === "production";
 
   return (
-    <html lang="ko">
+    <html lang="ko" className={pretendard.variable}>
       <head>
-        {/*
-         * [LCP 최적화] Pretendard 폰트를 CSS @import 대신 preload + async stylesheet로 로드.
-         * @import는 CSSOM 파싱을 블록하지만, preload는 렌더를 막지 않고 다운로드합니다.
-         */}
-        <link
-          rel="preload"
-          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css"
-          as="style"
-          crossOrigin="anonymous"
-        />
-        <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css"
-          crossOrigin="anonymous"
-        />
+        <link rel="preconnect" href="https://dapi.kakao.com" />
+        <link rel="dns-prefetch" href="https://dapi.kakao.com" />
         {/*
          * [LCP 최적화] GA·Clarity를 lazyOnload로 변경 → 메인 스레드 경합 최소화
          */}
         {isProd && GA_MEASUREMENT_ID ? <GoogleAnalyticsScripts /> : null}
         {isProd && CLARITY_PROJECT_ID ? <MicrosoftClarityScripts /> : null}
       </head>
-      <body>
+      <body className={pretendard.className}>
         <ChunkLoadRecovery />
         {isProd && GA_MEASUREMENT_ID && GA_ROUTE_TRACKER_ENABLED ? <GtagRouteTracker /> : null}
         {children}

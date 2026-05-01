@@ -149,7 +149,6 @@ function MapViewInner({
   const userMarkerRef = useRef<KakaoMarker | null>(null);
   const prevCenterRef = useRef<{ lat: number; lng: number } | null>(null);
   const prevCenterVersionRef = useRef(0);
-  const prevSelectedIdRef = useRef<string | null>(null);
   const activeFilterRef = useRef<StoreListFilter>(activeFilter);
   activeFilterRef.current = activeFilter;
 
@@ -173,13 +172,17 @@ function MapViewInner({
   const mapInitMeasuredRef = useRef(false);
   const mapFirstIdleMeasuredRef = useRef(false);
 
+  /**
+   * 변경 전: effect 의존성에 center가 포함되어 이동마다 cleanup이 click 리스너를 제거·재부착.
+   * 변경 후: 지도·idle·click은 마운트 1회만 등록(초기 중심은 첫 페인트 값), center는 별도 effect.
+   * 측정: DevTools Performance 이벤트 리스너·스크립트 비용, 드래그 idle 루프 안정성.
+   */
   useEffect(() => {
-    if (!containerRef.current || typeof window === "undefined" || !window.kakao?.maps) return;
+    if (typeof window === "undefined" || !containerRef.current || !window.kakao?.maps) return;
 
     const kakao = window.kakao.maps;
 
     if (!mapRef.current) {
-      // [perf] map init start/end: constructor + first idle
       perfTimeStart("[perf] map-init");
       perfTimeStart("[perf] map-first-idle");
       mapRef.current = new kakao.Map(containerRef.current, {
@@ -196,54 +199,51 @@ function MapViewInner({
     if (!idleAttachedRef.current) {
       idleAttachedRef.current = true;
       const onIdle = () => {
-        if (!mapFirstIdleMeasuredRef.current) {
-          perfTimeEnd("[perf] map-first-idle");
-          mapFirstIdleMeasuredRef.current = true;
+      if (!mapFirstIdleMeasuredRef.current) {
+        perfTimeEnd("[perf] map-first-idle");
+        mapFirstIdleMeasuredRef.current = true;
+      }
+      if (idleBoundTimerRef.current) clearTimeout(idleBoundTimerRef.current);
+      idleBoundTimerRef.current = setTimeout(() => {
+        try {
+          const b = map.getBounds();
+          const sw = b.getSouthWest();
+          const ne = b.getNorthEast();
+          const swLat = sw.getLat();
+          const swLng = sw.getLng();
+          const neLat = ne.getLat();
+          const neLng = ne.getLng();
+          const pad = 0.11;
+          const dLat = (neLat - swLat) * pad;
+          const dLng = (neLng - swLng) * pad;
+          const round = (v: number) => Math.round(v * 1e5) / 1e5;
+          const next: MapBoundsBox = {
+            swLat: round(swLat - dLat),
+            swLng: round(swLng - dLng),
+            neLat: round(neLat + dLat),
+            neLng: round(neLng + dLng)
+          };
+          setMapBounds((prev) => {
+            if (
+              prev &&
+              prev.swLat === next.swLat &&
+              prev.swLng === next.swLng &&
+              prev.neLat === next.neLat &&
+              prev.neLng === next.neLng
+            ) {
+              return prev;
+            }
+            return next;
+          });
+        } catch {
+          /* bounds not ready */
         }
-        if (idleBoundTimerRef.current) clearTimeout(idleBoundTimerRef.current);
-        idleBoundTimerRef.current = setTimeout(() => {
-          try {
-            const b = map.getBounds();
-            const sw = b.getSouthWest();
-            const ne = b.getNorthEast();
-            const swLat = sw.getLat();
-            const swLng = sw.getLng();
-            const neLat = ne.getLat();
-            const neLng = ne.getLng();
-            const pad = 0.11;
-            const dLat = (neLat - swLat) * pad;
-            const dLng = (neLng - swLng) * pad;
-            const round = (v: number) => Math.round(v * 1e5) / 1e5;
-            const next: MapBoundsBox = {
-              swLat: round(swLat - dLat),
-              swLng: round(swLng - dLng),
-              neLat: round(neLat + dLat),
-              neLng: round(neLng + dLng)
-            };
-            setMapBounds((prev) => {
-              if (
-                prev &&
-                prev.swLat === next.swLat &&
-                prev.swLng === next.swLng &&
-                prev.neLat === next.neLat &&
-                prev.neLng === next.neLng
-              ) {
-                return prev;
-              }
-              return next;
-            });
-          } catch {
-            /* bounds not ready */
-          }
-        }, 90);
+      }, 90);
       };
       idleHandlerRef.current = onIdle;
       kakao.event.addListener(map, "idle", onIdle);
       onIdle();
     }
-
-    if (pickListenerAttachedRef.current) return;
-    pickListenerAttachedRef.current = true;
 
     const onMapClick = (...args: unknown[]) => {
       const mouseEvent = args[0] as { latLng: { getLat: () => number; getLng: () => number } };
@@ -274,18 +274,23 @@ function MapViewInner({
       }
 
       if (best) {
-        console.debug("[MapView] nearest marker pick:", best.id, bestDist.toFixed(1), "px");
         onSelectStoreRef.current(best);
       }
     };
 
-    kakao.event.addListener(map, "click", onMapClick);
+    if (!pickListenerAttachedRef.current) {
+      pickListenerAttachedRef.current = true;
+      kakao.event.addListener(map, "click", onMapClick);
+    }
 
     return () => {
-      kakao.event.removeListener(map, "click", onMapClick);
-      pickListenerAttachedRef.current = false;
+      if (pickListenerAttachedRef.current) {
+        kakao.event.removeListener(map, "click", onMapClick);
+        pickListenerAttachedRef.current = false;
+      }
     };
-  }, [center.lat, center.lng]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 의도: 첫 마운트에서만 Map·리스너 생성(초기 center만 사용)
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -320,75 +325,58 @@ function MapViewInner({
     }
   }, [center.lat, center.lng, centerVersion, preferredMapLevel]);
 
+  /**
+   * 변경 전: visible 목록 변경 시 전체 오버레이 `setMap(null)` 후 재생성 → idle마다 레이아웃·DOM 비용 폭증.
+   * 변경 후: id별 add / position·아이콘 update / 불필요 id remove 만 수행(CustomOverlay 유지 MarkerClusterer와 별 계열).
+   * 측정: "[perf] map-markers-diff" 구간 ms, idle 루프당 Scripting 시간.
+   */
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !window.kakao?.maps) return;
 
-    perfTimeStart("[perf] map-markers-rebuild");
-    storeOverlayMapRef.current.forEach(({ overlay }) => overlay.setMap(null));
-    storeOverlayMapRef.current.clear();
-    prevSelectedIdRef.current = null;
-
+    perfTimeStart("[perf] map-markers-diff");
     const kakao = window.kakao.maps;
+    const desired = new Set(visibleForMarkers.map((s) => s.id));
+    const cur = storeOverlayMapRef.current;
 
-    visibleForMarkers.forEach((store) => {
+    for (const id of [...cur.keys()]) {
+      if (!desired.has(id)) {
+        cur.get(id)!.overlay.setMap(null);
+        cur.delete(id);
+      }
+    }
+
+    const meta = FILTER_MARKER_MAP[activeFilter];
+
+    for (const store of visibleForMarkers) {
       const lat = Number(store.lat);
       const lng = Number(store.lng);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
 
       const isSelected = selectedStoreId != null && store.id === selectedStoreId;
-      const { root, img } = createStoreMarkerElements(store, activeFilter, isSelected);
+      const entry = cur.get(store.id);
 
-      const overlay = new kakao.CustomOverlay({
-        map,
-        position: new kakao.LatLng(lat, lng),
-        content: root,
-        xAnchor: 0.5,
-        yAnchor: 0.5,
-        zIndex: isSelected ? 100 : 1,
-        clickable: false
-      });
-      storeOverlayMapRef.current.set(store.id, { overlay, img });
-
-      if (isSelected) {
-        prevSelectedIdRef.current = store.id;
-      }
-    });
-    perfTimeEnd("[perf] map-markers-rebuild");
-    // selectedStoreId handled in separate effect for icon swap
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFilter, visibleForMarkers]);
-
-  useEffect(() => {
-    if (!window.kakao?.maps) return;
-
-    const prevId = prevSelectedIdRef.current;
-    const newId = selectedStoreId ?? null;
-
-    if (prevId === newId) return;
-
-    console.debug("[MapView] selection changed:", prevId, "→", newId, "(NO map movement)");
-
-    const meta = FILTER_MARKER_MAP[activeFilterRef.current];
-
-    if (prevId) {
-      const prevEntry = storeOverlayMapRef.current.get(prevId);
-      if (prevEntry) {
-        prevEntry.img.src = meta.src;
-        prevEntry.overlay.setZIndex(1);
+      if (!entry) {
+        const { root, img } = createStoreMarkerElements(store, activeFilter, isSelected);
+        const overlay = new kakao.CustomOverlay({
+          map,
+          position: new kakao.LatLng(lat, lng),
+          content: root,
+          xAnchor: 0.5,
+          yAnchor: 0.5,
+          zIndex: isSelected ? 100 : 1,
+          clickable: false
+        });
+        cur.set(store.id, { overlay, img });
+      } else {
+        entry.overlay.setPosition(new kakao.LatLng(lat, lng));
+        entry.img.src = isSelected ? meta.selectedSrc : meta.src;
+        entry.overlay.setZIndex(isSelected ? 100 : 1);
       }
     }
 
-    if (newId) {
-      const newEntry = storeOverlayMapRef.current.get(newId);
-      if (newEntry) {
-        newEntry.img.src = meta.selectedSrc;
-        newEntry.overlay.setZIndex(100);
-      }
-    }
-
-    prevSelectedIdRef.current = newId;
-  }, [selectedStoreId]);
+    perfTimeEnd("[perf] map-markers-diff");
+  }, [visibleForMarkers, activeFilter, selectedStoreId]);
 
   useEffect(() => {
     if (!mapRef.current || !window.kakao?.maps) return;

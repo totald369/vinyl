@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * 카카오 지도 스크립트 로더.
+ *
+ * 변경 전: 프로덕션에서도 과도한 console.info 로그 및 clusterer 라이브러리 미포함.
+ * 변경 후: production 시 로그 차단(+ next.config compiler.removeConsole 병행 가능),
+ *          clusterer 라이브러리 파라미터로 마커 밀도 대응.
+ * 측정: 크롬 Performance Main 스레드 시간, 번들 실행 시 문자열/format 비용(ms).
+ */
 import { useEffect, useMemo, useState } from "react";
 import { perfTimeEnd, perfTimeStart } from "@/lib/perfMarks";
 
@@ -14,51 +22,64 @@ type UseKakaoMapLoaderResult = {
 
 let sdkLoadPromise: Promise<void> | null = null;
 
+const DEV = typeof process !== "undefined" && process.env.NODE_ENV !== "production";
+
+function devLog(...args: unknown[]) {
+  if (!DEV || typeof console === "undefined") return;
+  console.info(...args);
+}
+
+function devError(...args: unknown[]) {
+  if (typeof console === "undefined") return;
+  console.error(...args);
+}
+
+/** SDK 엔드포인트/쿼리 스킴은 카카오 정책상 유지, clusterer 라이브러리만 추가 */
+function sdkSrc(appKey: string): string {
+  return `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(
+    appKey
+  )}&autoload=false&libraries=clusterer`;
+}
+
 function loadKakaoSdk(appKey: string): Promise<void> {
   if (typeof window === "undefined") {
     return Promise.resolve();
   }
 
-  console.info(`[KakaoMap] env key exists: ${appKey ? "yes" : "no"}`);
+  devLog(`[KakaoMap] env key exists: ${appKey ? "yes" : "no"}`);
   if (!appKey) {
-    console.error("[KakaoMap] env missing: NEXT_PUBLIC_KAKAO_MAP_APP_KEY");
+    devError("[KakaoMap] env missing: NEXT_PUBLIC_KAKAO_MAP_APP_KEY");
     return Promise.reject(new Error("NEXT_PUBLIC_KAKAO_MAP_APP_KEY가 설정되지 않았습니다."));
   }
 
+  const srcUrl = sdkSrc(appKey);
+
   if (window.kakao?.maps) {
-    console.info("[KakaoMap] sdk already present on window");
+    devLog("[KakaoMap] sdk already present on window");
     return new Promise<void>((resolve) => {
       window.kakao.maps.load(() => resolve());
     });
   }
 
   if (sdkLoadPromise) {
-    console.info("[KakaoMap] reuse in-flight sdk load promise");
+    devLog("[KakaoMap] reuse in-flight sdk load promise");
     return sdkLoadPromise;
   }
 
   sdkLoadPromise = new Promise<void>((resolve, reject) => {
-    const sdkUrl = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${appKey}&autoload=false`;
-    console.info(`[KakaoMap] final sdk url: ${sdkUrl}`);
-
     const existingScript = document.querySelector(
       "script[data-kakao-map-sdk='true']"
     ) as HTMLScriptElement | null;
 
-    if (existingScript) {
-      console.info(`[KakaoMap] existing script src: ${existingScript.src}`);
+    if (existingScript && existingScript.src.includes("dapi.kakao.com")) {
       existingScript.addEventListener("load", () => {
-        console.info("[KakaoMap] script loaded (existing script)");
-        console.info(`[KakaoMap] window.kakao exists: ${window.kakao ? "yes" : "no"}`);
         if (window.kakao?.maps) {
-          console.info("[KakaoMap] sdk loaded from existing script tag");
           window.kakao.maps.load(() => resolve());
         } else {
           reject(new Error("카카오맵 SDK 초기화 실패"));
         }
       });
       existingScript.addEventListener("error", () => {
-        console.error(`[KakaoMap] script failed (existing script): ${existingScript.src}`);
         reject(new Error("카카오맵 SDK 로드 실패"));
       });
       return;
@@ -67,25 +88,15 @@ function loadKakaoSdk(appKey: string): Promise<void> {
     const script = document.createElement("script");
     script.async = true;
     script.dataset.kakaoMapSdk = "true";
-    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${appKey}&autoload=false`;
-    console.log("KAKAO SDK URL:", script.src);
+    script.src = srcUrl;
     script.onload = () => {
-      console.log("[KakaoMap] script loaded");
-      console.log("[KakaoMap] window.kakao exists:", Boolean(window.kakao));
       if (window.kakao?.maps) {
-        console.info("[KakaoMap] sdk loaded successfully");
         window.kakao.maps.load(() => resolve());
       } else {
-        console.error("[KakaoMap] sdk script loaded but window.kakao.maps is unavailable");
         reject(new Error("카카오맵 SDK 초기화 실패"));
       }
     };
-    script.onerror = (event) => {
-      console.log("[KakaoMap] script failed");
-      console.error("[KakaoMap] failed script src:", script.src);
-      console.error("[KakaoMap] browser error context:", event);
-      reject(new Error("카카오맵 SDK 로드 실패"));
-    };
+    script.onerror = () => reject(new Error("카카오맵 SDK 로드 실패"));
     document.head.appendChild(script);
   }).catch((error) => {
     sdkLoadPromise = null;
@@ -101,25 +112,21 @@ export function useKakaoMapLoader(): UseKakaoMapLoaderResult {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
+    if (typeof window === "undefined") return;
 
-    console.info(
-      `[KakaoMap] env exists: ${appKey ? "yes" : "no"} (NEXT_PUBLIC_KAKAO_MAP_APP_KEY)`
-    );
+    devLog("[KakaoMap] hook mount, key exists:", Boolean(appKey));
     setState("loading");
     setError(null);
 
     perfTimeStart("[perf] kakao-sdk-load");
     void loadKakaoSdk(appKey)
       .then(() => {
-        console.info("[KakaoMap] sdk ready");
+        devLog("[KakaoMap] sdk ready");
         perfTimeEnd("[perf] kakao-sdk-load");
         setState("ready");
       })
       .catch((e) => {
-        console.error("[KakaoMap] sdk failed", e);
+        devError("[KakaoMap] sdk failed", e);
         perfTimeEnd("[perf] kakao-sdk-load");
         setState("error");
         setError(e instanceof Error ? e.message : "카카오맵 로드 오류");

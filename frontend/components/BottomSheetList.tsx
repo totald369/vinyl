@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * 하단 시트 매장 목록.
+ *
+ * 변경 전: windowing 없이 chunk로 DOM을 늘려 스크롤 시 메인 스레드·레이아웃 비용 증가.
+ * 변경 후: @tanstack/react-virtual로 뷰포트 밖 행 DOM 생략 — 스크롤 FPS·INP 개선.
+ * 측정: Performance 스레드上的 Scripting/Layout ms, 긴 목록에서 interaction delay.
+ */
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Fragment,
   memo,
@@ -83,9 +91,8 @@ function rubberClampTy(ty: number, maxTy: number, rubber: boolean): number {
 
 const SNAP_ORDER: BottomSheetSnap[] = ["expanded", "collapsed"];
 
-/** Long lists: first chunk only; scroll near end reveals more (avoids huge DOM on first paint). */
-const LIST_CHUNK_FIRST = 42;
-const LIST_CHUNK_STEP = 48;
+/** 가상 행 추정 높이(px): 실제 카드 높이에 근사, measureElement 미사용 시 스크롤바 보정 목적 */
+const EST_ROW_PX = 124;
 
 type StoreRowProps = {
   store: StoreData;
@@ -94,22 +101,19 @@ type StoreRowProps = {
   total: number;
   onSelectStore: (store: StoreData) => void;
   onPrefetchStore?: (store: StoreData) => void;
-  itemRef: (id: string, el: HTMLLIElement | null) => void;
 };
 
-const BottomSheetStoreRow = memo(function BottomSheetStoreRow({
+function BottomSheetStoreRow({
   store,
   selected,
   index,
   total,
   onSelectStore,
-  onPrefetchStore,
-  itemRef
+  onPrefetchStore
 }: StoreRowProps) {
   return (
     <Fragment>
       <li
-        ref={(el) => itemRef(store.id, el)}
         role="button"
         tabIndex={0}
         aria-current={selected ? "true" : undefined}
@@ -165,9 +169,26 @@ const BottomSheetStoreRow = memo(function BottomSheetStoreRow({
       ) : null}
     </Fragment>
   );
-});
+}
 
-export default function BottomSheetList({
+const BottomSheetStoreRowOptimized = memo(
+  BottomSheetStoreRow,
+  (prev, next) =>
+    prev.store.id === next.store.id &&
+    prev.selected === next.selected &&
+    prev.index === next.index &&
+    prev.total === next.total &&
+    prev.store.distance === next.store.distance &&
+    prev.store.name === next.store.name &&
+    (prev.store.roadAddress || prev.store.address) ===
+      (next.store.roadAddress || next.store.address) &&
+    prev.store.adminVerified === next.store.adminVerified &&
+    prev.store.hasTrashBag === next.store.hasTrashBag &&
+    prev.store.hasSpecialBag === next.store.hasSpecialBag &&
+    prev.store.hasLargeWasteSticker === next.store.hasLargeWasteSticker
+);
+
+function BottomSheetListInner({
   stores,
   selectedStoreId,
   onSelectStore,
@@ -179,7 +200,6 @@ export default function BottomSheetList({
   listLoading = false,
   onPrefetchStore
 }: Props) {
-  const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
   const scrollHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [listScrolling, setListScrolling] = useState(false);
   const suppressListClickRef = useRef(false);
@@ -210,7 +230,14 @@ export default function BottomSheetList({
   const [dragTy, setDragTy] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [listSheetTouchLock, setListSheetTouchLock] = useState(false);
-  const listUlRef = useRef<HTMLUListElement | null>(null);
+  const listScrollRef = useRef<HTMLDivElement | null>(null);
+
+  const rowVirtualizer = useVirtualizer({
+    count: listLoading && stores.length === 0 ? 0 : stores.length,
+    getScrollElement: () => listScrollRef.current,
+    estimateSize: () => EST_ROW_PX,
+    overscan: 10
+  });
   const sectionRef = useRef<HTMLElement | null>(null);
 
   const dragTyRafRef = useRef<number | null>(null);
@@ -254,21 +281,6 @@ export default function BottomSheetList({
 
   const SCROLLBAR_HIDE_MS = 700;
 
-  const [listCap, setListCap] = useState(LIST_CHUNK_FIRST);
-
-  useEffect(() => {
-    setListCap(LIST_CHUNK_FIRST);
-  }, [stores]);
-
-  const cappedStores = useMemo(() => {
-    if (stores.length <= listCap) return stores;
-    return stores.slice(0, listCap);
-  }, [stores, listCap]);
-
-  const setItemRef = useCallback((id: string, el: HTMLLIElement | null) => {
-    itemRefs.current[id] = el;
-  }, []);
-
   const handleListScroll = useCallback(() => {
     setListScrolling(true);
     if (scrollHideTimerRef.current) {
@@ -278,12 +290,7 @@ export default function BottomSheetList({
       setListScrolling(false);
       scrollHideTimerRef.current = null;
     }, SCROLLBAR_HIDE_MS);
-
-    const el = listUlRef.current;
-    if (el && listCap < stores.length && el.scrollTop + el.clientHeight > el.scrollHeight - 120) {
-      setListCap((c) => Math.min(c + LIST_CHUNK_STEP, stores.length));
-    }
-  }, [listCap, stores.length]);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -413,7 +420,7 @@ export default function BottomSheetList({
     [finishDrag, geom.maxTy, setDragging]
   );
 
-  const onListPointerDown = useCallback((e: React.PointerEvent<HTMLUListElement>) => {
+  const onListPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     if (dragRef.current) return;
     const now = performance.now();
@@ -428,7 +435,7 @@ export default function BottomSheetList({
   }, []);
 
   const onListPointerMove = useCallback(
-    (e: React.PointerEvent<HTMLUListElement>) => {
+    (e: React.PointerEvent<HTMLDivElement>) => {
       const g = listGestureRef.current;
       if (!g || e.pointerId !== g.pointerId) return;
 
@@ -493,7 +500,7 @@ export default function BottomSheetList({
   );
 
   const onListPointerUp = useCallback(
-    (e: React.PointerEvent<HTMLUListElement>) => {
+    (e: React.PointerEvent<HTMLDivElement>) => {
       const g = listGestureRef.current;
       if (!g || e.pointerId !== g.pointerId) return;
 
@@ -541,7 +548,7 @@ export default function BottomSheetList({
   );
 
   const onListPointerCancel = useCallback(
-    (e: React.PointerEvent<HTMLUListElement>) => {
+    (e: React.PointerEvent<HTMLDivElement>) => {
       const g = listGestureRef.current;
       if (!g || e.pointerId !== g.pointerId) return;
       if (g.sheetDragStarted && dragRef.current) {
@@ -561,7 +568,7 @@ export default function BottomSheetList({
     [cancelDragTyRaf, setDragging]
   );
 
-  const onListClickCapture = useCallback((e: React.MouseEvent<HTMLUListElement>) => {
+  const onListClickCapture = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (suppressListClickRef.current) {
       e.preventDefault();
       e.stopPropagation();
@@ -573,7 +580,7 @@ export default function BottomSheetList({
   const listScrollEnabled = translateY <= SHEET_FULLY_OPEN_EPS;
 
   useEffect(() => {
-    const el = listUlRef.current;
+    const el = listScrollRef.current;
     if (!el || listScrollEnabled) return;
     el.scrollTop = 0;
   }, [listScrollEnabled, snap]);
@@ -584,7 +591,7 @@ export default function BottomSheetList({
   }, [isDragging, snap]);
 
   useEffect(() => {
-    const el = listUlRef.current;
+    const el = listScrollRef.current;
     if (!el || !listSheetTouchLock) return;
     const blockScroll = (ev: TouchEvent) => {
       ev.preventDefault();
@@ -594,11 +601,11 @@ export default function BottomSheetList({
   }, [listSheetTouchLock]);
 
   useEffect(() => {
-    if (!selectedStoreId) return;
-    const node = itemRefs.current[selectedStoreId];
-    if (!node) return;
-    node.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [selectedStoreId]);
+    if (!selectedStoreId || !stores.length) return;
+    const ix = stores.findIndex((s) => s.id === selectedStoreId);
+    if (ix < 0) return;
+    rowVirtualizer.scrollToIndex(ix, { align: "center" });
+  }, [selectedStoreId, stores, rowVirtualizer]);
 
   const handleLabel =
     snap === "expanded" ? "목록 · 아래로 내려 접기" : "목록 · 위로 올려 펼치기";
@@ -684,15 +691,17 @@ export default function BottomSheetList({
           </button>
         </div>
 
-        <ul
-          ref={listUlRef}
+        <div
+          ref={listScrollRef}
+          role="list"
+          aria-label="주변 판매처 목록"
           onScroll={handleListScroll}
           onPointerDown={onListPointerDown}
           onPointerMove={onListPointerMove}
           onPointerUp={onListPointerUp}
           onPointerCancel={onListPointerCancel}
           onClickCapture={onListClickCapture}
-          className={`scrollbar-map-list flex min-h-0 flex-1 flex-col gap-1 overscroll-y-contain px-2 pb-4 ${
+          className={`scrollbar-map-list flex min-h-0 flex-1 flex-col overscroll-y-contain px-2 pb-4 ${
             listScrollEnabled ? "overflow-y-auto" : "overflow-y-hidden"
           } ${listScrolling ? "is-scrolling" : ""} ${
             isDragging || !listScrollEnabled ? "touch-none" : ""
@@ -700,35 +709,46 @@ export default function BottomSheetList({
         >
           {listLoading && stores.length === 0 ? (
             Array.from({ length: 3 }, (_, i) => (
-              <li key={`list-skel-${i}`} className="px-4 py-4" aria-hidden>
+              <div key={`list-skel-${i}`} className="px-4 py-4" aria-hidden>
                 <div className="flex flex-col gap-3">
                   <div className="h-[18px] w-[72%] animate-pulse rounded-[6px] bg-neutral-200" />
                   <div className="h-[14px] w-[48%] animate-pulse rounded-[6px] bg-neutral-100" />
                 </div>
-              </li>
+              </div>
             ))
           ) : stores.length === 0 ? (
-            <li className="min-h-[120px] px-4 py-6 text-center text-[14px] leading-normal tracking-[0.1px] text-[#999999]">
+            <div className="min-h-[120px] px-4 py-6 text-center text-[14px] leading-normal tracking-[0.1px] text-[#999999]">
               주변에 표시할 판매처가 없습니다.
-            </li>
+            </div>
           ) : (
-            cappedStores.map((store, index) => (
-              <BottomSheetStoreRow
-                key={store.id}
-                store={store}
-                selected={selectedStoreId === store.id}
-                index={index}
-                total={cappedStores.length}
-                onSelectStore={onSelectStore}
-                onPrefetchStore={onPrefetchStore}
-                itemRef={setItemRef}
-              />
-            ))
+            <div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
+              {rowVirtualizer.getVirtualItems().map((vi) => {
+                const store = stores[vi.index];
+                return (
+                  <div
+                    key={vi.key}
+                    className="absolute left-0 top-0 w-full"
+                    style={{ transform: `translateY(${vi.start}px)` }}
+                  >
+                    <BottomSheetStoreRowOptimized
+                      store={store}
+                      selected={selectedStoreId === store.id}
+                      index={vi.index}
+                      total={stores.length}
+                      onSelectStore={onSelectStore}
+                      onPrefetchStore={onPrefetchStore}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           )}
-        </ul>
+        </div>
       </div>
     </section>
   );
 }
+
+export default memo(BottomSheetListInner);
 
 export type { BottomSheetSnap };

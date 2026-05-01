@@ -1,7 +1,4 @@
-/*
- * [LCP 최적화] CSS @import 제거 — render-blocking chain을 끊기 위해
- * layout.tsx에서 <link rel="preload"> + <link rel="stylesheet"> 로 비동기 로드합니다.
- */
+/* Pretendard: next/font/local + layout.tsx variable — 외부 CSS 체인 없음 */
 
 @tailwind base;
 @tailwind components;

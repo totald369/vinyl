@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { memo } from "react";
 import { FILTER_LABELS, StoreItem } from "@/lib/types";
 
 type Props = {
@@ -6,7 +7,11 @@ type Props = {
   compact?: boolean;
 };
 
-export default function StoreCard({ store, compact = false }: Props) {
+/**
+ * 변경 전: 목록 스크롤 시 카드 전량 리렌더.
+ * 변경 후: id·거리 중심 동등 비교로 가상 스크롤과 결합 시 불필요한 commit 감소.
+ */
+function StoreCardInner({ store, compact = false }: Props) {
   return (
     <article className="rounded-xl border border-border-subtle bg-bg-surface p-4 shadow-elevation-1">
       <Link href={`/stores/${store.id}`} className="block">
@@ -26,3 +31,17 @@ export default function StoreCard({ store, compact = false }: Props) {
     </article>
   );
 }
+
+const StoreCard = memo(
+  StoreCardInner,
+  (prev, next) =>
+    prev.store.id === next.store.id &&
+    prev.compact === next.compact &&
+    prev.store.address === next.store.address &&
+    prev.store.name === next.store.name &&
+    prev.store.distanceKm === next.store.distanceKm &&
+    prev.store.products.length === next.store.products.length &&
+    prev.store.products.every((p, i) => p === next.store.products[i])
+);
+
+export default StoreCard;

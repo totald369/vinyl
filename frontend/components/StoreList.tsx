@@ -1,8 +1,14 @@
 "use client";
 
+/**
+ * /stores 정적 목록.
+ * 변경 후: 가상 스크롤로 수백 행도 DOM 노드 수 상한 유지.
+ */
 import Link from "next/link";
-import { ContentState, StoreItem } from "@/lib/types";
+import { useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import StoreCard from "@/components/ui/StoreCard";
+import { ContentState, StoreItem } from "@/lib/types";
 
 type Props = {
   contentState: ContentState;
@@ -10,7 +16,17 @@ type Props = {
   errorMessage?: string;
 };
 
+const EST_STORE_CARD = 180;
+
 export default function StoreList({ contentState, stores, errorMessage }: Props) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  const rowVirtualizer = useVirtualizer({
+    count: stores.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => EST_STORE_CARD,
+    overscan: 5
+  });
 
   if (contentState === "loading") {
     return <section className="card text-body-sm text-text-secondary">데이터를 불러오는 중입니다...</section>;
@@ -39,13 +55,27 @@ export default function StoreList({ contentState, stores, errorMessage }: Props)
   return (
     <section className="card">
       <h2 className="mb-3 text-title-sm text-text-primary">매장 목록</h2>
-      <ul className="space-y-3">
-        {stores.map((store) => (
-          <li key={store.id}>
-            <StoreCard store={store} />
-          </li>
-        ))}
-      </ul>
+      <div
+        ref={scrollRef}
+        className="max-h-[min(70vh,720px)] overflow-y-auto overscroll-y-contain pr-1"
+        role="list"
+        aria-label="매장 목록"
+      >
+        <div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
+          {rowVirtualizer.getVirtualItems().map((vi) => {
+            const store = stores[vi.index];
+            return (
+              <div
+                key={vi.key}
+                className="absolute left-0 top-0 w-full pb-3"
+                style={{ transform: `translateY(${vi.start}px)` }}
+              >
+                <StoreCard store={store} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </section>
   );
 }

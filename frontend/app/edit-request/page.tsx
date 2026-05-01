@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import type { AddressSearchResult } from "@/lib/kakao/addressSearch";
-import { mockStores } from "@/lib/mock";
 import { searchAddress } from "@/lib/services/addressSearch";
 import { getBrowserSupabaseClient } from "@/lib/supabase";
 import { FILTER_LABELS, FilterType } from "@/lib/types";
@@ -38,9 +37,9 @@ function EditRequestContent() {
   const [selectedPlace, setSelectedPlace] = useState<AddressSearchResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const linkedStore = useMemo(() => mockStores.find((store) => store.id === storeId), [storeId]);
-  const storeName = linkedStore?.name || storeNameParam || "선택한 판매처";
-  const storeAddress = linkedStore?.address || storeAddressParam || "판매처 주소 정보가 없습니다.";
+  /** 쿼리스트링 파라미터만 사용(mock 번들 미포함으로 초기 번들 경량화) */
+  const storeName = storeNameParam.trim() || "선택한 판매처";
+  const storeAddress = storeAddressParam.trim() || "판매처 주소 정보가 없습니다.";
   const canSubmit = useMemo(() => {
     if (submitting) return false;
     if (!storeId.trim()) return false;
