@@ -9,6 +9,19 @@ const BLOCKED_DATA_FILES = new Set([
   "stores.gunpo.json",
   "stores.goyang.json",
   "stores.goyang-sticker.json",
+  "stores.busan-namgu-trash.json",
+  "stores.busan-junggu-trash.json",
+  "stores.busan-junggu-pp.json",
+  "stores.busan-donggu-trash.json",
+  "stores.busan-dongnae-trash.json",
+  "stores.busan-geumjeong-trash.json",
+  "stores.busan-geumjeong-special.json",
+  "stores.busan-bukgu-trash.json",
+  "stores.busan-bukgu-special.json",
+  "stores.busan-sasang-trash.json",
+  "stores.busan-sasang-special.json",
+  "stores.busan-haeundae-trash.json",
+  "stores.busan-yeongdo-trash.json",
   "reports_rows.json"
 ]);
 

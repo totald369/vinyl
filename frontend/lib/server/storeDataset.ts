@@ -31,6 +31,19 @@ export function getMergedStores() {
   const reportRows = readJsonArray<RawReportRow>("reports_rows.json");
   const guroNoncombustRows = readJsonArray<RawStoreRow>("stores.guro-noncombust.json");
   const gwanakNoncombustRows = readJsonArray<RawStoreRow>("stores.gwanak-noncombust.json");
+  const busanNamguTrashRows = readJsonArray<RawStoreRow>("stores.busan-namgu-trash.json");
+  const busanJungguTrashRows = readJsonArray<RawStoreRow>("stores.busan-junggu-trash.json");
+  const busanJungguPpRows = readJsonArray<RawStoreRow>("stores.busan-junggu-pp.json");
+  const busanDongguTrashRows = readJsonArray<RawStoreRow>("stores.busan-donggu-trash.json");
+  const busanDongnaeTrashRows = readJsonArray<RawStoreRow>("stores.busan-dongnae-trash.json");
+  const busanGeumjeongTrashRows = readJsonArray<RawStoreRow>("stores.busan-geumjeong-trash.json");
+  const busanGeumjeongSpecialRows = readJsonArray<RawStoreRow>("stores.busan-geumjeong-special.json");
+  const busanBukguTrashRows = readJsonArray<RawStoreRow>("stores.busan-bukgu-trash.json");
+  const busanBukguSpecialRows = readJsonArray<RawStoreRow>("stores.busan-bukgu-special.json");
+  const busanSasangTrashRows = readJsonArray<RawStoreRow>("stores.busan-sasang-trash.json");
+  const busanSasangSpecialRows = readJsonArray<RawStoreRow>("stores.busan-sasang-special.json");
+  const busanHaeundaeTrashRows = readJsonArray<RawStoreRow>("stores.busan-haeundae-trash.json");
+  const busanYeongdoTrashRows = readJsonArray<RawStoreRow>("stores.busan-yeongdo-trash.json");
 
   cached = mergeStoreSources(
     mainRows,
@@ -39,7 +52,20 @@ export function getMergedStores() {
     goyangStickerRows,
     reportRows,
     guroNoncombustRows,
-    gwanakNoncombustRows
+    gwanakNoncombustRows,
+    busanNamguTrashRows,
+    busanJungguTrashRows,
+    busanJungguPpRows,
+    busanDongguTrashRows,
+    busanDongnaeTrashRows,
+    busanGeumjeongTrashRows,
+    busanGeumjeongSpecialRows,
+    busanBukguTrashRows,
+    busanBukguSpecialRows,
+    busanSasangTrashRows,
+    busanSasangSpecialRows,
+    busanHaeundaeTrashRows,
+    busanYeongdoTrashRows
   );
   return cached;
 }

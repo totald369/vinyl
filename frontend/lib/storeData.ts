@@ -101,7 +101,20 @@ export function mergeStoreSources(
   goyangStickerRows: RawStoreRow[],
   reportRows: RawReportRow[],
   guroNoncombustRows: RawStoreRow[],
-  gwanakNoncombustRows: RawStoreRow[]
+  gwanakNoncombustRows: RawStoreRow[],
+  busanNamguTrashRows: RawStoreRow[],
+  busanJungguTrashRows: RawStoreRow[],
+  busanJungguPpRows: RawStoreRow[],
+  busanDongguTrashRows: RawStoreRow[],
+  busanDongnaeTrashRows: RawStoreRow[],
+  busanGeumjeongTrashRows: RawStoreRow[],
+  busanGeumjeongSpecialRows: RawStoreRow[],
+  busanBukguTrashRows: RawStoreRow[],
+  busanBukguSpecialRows: RawStoreRow[],
+  busanSasangTrashRows: RawStoreRow[],
+  busanSasangSpecialRows: RawStoreRow[],
+  busanHaeundaeTrashRows: RawStoreRow[],
+  busanYeongdoTrashRows: RawStoreRow[]
 ): StoreData[] {
   const verifiedIds = collectVerifiedStoreIdsFromReports(reportRows);
   const extraRaw = reportRowsToExtraRawStores(reportRows);
@@ -112,7 +125,20 @@ export function mergeStoreSources(
     ...goyangRows,
     ...goyangStickerRows,
     ...guroNoncombustRows,
-    ...gwanakNoncombustRows
+    ...gwanakNoncombustRows,
+    ...busanNamguTrashRows,
+    ...busanJungguTrashRows,
+    ...busanJungguPpRows,
+    ...busanDongguTrashRows,
+    ...busanDongnaeTrashRows,
+    ...busanGeumjeongTrashRows,
+    ...busanGeumjeongSpecialRows,
+    ...busanBukguTrashRows,
+    ...busanBukguSpecialRows,
+    ...busanSasangTrashRows,
+    ...busanSasangSpecialRows,
+    ...busanHaeundaeTrashRows,
+    ...busanYeongdoTrashRows
   ]
     .map(normalizeRow)
     .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng))
