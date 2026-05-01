@@ -576,11 +576,6 @@ export default function HomeClient({ initialShortCode = null }: HomeClientProps)
           )}
         </div>
       </div>
-      <nav className="sr-only" aria-label="주요 안내 페이지">
-        <a href="/stores">판매처 목록</a>
-        {" · "}
-        <a href="/gangnam">강남 종량제봉투 판매처 보기</a>
-      </nav>
     </main>
   );
 }

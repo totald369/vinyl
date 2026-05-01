@@ -1,7 +1,17 @@
 import type { MetadataRoute } from "next";
 import { DISTRICT_TRASHBAG_PAGES } from "@/lib/districtTrashbagSeo";
-import { mockStores } from "@/lib/mock";
 import { SITE_URL } from "@/lib/site";
+import { getMergedStores } from "@/lib/server/storeDataset";
+import { sliceStoresStableForSeo } from "@/lib/seoStoreSlice";
+
+function sitemapStoreCap(): number {
+  const raw = process.env.SITEMAP_STORE_CAP;
+  if (raw != null && raw !== "") {
+    const n = Number(raw);
+    if (Number.isFinite(n)) return Math.min(49000, Math.max(500, Math.floor(n)));
+  }
+  return 5000;
+}
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
@@ -45,8 +55,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
     }
   ];
 
-  const storeEntries: MetadataRoute.Sitemap = mockStores.map((store) => ({
-    url: `${SITE_URL}/stores/${store.id}`,
+  const merged = getMergedStores();
+  const capped = sliceStoresStableForSeo(merged, sitemapStoreCap());
+  const storeEntries: MetadataRoute.Sitemap = capped.map((store) => ({
+    url: `${SITE_URL}/stores/${encodeURIComponent(store.id)}`,
     lastModified: now,
     changeFrequency: "weekly" as const,
     priority: 0.6

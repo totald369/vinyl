@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import ChunkLoadRecovery from "@/components/ChunkLoadRecovery";
+import GlobalSeoNav from "@/components/GlobalSeoNav";
 import { GoogleAnalyticsScripts } from "@/components/GoogleAnalyticsScripts";
 import { GtagRouteTracker } from "@/components/GtagRouteTracker";
 import { MicrosoftClarityScripts } from "@/components/MicrosoftClarityScripts";
@@ -107,6 +108,7 @@ export default function RootLayout({
         <ChunkLoadRecovery />
         {isProd && GA_MEASUREMENT_ID && GA_ROUTE_TRACKER_ENABLED ? <GtagRouteTracker /> : null}
         {children}
+        <GlobalSeoNav />
       </body>
     </html>
   );
