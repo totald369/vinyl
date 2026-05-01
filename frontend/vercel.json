@@ -1,0 +1,10 @@
+{
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "trashbagmap.com" }],
+      "destination": "https://www.trashbagmap.com/:path*",
+      "permanent": true
+    }
+  ]
+}
