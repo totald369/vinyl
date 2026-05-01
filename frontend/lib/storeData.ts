@@ -28,6 +28,8 @@ export type RawStoreRow = {
   hasLargeWasteSticker?: boolean;
   /** 6-char share code from JSON (must be pre-assigned by scripts/assignShortCodes.ts) */
   shortCode?: string;
+  /** 대표 전화번호(표시 가능한 경우만) */
+  phone?: string;
 } & Record<string, unknown>;
 
 export type StoreData = {
@@ -37,6 +39,7 @@ export type StoreData = {
   lng: number;
   roadAddress?: string;
   address?: string;
+  phone?: string;
   businessStatus?: string;
   hasTrashBag: boolean;
   hasSpecialBag: boolean;
@@ -66,6 +69,9 @@ export function normalizeRow(raw: RawStoreRow): StoreData {
       ? raw.shortCode.trim()
       : undefined;
 
+  const phoneTrim =
+    typeof raw.phone === "string" ? raw.phone.trim() : "";
+
   return {
     id: String(raw.id ?? ""),
     name: String(raw.name ?? ""),
@@ -79,7 +85,8 @@ export function normalizeRow(raw: RawStoreRow): StoreData {
     hasLargeWasteSticker,
     adminVerified: raw.adminVerified === true,
     dataReferenceDate: fromJson || pickDataReferenceDateFromRow(raw),
-    ...(sc ? { shortCode: sc } : {})
+    ...(sc ? { shortCode: sc } : {}),
+    ...(phoneTrim ? { phone: phoneTrim } : {})
   };
 }
 
@@ -92,7 +99,9 @@ export function mergeStoreSources(
   gunpoRows: RawStoreRow[],
   goyangRows: RawStoreRow[],
   goyangStickerRows: RawStoreRow[],
-  reportRows: RawReportRow[]
+  reportRows: RawReportRow[],
+  guroNoncombustRows: RawStoreRow[],
+  gwanakNoncombustRows: RawStoreRow[]
 ): StoreData[] {
   const verifiedIds = collectVerifiedStoreIdsFromReports(reportRows);
   const extraRaw = reportRowsToExtraRawStores(reportRows);
@@ -101,7 +110,9 @@ export function mergeStoreSources(
     ...mainRows,
     ...gunpoRows,
     ...goyangRows,
-    ...goyangStickerRows
+    ...goyangStickerRows,
+    ...guroNoncombustRows,
+    ...gwanakNoncombustRows
   ]
     .map(normalizeRow)
     .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng))

@@ -29,13 +29,17 @@ export function getMergedStores() {
   const goyangRows = readJsonArray<RawStoreRow>("stores.goyang.json");
   const goyangStickerRows = readJsonArray<RawStoreRow>("stores.goyang-sticker.json");
   const reportRows = readJsonArray<RawReportRow>("reports_rows.json");
+  const guroNoncombustRows = readJsonArray<RawStoreRow>("stores.guro-noncombust.json");
+  const gwanakNoncombustRows = readJsonArray<RawStoreRow>("stores.gwanak-noncombust.json");
 
   cached = mergeStoreSources(
     mainRows,
     gunpoRows,
     goyangRows,
     goyangStickerRows,
-    reportRows
+    reportRows,
+    guroNoncombustRows,
+    gwanakNoncombustRows
   );
   return cached;
 }

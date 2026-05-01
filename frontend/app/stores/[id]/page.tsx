@@ -28,7 +28,9 @@ export default function StoreDetailPage({ params }: Props) {
   }
 
   const addressLine = store.roadAddress?.trim() || store.address?.trim() || "";
+  const phoneLine = store.phone?.trim();
   const directionsHref = kakaoDestinationOnlyUrl(store);
+  const telHref = phoneLine ? `tel:${phoneLine.replace(/\D/g, "")}` : "";
 
   return (
     <main className="mx-auto max-w-md bg-slate-50 p-4 pb-8">
@@ -43,11 +45,36 @@ export default function StoreDetailPage({ params }: Props) {
         {store.adminVerified ? (
           <div className="mb-2 flex flex-wrap items-center gap-1">
             <img src="/Img/Icon/confirm_24.svg" alt="" width={24} height={24} className="size-6 shrink-0" />
-            <span className="text-xs font-semibold text-emerald-700">판매여부 확인완료</span>
+            <span className="text-base font-semibold leading-normal tracking-[0.1px] text-[#0130b6]">
+              판매여부 확인완료
+            </span>
           </div>
         ) : null}
-        <h2 className="text-xl font-bold">{store.name}</h2>
-        {addressLine ? <p className="mt-2 text-sm text-slate-600">{addressLine}</p> : null}
+        <h2 className="text-xl font-bold leading-normal tracking-[0.1px] text-[#171717]">{store.name}</h2>
+        {addressLine || phoneLine ? (
+          <div className="mt-2 flex flex-col gap-[2px]">
+            {addressLine ? (
+              <div className="flex items-start gap-1">
+                <span className="flex shrink-0 items-start" aria-hidden>
+                  <img
+                    src="/Img/Icon/address_16.svg"
+                    alt=""
+                    width={16}
+                    height={19}
+                    className="h-[19px] w-4 shrink-0"
+                  />
+                </span>
+                <p className="min-w-0 flex-1 text-base font-normal leading-[1.4] text-[#555555]">{addressLine}</p>
+              </div>
+            ) : null}
+            {phoneLine ? (
+              <a href={telHref} className="flex items-center gap-1 outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+                <img src="/Img/Icon/phone_16.png" alt="" width={16} height={16} className="size-4 shrink-0" />
+                <span className="text-base font-normal leading-[1.4] text-[#555555]">{phoneLine}</span>
+              </a>
+            ) : null}
+          </div>
+        ) : null}
         <div className="mt-3">
           <StoreProductChips store={store} />
         </div>

@@ -86,7 +86,7 @@ export default function StoreDetailPageActions({ store, directionsHref, addressL
             href={`/edit-request?storeId=${encodeURIComponent(store.id)}&storeName=${encodeURIComponent(store.name)}&storeAddress=${encodeURIComponent(addressLine)}`}
             className="text-[14px] font-semibold text-[#111111] underline-offset-2 hover:underline"
           >
-            정보 수정 요청
+            정보 수정요청
           </Link>
         </div>
       ) : null}

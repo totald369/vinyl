@@ -9,7 +9,9 @@ const SOURCE_FILES = [
   "stores.sample.json",
   "stores.gunpo.json",
   "stores.goyang.json",
-  "stores.goyang-sticker.json"
+  "stores.goyang-sticker.json",
+  "stores.guro-noncombust.json",
+  "stores.gwanak-noncombust.json"
 ] as const;
 
 type LoadedFile = {

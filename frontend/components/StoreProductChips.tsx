@@ -14,7 +14,7 @@ export function StoreProductChips({ store }: { store: StoreData }) {
       >
         <img src="/Img/Icon/trash_bag_16.svg" alt="" width={16} height={16} className="size-4 shrink-0" />
         <span className="whitespace-nowrap text-[14px] font-medium leading-normal tracking-[0.1px] text-[#356438]">
-          종량제봉투
+          종량제
         </span>
       </div>
     );
@@ -46,7 +46,7 @@ export function StoreProductChips({ store }: { store: StoreData }) {
           <img src="/Img/Icon/sticker_16.svg" alt="" width={16} height={16} className="size-4" />
         </div>
         <span className="whitespace-nowrap text-[14px] font-medium leading-normal tracking-[0.1px] text-[#14a1a1]">
-          폐기물 스티커
+          폐기물스티커
         </span>
       </div>
     );
@@ -54,5 +54,5 @@ export function StoreProductChips({ store }: { store: StoreData }) {
 
   if (chips.length === 0) return null;
 
-  return <div className="flex flex-wrap gap-0.5">{chips}</div>;
+  return <div className="flex flex-wrap gap-[2px]">{chips}</div>;
 }

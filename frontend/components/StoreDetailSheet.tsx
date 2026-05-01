@@ -63,6 +63,8 @@ export default function StoreDetailSheet({
   }, []);
 
   const addressLine = store.roadAddress?.trim() || store.address?.trim() || "";
+  const phoneLine = store.phone?.trim();
+  const telHref = phoneLine ? `tel:${phoneLine.replace(/\D/g, "")}` : "";
 
   const copyAddress = useCallback(async () => {
     if (!addressLine) return;
@@ -187,15 +189,47 @@ export default function StoreDetailSheet({
               </div>
             ) : (
               <>
-                {addressLine ? (
-                  <button
-                    type="button"
-                    onClick={() => void copyAddress()}
-                    className="w-full rounded-lg py-1 text-left text-[16px] font-normal leading-[1.4] tracking-[0.1px] text-[#555555] outline-none transition-colors active:bg-[rgba(23,23,23,0.06)] focus-visible:ring-2 focus-visible:ring-brand-500"
-                    aria-label="Copy address"
-                  >
-                    {addressLine}
-                  </button>
+                {addressLine || phoneLine ? (
+                  <div className="flex flex-col gap-[2px]">
+                    {addressLine ? (
+                      <button
+                        type="button"
+                        onClick={() => void copyAddress()}
+                        className="flex w-full items-start gap-1 rounded-lg py-0 text-left outline-none transition-colors active:bg-[rgba(23,23,23,0.06)] focus-visible:ring-2 focus-visible:ring-brand-500"
+                        aria-label="Copy address"
+                      >
+                        <span className="flex shrink-0 items-start" aria-hidden>
+                          <img
+                            src="/Img/Icon/address_16.svg"
+                            alt=""
+                            width={16}
+                            height={19}
+                            className="h-[19px] w-4 shrink-0"
+                          />
+                        </span>
+                        <span className="min-w-0 flex-1 text-[16px] font-normal leading-[1.4] tracking-[0.1px] text-[#555555]">
+                          {addressLine}
+                        </span>
+                      </button>
+                    ) : null}
+                    {phoneLine ? (
+                      <a
+                        href={telHref}
+                        className="flex w-full items-center gap-1 rounded-lg py-0 outline-none transition-colors active:bg-[rgba(23,23,23,0.06)] focus-visible:ring-2 focus-visible:ring-brand-500"
+                      >
+                        <img
+                          src="/Img/Icon/phone_16.png"
+                          alt=""
+                          width={16}
+                          height={16}
+                          className="size-4 shrink-0"
+                        />
+                        <span className="text-[16px] font-normal leading-[1.4] tracking-[0.1px] text-[#555555]">
+                          {phoneLine}
+                        </span>
+                      </a>
+                    ) : null}
+                  </div>
                 ) : null}
                 <StoreProductChips store={store} />
                 <div className="flex flex-wrap items-center gap-2">
@@ -220,7 +254,7 @@ export default function StoreDetailSheet({
                       href={`/edit-request?storeId=${encodeURIComponent(store.id)}&storeName=${encodeURIComponent(store.name)}&storeAddress=${encodeURIComponent(addressLine)}`}
                       className="text-[14px] font-semibold leading-normal tracking-[0.1px] text-[#111111] outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                     >
-                      정보 수정 요청
+                      정보 수정요청
                     </Link>
                   ) : null}
                 </div>

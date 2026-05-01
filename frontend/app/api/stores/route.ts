@@ -77,10 +77,12 @@ function toListStore(s: StoreData, distanceKm?: number) {
 }
 
 function toDetailStore(s: StoreData, distanceKm?: number) {
+  const phone = s.phone?.trim();
   return {
     ...toListStore(s, distanceKm),
     dataReferenceDate: s.dataReferenceDate,
-    businessStatus: s.businessStatus
+    businessStatus: s.businessStatus,
+    ...(phone ? { phone } : {})
   };
 }
 
