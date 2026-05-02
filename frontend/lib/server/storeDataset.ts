@@ -44,6 +44,15 @@ export function getMergedStores() {
   const busanSasangSpecialRows = readJsonArray<RawStoreRow>("stores.busan-sasang-special.json");
   const busanHaeundaeTrashRows = readJsonArray<RawStoreRow>("stores.busan-haeundae-trash.json");
   const busanYeongdoTrashRows = readJsonArray<RawStoreRow>("stores.busan-yeongdo-trash.json");
+  const gyeonggiGwangjuFindstoreRows = readJsonArray<RawStoreRow>(
+    "stores.gyeonggi-gwangju-findstore.json"
+  );
+  const gwangjuTrashLifeinsightsRows = readJsonArray<RawStoreRow>(
+    "stores.gwangju-trash-lifeinsights.json"
+  );
+  const daeguBukDalTrashRows = readJsonArray<RawStoreRow>(
+    "stores.daegu-buk-dalseo-trash.json"
+  );
 
   cached = mergeStoreSources(
     mainRows,
@@ -65,7 +74,10 @@ export function getMergedStores() {
     busanSasangTrashRows,
     busanSasangSpecialRows,
     busanHaeundaeTrashRows,
-    busanYeongdoTrashRows
+    busanYeongdoTrashRows,
+    gyeonggiGwangjuFindstoreRows,
+    gwangjuTrashLifeinsightsRows,
+    daeguBukDalTrashRows
   );
   return cached;
 }

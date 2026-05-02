@@ -1,300 +1,232 @@
 #!/usr/bin/env python3
 """
-경기도 광주시 findstore.kr 종량제 지도 → stores.sample.json 병합.
+경기도 광주시 종량제 지정판매소 — findstore.kr FindStore_gumc (data.js)
 
-원본: https://findstore.kr/map/FindStore_gumc.html
-데이터: https://findstore.kr/map/js/gumc/data.js (var url = [ ... ])
+원본 URL: https://findstore.kr/map/FindStore_gumc.html
+데이터:     https://findstore.kr/map/js/gumc/data.js
 
-- hasTrashBag: 메뉴에 「소각용」+ 수량(【…】 내 숫자) — 일반 종량제봉투에 해당
-- hasSpecialBag: 「불연성」/「불연성마대」+ 수량 — 불연성 마대
-- hasLargeWasteSticker: 「대형폐기물」+ 수량 — 대형폐기물 스티커
-- 주소는 doaddr/jiaddr 를 경기도 광주시 형태로 정규화, 좌표는 원본 사용
+※ 페이지·주소 표기상 「경기 광주시」이며 광주광역시(광역시)와는 다른 지역입니다.
 
-세 플래그가 모두 False 인 행(메뉴 비어 있음 등)은 기본 제외. --include-all 로 전체 추가 가능.
+플래그(원천 문자열 기준):
+  - 종량제봉투(hasTrashBag): menuList 각 slist 안에 「소각용」「재사용」「음식물」 중 하나와
+    실제 규격/수량 문자(숫자 등)가 있을 때 True
+  - 불연성마대(hasSpecialBag): 「불연성」「불연」 + 수량 패턴
+  - 대형폐기물스티커(hasLargeWasteSticker): 「대형폐기물」「대형폐기」 + 수량 패턴
 
-사용:
-  python3 scripts/import_gyeonggi_gwangju_findstore.py --dry-run
   python3 scripts/import_gyeonggi_gwangju_findstore.py
 """
 
 from __future__ import annotations
 
-import argparse
 import json
+import math
 import re
 import sys
-import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
-DATA_URL = "https://findstore.kr/map/js/gumc/data.js"
 FRONTEND = Path(__file__).resolve().parent.parent
-DEFAULT_MERGE = FRONTEND / "public" / "data" / "stores.sample.json"
-DEFAULT_OUT = FRONTEND / "public" / "data" / "gwangju-gyeonggi-findstore-import.json"
+OUT_JSON = FRONTEND / "public" / "data" / "stores.gyeonggi-gwangju-findstore.json"
+
+DATA_JS_URL = "https://findstore.kr/map/js/gumc/data.js"
+USER_AGENT = "Mozilla/5.0 (compatible; VinylMapImport/1.1)"
 
 
-def norm_store_name(name: str) -> str:
-    return re.sub(r"\s*\(\d+\)\s*$", "", (name or "").strip()).strip()
-
-
-def norm_key(name: str, addr: str) -> str:
-    a = re.sub(r"\s+", " ", (addr or "").strip().lower())
-    return f"{norm_store_name(name).lower()}|{a}"
-
-
-def normalize_gwangju_gg_road(addr: str) -> str:
-    """경기 광주시 → 경기도 광주시 (광주광역시와 구분)."""
-    a = re.sub(r"\s+", " ", (addr or "").replace("\n", " ").strip())
-    if not a:
-        return a
-    if a.startswith("경기도"):
-        return a
-    if a.startswith("경기 "):
-        return "경기도 " + a[3:].lstrip()
-    if a.startswith("경기광주") or a.startswith("경기 광주"):
-        return re.sub(r"^경기\s*", "경기도 ", a, count=1)
-    if re.match(r"^광주시\s", a):
-        return f"경기도 {a}"
-    return f"경기도 광주시 {a}"
-
-
-def _menu_qty(text: str) -> bool:
-    return bool(text and re.search(r"【[^】]*\d", text))
-
-
-def has_trash_from_menu(menu_list: dict | None) -> bool:
-    if not menu_list:
-        return False
-    for t in menu_list.values():
-        t = t or ""
-        if "소각용" in t and _menu_qty(t):
-            return True
-    return False
-
-
-def has_special_from_menu(menu_list: dict | None) -> bool:
-    if not menu_list:
-        return False
-    for t in menu_list.values():
-        t = t or ""
-        if "불연성" in t and _menu_qty(t):
-            return True
-    return False
-
-
-def has_sticker_from_menu(menu_list: dict | None) -> bool:
-    if not menu_list:
-        return False
-    for t in menu_list.values():
-        t = t or ""
-        if "대형폐기물" in t and _menu_qty(t):
-            return True
-    return False
-
-
-def flags_for_record(rec: dict) -> tuple[bool, bool, bool]:
-    m = rec.get("menuList")
-    return (
-        has_trash_from_menu(m),
-        has_special_from_menu(m),
-        has_sticker_from_menu(m),
-    )
+def collapse(s: str) -> str:
+    return re.sub(r"\s+", " ", (s or "").strip())
 
 
 def fetch_data_js(url: str) -> str:
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": "Mozilla/5.0 (compatible; vinyl-data-import/1.0)"},
-    )
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        return resp.read().decode("utf-8", errors="replace")
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        return resp.read().decode("utf-8")
 
 
-def parse_url_array(js_text: str) -> list[dict]:
-    t = js_text.strip()
-    t = re.sub(r"^\s*var\s+url\s*=\s*", "", t, flags=re.I).strip()
-    t = t.rstrip(";").strip()
-    return json.loads(t)
+def parse_js_array(payload: str) -> list:
+    body = collapse(payload.replace("\ufeff", ""))
+    body = re.sub(r"^\s*var\s+url\s*=\s*", "", body, flags=re.I).strip()
+    if body.endswith(";"):
+        body = body[:-1].strip()
+    return json.loads(body)
 
 
-def in_gwangju_gyeonggi_bbox(lat: float, lng: float) -> bool:
-    """경기 광주시 일대(광주광역시와 혼동 방지)."""
-    return 37.25 <= lat <= 37.50 and 127.15 <= lng <= 127.45
-
-
-def merge_into_existing(
-    incoming: list[dict],
-    merge_path: Path,
-) -> tuple[int, int]:
-    with open(merge_path, "r", encoding="utf-8") as f:
-        existing = json.load(f)
-    max_id = 0
-    for e in existing:
-        try:
-            max_id = max(max_id, int(str(e.get("id", "0"))))
-        except ValueError:
-            pass
-    exist_keys = {
-        norm_key(e.get("name", ""), e.get("roadAddress") or e.get("address", ""))
-        for e in existing
-    }
-    added = updated = 0
-    for s in incoming:
-        if s.get("lat") is None or s.get("lng") is None:
+def ml_lines(menu_list: dict) -> list[tuple[str, str]]:
+    if not menu_list:
+        return []
+    out: list[tuple[str, str]] = []
+    for k in sorted(menu_list.keys(), key=lambda x: (len(x), x)):
+        if not str(k).startswith("slist"):
             continue
-        if not in_gwangju_gyeonggi_bbox(float(s["lat"]), float(s["lng"])):
+        v = collapse(str(menu_list.get(k) or ""))
+        if v:
+            out.append((k, v))
+    return out
+
+
+def line_has_stock(text: str) -> bool:
+    t = collapse(text)
+    if len(t) < 3:
+        return False
+    return bool(re.search(r"\d", t))
+
+
+def classify_flags(menu_list: dict) -> tuple[bool, bool, bool]:
+    """
+    (hasTrashBag, hasSpecialBag, hasLargeWasteSticker)
+    종량제: 소각용·재사용·음식물 (사용자 요청에 맞춰 소각+재사용 핵심, 음식물은 동일 포털 종량제군으로 포함)
+    """
+    has_trash = has_special = has_sticker = False
+    for _k, line in ml_lines(menu_list):
+        if not line_has_stock(line):
             continue
-        k0 = norm_key(s["name"], s["roadAddress"])
-        if k0 in exist_keys:
-            for e in existing:
-                if norm_key(e.get("name", ""), e.get("roadAddress") or e.get("address", "")) != k0:
-                    continue
-                ch = False
-                if s.get("hasSpecialBag") and not e.get("hasSpecialBag"):
-                    e["hasSpecialBag"] = True
-                    ch = True
-                if s.get("hasTrashBag") and not e.get("hasTrashBag"):
-                    e["hasTrashBag"] = True
-                    ch = True
-                if s.get("hasLargeWasteSticker") and not e.get("hasLargeWasteSticker"):
-                    e["hasLargeWasteSticker"] = True
-                    ch = True
-                if s.get("dataReferenceDate"):
-                    od = e.get("dataReferenceDate") or ""
-                    nd = s["dataReferenceDate"]
-                    if (not od or nd > od) and nd != od:
-                        e["dataReferenceDate"] = nd
-                        ch = True
-                if ch:
-                    updated += 1
-                break
-            continue
-        max_id += 1
-        exist_keys.add(k0)
-        rec = {
-            "id": str(max_id),
-            "name": s["name"],
-            "lat": s["lat"],
-            "lng": s["lng"],
-            "roadAddress": s["roadAddress"],
-            "address": s.get("address") or s["roadAddress"],
-            "businessStatus": "영업",
-            "hasTrashBag": bool(s.get("hasTrashBag")),
-            "hasSpecialBag": bool(s.get("hasSpecialBag")),
-            "hasLargeWasteSticker": bool(s.get("hasLargeWasteSticker")),
-            "adminVerified": False,
-        }
-        if s.get("dataReferenceDate"):
-            rec["dataReferenceDate"] = s["dataReferenceDate"]
-        existing.append(rec)
-        added += 1
-    merge_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(merge_path, "w", encoding="utf-8") as f:
-        json.dump(existing, f, ensure_ascii=False, indent=2)
-    return added, updated
+        if "소각용" in line or "재사용" in line or "음식물" in line:
+            has_trash = True
+        if "대형폐기물" in line or "대형폐기" in line:
+            has_sticker = True
+        if ("불연성" in line or "불연" in line) and (
+            "마대" in line or "리터" in line or "매" in line
+        ):
+            has_special = True
+    return has_trash, has_special, has_sticker
+
+
+def fmt_phone(raw: object) -> str:
+    if raw is None:
+        return ""
+    s = collapse(str(raw))
+    if not s:
+        return ""
+    if re.match(r"^031-\d{3,4}-\d{4}$", s):
+        return s
+    digits = re.sub(r"\D", "", s)
+    if digits.startswith("031") and len(digits) == 10:
+        return f"031-{digits[3:7]}-{digits[7:]}"
+    if digits.startswith("031") and len(digits) == 11:
+        return f"031-{digits[3:6]}-{digits[6:]}"
+    if len(digits) == 8 and digits.startswith("031"):
+        return f"031-{digits[3:]}"
+    return s
+
+
+def iso_date_maybe(s: str) -> str:
+    """last 필드 yyyy-mm-dd"""
+    s = collapse(s)
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", s):
+        return s
+    return ""
+
+
+def to_latlng(v: object) -> float | None:
+    try:
+        f = float(v)
+        return f if math.isfinite(f) else None
+    except (TypeError, ValueError):
+        return None
+
+
+GWANGJU_ADDR = re.compile(r"(경기도|경기)\s+광주시")
+
+
+def ensure_road(addr: str) -> str:
+    s = collapse(addr)
+    if s.startswith("경기 광주"):
+        s = "경기도 " + s[len("경기 ") :]
+    elif s.startswith("경기도 광주"):
+        pass
+    return s
+
+
+def in_gwangju_si(doaddr: str, jiaddr: str) -> bool:
+    """맵 번들에 타 시·구 분점이 포함될 수 있어 행정구역으로 제한."""
+    for blk in (doaddr, jiaddr):
+        if blk and GWANGJU_ADDR.search(blk):
+            return True
+    return False
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="경기 광주시 findstore → StoreData 병합")
-    ap.add_argument("--url", default=DATA_URL)
-    ap.add_argument("--merge-into", type=Path, default=DEFAULT_MERGE)
-    ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    ap.add_argument(
-        "--include-all",
-        action="store_true",
-        help="소각/불연/대형 스티커 미판별 행도 추가",
+    print(f"다운로드 {DATA_JS_URL}", file=sys.stderr)
+    raw = fetch_data_js(DATA_JS_URL)
+    rows = parse_js_array(raw)
+    print(f"파싱 {len(rows)}건", file=sys.stderr)
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    stores: list[dict] = []
+
+    sorted_rows = sorted(
+        rows,
+        key=lambda r: (
+            r.get("lat") or 0,
+            r.get("lng") or 0,
+            collapse(str(r.get("jiaddr") or "")),
+            collapse(str(r.get("sname") or "")),
+        ),
     )
-    ap.add_argument("--dry-run", action="store_true")
-    args = ap.parse_args()
 
-    print(f"다운로드: {args.url}", file=sys.stderr)
-    try:
-        raw = fetch_data_js(str(args.url))
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as e:
-        print(f"다운로드 실패: {e}", file=sys.stderr)
-        raise SystemExit(1)
-
-    try:
-        rows_raw = parse_url_array(raw)
-    except json.JSONDecodeError as e:
-        print(f"JSON 파싱 실패: {e}", file=sys.stderr)
-        raise SystemExit(1)
-
-    built: list[dict] = []
-    for rec in rows_raw:
-        name = (rec.get("sname") or "").strip()
-        road_raw = (rec.get("doaddr") or "").strip()
-        road = normalize_gwangju_gg_road(road_raw)
-        ji = (rec.get("jiaddr") or "").strip()
-        lat, lng = rec.get("lat"), rec.get("lng")
-        try:
-            lat_f = float(lat) if lat is not None else None
-            lng_f = float(lng) if lng is not None else None
-        except (TypeError, ValueError):
-            lat_f = lng_f = None
-        if not name or not road or lat_f is None or lng_f is None:
+    skipped_oob = 0
+    kept_no = 0
+    for r in sorted_rows:
+        lat = to_latlng(r.get("lat"))
+        lng = to_latlng(r.get("lng"))
+        name = collapse(str(r.get("sname") or ""))
+        raw_do = str(r.get("doaddr") or "")
+        raw_ji = str(r.get("jiaddr") or "")
+        if not in_gwangju_si(raw_do, raw_ji):
+            skipped_oob += 1
             continue
-        ht, hs, hk = flags_for_record(rec)
-        if not args.include_all and not (ht or hs or hk):
+        road = ensure_road(raw_do)
+        if not road:
+            road = ensure_road(raw_ji)
+        if lat is None or lng is None or not name:
             continue
-        last = (rec.get("last") or "").strip()
-        ref = last if re.match(r"^\d{4}-\d{2}-\d{2}$", last) else None
-        ji_norm = normalize_gwangju_gg_road(ji) if ji else road
-        built.append(
-            {
-                "name": name,
-                "roadAddress": road,
-                "address": ji_norm,
-                "lat": lat_f,
-                "lng": lng_f,
-                "hasTrashBag": ht,
-                "hasSpecialBag": hs,
-                "hasLargeWasteSticker": hk,
-                "dataReferenceDate": ref,
-            }
-        )
+
+        kept_no += 1
+        menu = r.get("menuList") if isinstance(r.get("menuList"), dict) else {}
+        ht, hs, hst = classify_flags(menu)
+        oid = f"gyeonggi-gwangju-findstore-{kept_no:04d}"
+
+        ref = iso_date_maybe(str(r.get("last") or "")) or today
+
+        obj: dict = {
+            "id": oid,
+            "name": name,
+            "lat": lat,
+            "lng": lng,
+            "roadAddress": road,
+            "address": road,
+            "businessStatus": "영업",
+            "hasTrashBag": ht,
+            "hasSpecialBag": hs,
+            "hasLargeWasteSticker": hst,
+            "adminVerified": False,
+            "dataReferenceDate": ref,
+            "sourceVendor": "findstore.kr/map/FindStore_gumc",
+        }
+        ph = fmt_phone(r.get("tel"))
+        if ph:
+            obj["phone"] = ph
+
+        gs = collapse(str(r.get("gsale") or ""))
+        if gs.isdigit():
+            obj["vendorStoreCode"] = gs
+
+        stores.append(obj)
 
     print(
-        f"원본 {len(rows_raw)}건 → 병합 후보 {len(built)}건 (include_all={args.include_all})",
+        "플래그 요약 종량제/불연/스티커 "
+        f"{sum(1 for s in stores if s['hasTrashBag'])}/"
+        f"{sum(1 for s in stores if s['hasSpecialBag'])}/"
+        f"{sum(1 for s in stores if s['hasLargeWasteSticker'])}"
+        + (f" · 경기 광주시 외 행 제외 {skipped_oob}건" if skipped_oob else ""),
         file=sys.stderr,
     )
-    if args.dry_run:
-        t = sum(1 for x in built if x["hasTrashBag"])
-        sp = sum(1 for x in built if x["hasSpecialBag"])
-        st = sum(1 for x in built if x["hasLargeWasteSticker"])
-        print(f"  소각용(일반) {t}, 불연성마대 {sp}, 대형폐기물스티커 {st}", file=sys.stderr)
-        for x in built[:12]:
-            fl = []
-            if x["hasTrashBag"]:
-                fl.append("소각")
-            if x["hasSpecialBag"]:
-                fl.append("마대")
-            if x["hasLargeWasteSticker"]:
-                fl.append("스티커")
-            print(f"  [{'/'.join(fl)}] {x['name']} | {x['roadAddress']}")
-        if len(built) > 12:
-            print(f"  … 외 {len(built) - 12}건")
-        return
 
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    with open(args.out, "w", encoding="utf-8") as f:
-        json.dump(
-            [
-                {
-                    **x,
-                    "businessStatus": "영업",
-                    "adminVerified": False,
-                }
-                for x in built
-            ],
-            f,
-            ensure_ascii=False,
-            indent=2,
-        )
-    print(f"저장: {args.out} ({len(built)}건)")
-
-    added, updated = merge_into_existing(built, args.merge_into.expanduser().resolve())
-    print(f"병합: 신규 {added}건, 기존 갱신 {updated}건 → {args.merge_into}")
+    OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
+    with open(OUT_JSON, "w", encoding="utf-8") as f:
+        json.dump(stores, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+    print(f"저장: {OUT_JSON} ({len(stores)}건)", file=sys.stderr)
 
 
 if __name__ == "__main__":
