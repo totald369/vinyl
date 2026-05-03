@@ -165,29 +165,6 @@ export default function RegionPickerClient() {
             );
           })}
         </div>
-        <p className="mt-2 text-[12px] leading-[1.55] text-[#666666]">
-          검색 안내:{" "}
-          <Link
-            href={"/seo/강남-종량제봉투" as Route}
-            className="font-medium text-[#171717] underline underline-offset-2"
-          >
-            강남 종량제 봉투
-          </Link>
-          {" · "}
-          <Link
-            href={"/seo/덕양구-불연성마대" as Route}
-            className="font-medium text-[#171717] underline underline-offset-2"
-          >
-            덕양구 불연성마대
-          </Link>
-          {" · "}
-          <Link
-            href={"/seo/마포구-폐기물스티커" as Route}
-            className="font-medium text-[#171717] underline underline-offset-2"
-          >
-            마포 폐기물 스티커
-          </Link>
-        </p>
       </div>
 
       <div className="flex min-h-0 flex-1 divide-x divide-[#f1f1f1]">
