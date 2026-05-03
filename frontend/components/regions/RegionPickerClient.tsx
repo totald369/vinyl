@@ -170,7 +170,7 @@ export default function RegionPickerClient() {
       <div className="flex min-h-0 flex-1 divide-x divide-[#f1f1f1]">
         <nav
           aria-label="시·도"
-          className="w-[120px] shrink-0 overflow-y-auto bg-[#f7f7f7]"
+          className="w-[120px] shrink-0 overflow-y-auto bg-[#f7f7f7] [-ms-overflow-style:none] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
         >
           {PROVINCES_ORDERED.map((p) => {
             const sel = p.slug === provinceSlug;

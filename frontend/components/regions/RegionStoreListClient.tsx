@@ -470,17 +470,22 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
           </span>
         </div>
       </div>
+    </>
+  );
+
+  const listStatsSlot = (
+    <div className="shrink-0 pb-2 pt-4">
       {!loading ? (
-        <p className="pl-2 pt-4 text-[14px] tracking-[0.1px] text-black">
+        <p className="pl-2 text-[14px] tracking-[0.1px] text-black">
           <span className="font-normal">총 </span>
           <span className="font-bold tabular-nums">{total}</span>
           <span className="font-normal">건</span>
         </p>
       ) : (
-        <p className="pl-2 pt-4 text-[14px] font-normal text-[#999]">불러오는 중…</p>
+        <p className="pl-2 text-[14px] font-normal text-[#999]">불러오는 중…</p>
       )}
-      {errorMsg ? <p className="pt-2 text-[13px] text-danger-700">{errorMsg}</p> : null}
-    </>
+      {errorMsg ? <p className="pl-2 pt-2 text-[13px] text-danger-700">{errorMsg}</p> : null}
+    </div>
   );
 
   useEffect(() => {
@@ -621,6 +626,7 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
                     aria-label="지역 판매처 목록"
                     className="scrollbar-map-list mt-2 min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-0 pb-[env(safe-area-inset-bottom,0px)]"
                   >
+                    {listStatsSlot}
                     {loading && stores.length === 0 ? (
                       Array.from({ length: 4 }, (_, i) => (
                         <div key={`sk-${i}`} className="px-2 py-4" aria-hidden>
