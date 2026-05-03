@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { DISTRICT_TRASHBAG_PAGES } from "@/lib/districtTrashbagSeo";
 import { enumerateRegionLeafPathnames } from "@/lib/koreaRegions";
+import { SEO_KEYWORD_LANDING_PAGES, seoKeywordLandingPublicPath } from "@/lib/seoKeywordLandings";
 import { SITE_URL } from "@/lib/site";
 import { getMergedStores } from "@/lib/server/storeDataset";
 import { sliceStoresStableForSeo } from "@/lib/seoStoreSlice";
@@ -36,6 +37,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 0.88
     },
+    ...SEO_KEYWORD_LANDING_PAGES.map((p) => ({
+      url: `${SITE_URL}${seoKeywordLandingPublicPath(p.slug)}`,
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.72
+    })),
     ...enumerateRegionLeafPathnames().map((pathname) => ({
       url: `${SITE_URL}${pathname}`,
       lastModified: now,

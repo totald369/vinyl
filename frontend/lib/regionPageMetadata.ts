@@ -23,14 +23,14 @@ export function regionCategoryKo(cat: RegionSeoCategory): string {
 
 export function buildRegionStoreMetadata(opts: {
   headingLabelKo: string;
-  category: RegionSeoCategory;
   pathname: string;
+  /** 카테고리 필터(UI·분석용). 고정 SERP 패턴에서는 제목 생성에 사용하지 않습니다. */
+  category?: RegionSeoCategory;
 }): Metadata {
-  const catKo = regionCategoryKo(opts.category);
-  const title = `${opts.headingLabelKo} ${catKo} 판매처 | ${SITE_BRAND_KO}`;
-  const description = `${opts.headingLabelKo}에서 종량제 봉투, 불연성마대, 대형폐기물 스티커 판매처를 확인하세요.`;
+  const title = `${opts.headingLabelKo} 종량제 봉투 판매처 | ${SITE_BRAND_KO}`;
+  const description = `${opts.headingLabelKo}에서 종량제 봉투, 불연성마대, 폐기물 스티커 판매처를 확인하세요.`;
   const url = `https://${SITE_CANONICAL_HOST}${opts.pathname}`;
-  const ogTitle = `${opts.headingLabelKo} ${catKo} 판매처 | ${SITE_BRAND_KO}`;
+  const ogTitle = title;
 
   return {
     title,

@@ -15,6 +15,11 @@ import { useUserLocation } from "@/hooks/useUserLocation";
 import { trackRegionEvent } from "@/lib/analytics";
 import type { ResolvedRegionLeaf } from "@/lib/koreaRegions";
 import { leafToRegionPath } from "@/lib/koreaRegions";
+import {
+  sampleSeoLandingsExclusiveOf,
+  seoKeywordLandingPublicPath,
+  seoLandingsSharingRegion
+} from "@/lib/seoKeywordLandings";
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
 import { sendGtagEvent } from "@/lib/gtag";
 import { prefetchStoreDetail } from "@/lib/storeDetailClient";
@@ -100,6 +105,10 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
 
   const regionPath = useMemo(() => leafToRegionPath(leaf), [leaf]);
   const pickerInitial = encodeURIComponent(regionPath);
+  const inlineSeoLandings = useMemo(() => {
+    const mine = seoLandingsSharingRegion(leaf);
+    return mine.length ? mine.slice(0, 4) : sampleSeoLandingsExclusiveOf(undefined).slice(0, 4);
+  }, [leaf]);
 
   const [category, setCategory] = useState<RegionSeoCategory>(() =>
     parseRegionCategoryParam(searchParams.get("filter") ?? undefined)
@@ -673,6 +682,29 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
                         ) : null}
                       </>
                     )}
+                    {!loading && inlineSeoLandings.length ? (
+                      <aside
+                        className="mx-2 mb-[calc(12px+env(safe-area-inset-bottom,0px))] mt-4 rounded-[10px] border border-[#eee] bg-[#fafafa] px-3 py-4"
+                        aria-label="검색 안내 문서"
+                      >
+                        <p className="text-[13px] font-semibold leading-snug text-[#171717]">
+                          이 지역 관련 안내
+                        </p>
+                        <ul className="mt-2 space-y-2 text-[13px] leading-[1.45] text-[#454545]">
+                          {inlineSeoLandings.map((item) => (
+                            <li key={item.slug}>
+                              <Link
+                                href={seoKeywordLandingPublicPath(item.slug) as Route}
+                                prefetch={false}
+                                className="underline decoration-[#ccc] underline-offset-2 hover:text-[#171717]"
+                              >
+                                {item.headline}
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      </aside>
+                    ) : null}
                   </div>
                 </div>
                 {SHOW_HOME_REPORT_BUTTON && !(!loading && !errorMsg && total === 0) ? (
