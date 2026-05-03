@@ -618,7 +618,7 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
                     <img src="/Img/Icon/close_32.svg" alt="" width={32} height={32} />
                   </Link>
                 </header>
-                <div className="flex min-h-0 flex-1 flex-col px-4 pt-6">
+                <div className="flex min-h-0 flex-1 flex-col px-4 pt-[4px]">
                   <div className="shrink-0">{filterRowReplacement}</div>
                   <div
                     ref={listScrollRef}
