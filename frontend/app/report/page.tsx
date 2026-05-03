@@ -288,7 +288,6 @@ export default function ReportPage() {
             {submitting ? "제출 중..." : "제보하기"}
           </button>
         </div>
-        <p className="px-4 pb-1 text-center text-[12px] text-[#999999]">{SITE_BRAND_KO}</p>
         <div className="h-[33px] w-full bg-white pb-[env(safe-area-inset-bottom,0px)]">
           <div className="relative mx-auto h-full w-[135px]">
             <span className="absolute bottom-2 left-1/2 h-[5px] w-[135px] -translate-x-1/2 rounded-[100px] bg-[#222222]" />

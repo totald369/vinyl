@@ -31,8 +31,6 @@ export default function ReportSuccessPage() {
         </Link>
       </div>
 
-      <p className="pb-1 text-center text-[12px] text-[#999999]">{SITE_BRAND_KO}</p>
-
       <div className="h-[33px] w-full shrink-0 bg-white pb-[env(safe-area-inset-bottom,0px)]">
         <div className="relative mx-auto h-full w-[135px]">
           <span className="absolute bottom-2 left-1/2 h-[5px] w-[135px] -translate-x-1/2 rounded-[100px] bg-[#222222]" />
