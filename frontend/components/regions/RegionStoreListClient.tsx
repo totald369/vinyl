@@ -617,7 +617,7 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
                   <div className="shrink-0">{filterRowReplacement}</div>
                   <div
                     ref={listScrollRef}
-                    role="list"
+                    role="region"
                     aria-label="지역 판매처 목록"
                     className="scrollbar-map-list mt-2 min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-0 pb-[env(safe-area-inset-bottom,0px)]"
                   >

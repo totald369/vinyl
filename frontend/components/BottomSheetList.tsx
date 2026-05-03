@@ -126,7 +126,7 @@ function BottomSheetStoreRow({
 }: StoreSheetVirtualRowProps) {
   return (
     <Fragment>
-      <li
+      <div
         role="button"
         tabIndex={0}
         aria-current={selected ? "true" : undefined}
@@ -176,7 +176,7 @@ function BottomSheetStoreRow({
           </div>
           <StoreProductChips store={store} />
         </div>
-      </li>
+      </div>
       {index < total - 1 ? (
         <div className="h-px w-full shrink-0 bg-[#f5f5f5]" aria-hidden />
       ) : null}
@@ -739,7 +739,7 @@ function BottomSheetListInner({
 
         <div
           ref={listScrollRef}
-          role="list"
+          role="region"
           aria-label="주변 판매처 목록"
           onScroll={handleListScroll}
           onPointerDown={onListPointerDown}
