@@ -1,7 +1,8 @@
 import type { NextRequest } from "next/server";
 
 const WINDOW_MS = 60_000;
-const MAX_REQUESTS = 30;
+/** 단일 사용자 세션에서 목록·검색·디테일·프리패치가 겹치면 초과하기 쉬움 → 완만히 상향 */
+const MAX_REQUESTS = 120;
 
 /** IP별 슬라이딩 윈도 카운터 (서버리스 인스턴스마다 독립 — 난이도 상승용) */
 const rateBuckets = new Map<string, { t: number; n: number }>();

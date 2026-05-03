@@ -16,7 +16,8 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState
+  useState,
+  type ReactNode
 } from "react";
 import { StoreProductChips } from "@/components/StoreProductChips";
 import { StoreData, StoreListFilter } from "@/hooks/useStores";
@@ -44,6 +45,18 @@ type Props = {
   /** 목록 API 로딩 중(빈 목록일 때 스켈레톤으로 높이 유지) */
   listLoading?: boolean;
   onPrefetchStore?: (store: StoreData) => void;
+  /** 있으면 기본 카테고리 칩 행 대신 렌더 (지역 페이지 등) */
+  filterRowReplacement?: ReactNode;
+  /** 목록 영역 빈 상태 기본 문구 대신 */
+  emptyListSlot?: ReactNode;
+  /** 스크롤 목록 하단 보조 슬롯 */
+  listFooterSlot?: ReactNode;
+  /** 시트 목록 바닥 sentinel으로 추가 로드 (지역 무한 스크롤 등) */
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
+  /** `filterRowReplacement` 래퍼 패딩·클래스 (기본 `px-4 pb-4`) */
+  filterReplacementPaddingClassName?: string;
 };
 
 /** 접힘 상태에서 화면에 보이는 시트 높이 ≈ 뷰포트 높이의 비율 */
@@ -94,7 +107,7 @@ const SNAP_ORDER: BottomSheetSnap[] = ["expanded", "collapsed"];
 /** 가상 행 추정 높이(px): 실제 카드 높이에 근사, measureElement 미사용 시 스크롤바 보정 목적 */
 const EST_ROW_PX = 124;
 
-type StoreRowProps = {
+export type StoreSheetVirtualRowProps = {
   store: StoreData;
   selected: boolean;
   index: number;
@@ -110,14 +123,14 @@ function BottomSheetStoreRow({
   total,
   onSelectStore,
   onPrefetchStore
-}: StoreRowProps) {
+}: StoreSheetVirtualRowProps) {
   return (
     <Fragment>
       <li
         role="button"
         tabIndex={0}
         aria-current={selected ? "true" : undefined}
-        className="cursor-pointer rounded-[8px] bg-transparent px-4 py-4 transition-colors hover:bg-[#eff3f4] active:bg-[#eff3f4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+        className="cursor-pointer rounded-[8px] bg-transparent px-4 py-4 outline-none transition-colors hover:bg-neutral-50/80 active:bg-neutral-50/80 focus-visible:ring-2 focus-visible:ring-brand-500"
         onClick={() => onSelectStore(store)}
         onPointerEnter={() => onPrefetchStore?.(store)}
         onTouchStart={() => onPrefetchStore?.(store)}
@@ -130,17 +143,17 @@ function BottomSheetStoreRow({
       >
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-0.5">
-              <p className="text-[18px] font-semibold leading-normal tracking-[0.1px] text-[#171717]">
+            <div className="flex min-w-0 items-center gap-0.5">
+              <p className="min-w-0 text-[16px] font-semibold leading-normal tracking-[0.1px] text-[#171717]">
                 {store.name}
               </p>
               {store.adminVerified ? (
                 <img
                   src="/Img/Icon/confirm_24.svg"
                   alt="판매여부 확인완료"
-                  width={20}
-                  height={20}
-                  className="size-5 shrink-0"
+                  width={16}
+                  height={16}
+                  className="size-4 shrink-0"
                 />
               ) : null}
             </div>
@@ -171,7 +184,7 @@ function BottomSheetStoreRow({
   );
 }
 
-const BottomSheetStoreRowOptimized = memo(
+export const StoreSheetVirtualRow = memo(
   BottomSheetStoreRow,
   (prev, next) =>
     prev.store.id === next.store.id &&
@@ -198,8 +211,16 @@ function BottomSheetListInner({
   onSnapChange,
   onDragActiveChange,
   listLoading = false,
-  onPrefetchStore
+  onPrefetchStore,
+  filterRowReplacement,
+  emptyListSlot,
+  listFooterSlot,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
+  filterReplacementPaddingClassName
 }: Props) {
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const scrollHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [listScrolling, setListScrolling] = useState(false);
   const suppressListClickRef = useRef(false);
@@ -607,6 +628,23 @@ function BottomSheetListInner({
     rowVirtualizer.scrollToIndex(ix, { align: "center" });
   }, [selectedStoreId, stores, rowVirtualizer]);
 
+  useEffect(() => {
+    const root = listScrollRef.current;
+    const sentinel = loadMoreSentinelRef.current;
+    if (!root || !sentinel || !listScrollEnabled || !onLoadMore || !hasMore || loadingMore) {
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        const hit = entries.some((e) => e.isIntersecting);
+        if (hit) onLoadMore();
+      },
+      { root, rootMargin: "120px", threshold: 0 }
+    );
+    io.observe(sentinel);
+    return () => io.disconnect();
+  }, [listScrollEnabled, onLoadMore, hasMore, loadingMore, stores.length, snap]);
+
   const handleLabel =
     snap === "expanded" ? "목록 · 아래로 내려 접기" : "목록 · 위로 올려 펼치기";
 
@@ -643,53 +681,61 @@ function BottomSheetListInner({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="flex shrink-0 items-center gap-1 overflow-x-auto px-4 pb-4">
-          <button
-            type="button"
-            onClick={() => onChangeFilter("payBag")}
-            className={`flex shrink-0 items-center gap-0.5 rounded-[8px] py-2 pl-2 pr-3 text-[14px] font-semibold leading-normal tracking-[0.1px] ${
-              activeFilter === "payBag"
-                ? "border-0 bg-[#171717] text-white"
-                : "border border-[#EEEEEE] bg-white text-[#333333]"
-            }`}
+        {filterRowReplacement ? (
+          <div
+            className={`shrink-0 overflow-visible ${filterReplacementPaddingClassName ?? "px-4 pb-4"}`}
           >
-            <img src="/Img/Icon/trash_bag_24.svg" alt="" width={24} height={24} className="h-6 w-6 shrink-0" />
-            <span className="whitespace-nowrap">종량제봉투</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onChangeFilter("nonBurnable")}
-            className={`flex shrink-0 items-center gap-0.5 rounded-[8px] py-2 pl-2 pr-3 text-[14px] font-semibold leading-normal tracking-[0.1px] ${
-              activeFilter === "nonBurnable"
-                ? "border-0 bg-[#171717] text-white"
-                : "border border-[#EEEEEE] bg-white text-[#333333]"
-            }`}
-          >
-            <img src="/Img/Icon/non-fire_24.svg" alt="" width={24} height={24} className="h-6 w-6 shrink-0" />
-            <span className="flex flex-col items-start gap-0 leading-[1.15]">
-              <span className="whitespace-nowrap">불연성마대</span>
-              <span
-                className={`whitespace-nowrap text-[11px] font-medium ${
-                  activeFilter === "nonBurnable" ? "text-white/85" : "text-[#555555]"
-                }`}
-              >
-                PP마대(건설마대)
+            {filterRowReplacement}
+          </div>
+        ) : (
+          <div className="flex shrink-0 items-center gap-1 overflow-x-auto px-4 pb-4">
+            <button
+              type="button"
+              onClick={() => onChangeFilter("payBag")}
+              className={`flex shrink-0 items-center gap-0.5 rounded-[8px] py-2 pl-2 pr-3 text-[14px] font-semibold leading-normal tracking-[0.1px] ${
+                activeFilter === "payBag"
+                  ? "border-0 bg-[#171717] text-white"
+                  : "border border-[#EEEEEE] bg-white text-[#333333]"
+              }`}
+            >
+              <img src="/Img/Icon/trash_bag_24.svg" alt="" width={24} height={24} className="h-6 w-6 shrink-0" />
+              <span className="whitespace-nowrap">종량제봉투</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeFilter("nonBurnable")}
+              className={`flex shrink-0 items-center gap-0.5 rounded-[8px] py-2 pl-2 pr-3 text-[14px] font-semibold leading-normal tracking-[0.1px] ${
+                activeFilter === "nonBurnable"
+                  ? "border-0 bg-[#171717] text-white"
+                  : "border border-[#EEEEEE] bg-white text-[#333333]"
+              }`}
+            >
+              <img src="/Img/Icon/non-fire_24.svg" alt="" width={24} height={24} className="h-6 w-6 shrink-0" />
+              <span className="flex flex-col items-start gap-0 leading-[1.15]">
+                <span className="whitespace-nowrap">불연성마대</span>
+                <span
+                  className={`whitespace-nowrap text-[11px] font-medium ${
+                    activeFilter === "nonBurnable" ? "text-white/85" : "text-[#555555]"
+                  }`}
+                >
+                  PP마대(건설마대)
+                </span>
               </span>
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onChangeFilter("largeSticker")}
-            className={`flex shrink-0 items-center gap-0.5 rounded-[8px] py-2 pl-2 pr-3 text-[14px] font-semibold leading-normal tracking-[0.1px] ${
-              activeFilter === "largeSticker"
-                ? "border-0 bg-[#171717] text-white"
-                : "border border-[#EEEEEE] bg-white text-[#333333]"
-            }`}
-          >
-            <img src="/Img/Icon/sticker_24.svg" alt="" width={24} height={24} className="h-6 w-6 shrink-0" />
-            <span className="whitespace-nowrap">폐기물 스티커</span>
-          </button>
-        </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeFilter("largeSticker")}
+              className={`flex shrink-0 items-center gap-0.5 rounded-[8px] py-2 pl-2 pr-3 text-[14px] font-semibold leading-normal tracking-[0.1px] ${
+                activeFilter === "largeSticker"
+                  ? "border-0 bg-[#171717] text-white"
+                  : "border border-[#EEEEEE] bg-white text-[#333333]"
+              }`}
+            >
+              <img src="/Img/Icon/sticker_24.svg" alt="" width={24} height={24} className="h-6 w-6 shrink-0" />
+              <span className="whitespace-nowrap">폐기물 스티커</span>
+            </button>
+          </div>
+        )}
 
         <div
           ref={listScrollRef}
@@ -711,37 +757,52 @@ function BottomSheetListInner({
             Array.from({ length: 3 }, (_, i) => (
               <div key={`list-skel-${i}`} className="px-4 py-4" aria-hidden>
                 <div className="flex flex-col gap-3">
-                  <div className="h-[18px] w-[72%] animate-pulse rounded-[6px] bg-neutral-200" />
+                  <div className="h-4 w-[72%] animate-pulse rounded-[6px] bg-neutral-200" />
                   <div className="h-[14px] w-[48%] animate-pulse rounded-[6px] bg-neutral-100" />
                 </div>
               </div>
             ))
           ) : stores.length === 0 ? (
-            <div className="min-h-[120px] px-4 py-6 text-center text-[14px] leading-normal tracking-[0.1px] text-[#999999]">
-              주변에 표시할 판매처가 없습니다.
-            </div>
+            emptyListSlot ? (
+              <div className="min-h-0 flex-1">{emptyListSlot}</div>
+            ) : (
+              <div className="min-h-[120px] px-4 py-6 text-center text-[14px] leading-normal tracking-[0.1px] text-[#999999]">
+                주변에 표시할 판매처가 없습니다.
+              </div>
+            )
           ) : (
-            <div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
-              {rowVirtualizer.getVirtualItems().map((vi) => {
-                const store = stores[vi.index];
-                return (
-                  <div
-                    key={vi.key}
-                    className="absolute left-0 top-0 w-full"
-                    style={{ transform: `translateY(${vi.start}px)` }}
-                  >
-                    <BottomSheetStoreRowOptimized
-                      store={store}
-                      selected={selectedStoreId === store.id}
-                      index={vi.index}
-                      total={stores.length}
-                      onSelectStore={onSelectStore}
-                      onPrefetchStore={onPrefetchStore}
-                    />
-                  </div>
-                );
-              })}
-            </div>
+            <>
+              <div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
+                {rowVirtualizer.getVirtualItems().map((vi) => {
+                  const store = stores[vi.index];
+                  return (
+                    <div
+                      key={vi.key}
+                      className="absolute left-0 top-0 w-full"
+                      style={{ transform: `translateY(${vi.start}px)` }}
+                    >
+                      <StoreSheetVirtualRow
+                        store={store}
+                        selected={selectedStoreId === store.id}
+                        index={vi.index}
+                        total={stores.length}
+                        onSelectStore={onSelectStore}
+                        onPrefetchStore={onPrefetchStore}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              {onLoadMore && hasMore ? (
+                <div ref={loadMoreSentinelRef} className="h-px w-full shrink-0" aria-hidden />
+              ) : null}
+              {loadingMore ? (
+                <div className="flex justify-center py-4" role="status" aria-busy="true">
+                  <span className="text-[13px] tracking-[0.1px] text-[#999999]">불러오는 중…</span>
+                </div>
+              ) : null}
+              {listFooterSlot ?? null}
+            </>
           )}
         </div>
       </div>
@@ -752,3 +813,6 @@ function BottomSheetListInner({
 export default memo(BottomSheetListInner);
 
 export type { BottomSheetSnap };
+
+/** 가상 스크롤 행 추정 높이 — 지역 풀스크린 목록 등에서 `useVirtualizer`와 동일 값 사용 */
+export const STORE_SHEET_VIRTUAL_ROW_EST_PX = EST_ROW_PX;

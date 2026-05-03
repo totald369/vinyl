@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { DISTRICT_TRASHBAG_PAGES } from "@/lib/districtTrashbagSeo";
+import { enumerateRegionLeafPathnames } from "@/lib/koreaRegions";
 import { SITE_URL } from "@/lib/site";
 import { getMergedStores } from "@/lib/server/storeDataset";
 import { sliceStoresStableForSeo } from "@/lib/seoStoreSlice";
@@ -29,6 +30,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 0.85
     },
+    {
+      url: `${SITE_URL}/regions`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.88
+    },
+    ...enumerateRegionLeafPathnames().map((pathname) => ({
+      url: `${SITE_URL}${pathname}`,
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.65
+    })),
     {
       url: `${SITE_URL}/gangnam`,
       lastModified: now,

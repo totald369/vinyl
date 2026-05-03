@@ -21,6 +21,7 @@ import {
   checkUserAgent,
   getClientIp
 } from "@/lib/server/storesApiSecurity";
+import { resolveRegionLeafFromSlugPath } from "@/lib/koreaRegions";
 import { isValidShortCode } from "@/lib/shortLink";
 import type { StoreData } from "@/lib/storeData";
 import { getDistanceKm } from "@/lib/utils";
@@ -49,6 +50,29 @@ function getSearchLimit(): number {
 /** 클라이언트 무한 스크롤 페이지 크기( useStores SEARCH_PAGE_SIZE )와 맞춤 */
 const SEARCH_PAGE_DEFAULT = 30;
 const SEARCH_PAGE_MAX = 200;
+
+/** 지역 목록 무한 스크롤 페이지 크기 */
+const REGION_PAGE_DEFAULT = 40;
+const REGION_PAGE_MAX = 120;
+
+function parseRegionOffsetLimit(searchParams: URLSearchParams): { offset: number; limit: number } {
+  let offset = Number(searchParams.get("offset"));
+  let limit = Number(searchParams.get("limit"));
+  if (!Number.isFinite(offset) || offset < 0) offset = 0;
+  if (!Number.isFinite(limit) || limit < 1) limit = REGION_PAGE_DEFAULT;
+  limit = Math.min(Math.max(Math.floor(limit), 1), REGION_PAGE_MAX);
+  offset = Math.max(0, Math.floor(offset));
+  return { offset, limit };
+}
+
+function matchesAllNeedles(blobLower: string, needles: string[]): boolean {
+  for (const n of needles) {
+    const t = (n ?? "").trim().toLowerCase();
+    if (!t) continue;
+    if (!blobLower.includes(t)) return false;
+  }
+  return true;
+}
 
 function parseSearchOffsetLimit(searchParams: URLSearchParams): { offset: number; limit: number } {
   let offset = Number(searchParams.get("offset"));
@@ -137,9 +161,11 @@ export async function GET(request: NextRequest) {
   }
 
   const ip = getClientIp(request);
-  const rl = checkRateLimit(ip);
-  if (!rl.ok) {
-    return NextResponse.json({ error: "rate_limited" }, { status: 429 });
+  if (!isLocalDev) {
+    const rl = checkRateLimit(ip);
+    if (!rl.ok) {
+      return NextResponse.json({ error: "rate_limited" }, { status: 429 });
+    }
   }
 
   const { searchParams } = new URL(request.url);
@@ -171,6 +197,71 @@ export async function GET(request: NextRequest) {
         stores: [{ ...toDetailStore(store, d), shortCode: shortParamEarly }]
       },
       "private"
+    );
+  }
+
+  const regionPathEncoded = searchParams.get("regionPath")?.trim() ?? "";
+  if (regionPathEncoded) {
+    const segments = regionPathEncoded
+      .split("/")
+      .map((s) => decodeURIComponent(s.trim()))
+      .filter(Boolean);
+    const leaf = resolveRegionLeafFromSlugPath(segments);
+    if (!leaf) {
+      return NextResponse.json({ error: "invalid_region" }, { status: 400 });
+    }
+    const productFilter = parseProductFilter(searchParams);
+    const { offset, limit } = parseRegionOffsetLimit(searchParams);
+    const candidates: StoreData[] = [];
+
+    for (const s of idx.byId.values()) {
+      if (!matchesProductFilter(s, productFilter)) continue;
+      const blob = idx.addressBlobLowerById.get(s.id) ?? "";
+      if (!matchesAllNeedles(blob, leaf.needles)) continue;
+      candidates.push(s);
+    }
+
+    const originOpt = parseLatLng(searchParams);
+    type SortRow = { store: StoreData; d: number };
+    let sorted: SortRow[];
+    if (originOpt != null) {
+      sorted = candidates.map((store) => ({
+        store,
+        d: getDistanceKm(originOpt.lat, originOpt.lng, store.lat, store.lng)
+      }));
+      sorted.sort((a, b) => a.d - b.d);
+    } else {
+      sorted = candidates
+        .map((store) => ({ store, d: NaN }))
+        .sort((a, b) =>
+          (a.store.name ?? "").localeCompare(b.store.name ?? "", "ko", {
+            sensitivity: "base"
+          })
+        );
+    }
+
+    const total = sorted.length;
+    const pageSlice = sorted.slice(offset, offset + limit);
+    const hasMore = offset + pageSlice.length < total;
+
+    return jsonCached(
+      {
+        mode: "region",
+        total,
+        offset,
+        limit,
+        hasMore,
+        headingLabelKo: leaf.headingLabelKo,
+        province: leaf.shortNameKo,
+        city:
+          leaf.cityNameKo ??
+          (!leaf.citySlug && leaf.districtNameKo ? leaf.districtNameKo : ""),
+        district: leaf.citySlug ? (leaf.districtNameKo ?? "") : "",
+        stores: pageSlice.map(({ store, d }) =>
+          toListStore(store, Number.isFinite(d) ? d : undefined)
+        )
+      },
+      "public"
     );
   }
 

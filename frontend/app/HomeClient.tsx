@@ -331,22 +331,25 @@ export default function HomeClient({ initialShortCode = null }: HomeClientProps)
           </div>
 
           <section className="pointer-events-none absolute left-[15px] right-[15px] top-[calc(16px+env(safe-area-inset-top,0px))] z-sheet flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={handleOpenSearch}
-              className="pointer-events-auto flex h-12 w-full cursor-pointer items-center gap-2 rounded-[8px] border-0 bg-white px-4 py-2 text-left shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)] outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-            >
-              <img src="/Img/Icon/search_24.svg" alt="" width={24} height={24} className="shrink-0" />
-              <span className="flex h-full min-w-0 flex-1 items-center text-[16px] font-normal leading-normal tracking-[-0.3px] text-[#999999]">
-                주소나 업체명을 검색해주세요
-              </span>
-            </button>
-            <p className="pointer-events-auto rounded-[8px] bg-white/90 px-3 py-1.5 text-center text-[10px] leading-snug text-[#444444] shadow-[0px_0px_2px_0px_rgba(0,0,0,0.06)]">
-              <span className="font-semibold text-[#171717]">종량제봉투</span>·
-              <span className="font-semibold text-[#171717]">불연성마대</span>·
-              <span className="font-semibold text-[#171717]">PP마대(건설마대)</span>·
-              <span className="font-semibold text-[#171717]">폐기물 스티커</span> 위치·거리 검색
-            </p>
+            <div className="pointer-events-auto flex w-full gap-2">
+              <button
+                type="button"
+                onClick={handleOpenSearch}
+                className="flex h-12 min-h-12 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-[8px] border-0 bg-white px-4 py-2 text-left shadow-[0px_0px_1px_rgba(0,0,0,0.08),0px_4px_6px_rgba(0,0,0,0.16)] outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              >
+                <img src="/Img/Icon/search_24.svg" alt="" width={24} height={24} className="shrink-0" />
+                <span className="flex h-full min-w-0 flex-1 items-center text-[16px] font-normal leading-normal tracking-[-0.3px] text-[#999999]">
+                  주소나 업체명을 검색해주세요
+                </span>
+              </button>
+              <Link
+                href="/regions"
+                prefetch={false}
+                className="flex h-12 shrink-0 items-center justify-center whitespace-nowrap rounded-[8px] bg-[#171717] px-4 py-2 text-[16px] font-semibold leading-normal tracking-[-0.3px] text-[#d4fe1c] shadow-[0px_0px_1px_rgba(0,0,0,0.08),0px_4px_6px_rgba(0,0,0,0.16)] outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              >
+                지역으로 보기
+              </Link>
+            </div>
             <div className="flex justify-end">
               <button
                 type="button"

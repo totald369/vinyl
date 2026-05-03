@@ -6,6 +6,7 @@ import { StoreData } from "@/hooks/useStores";
 export function StoreProductChips({ store }: { store: StoreData }) {
   const chips: ReactNode[] = [];
 
+  /** Figma 지역별 리스트: 종량제 → 폐기물 스티커 → 불연성마대 순 */
   if (store.hasTrashBag) {
     chips.push(
       <div
@@ -15,22 +16,6 @@ export function StoreProductChips({ store }: { store: StoreData }) {
         <img src="/Img/Icon/trash_bag_16.svg" alt="" width={16} height={16} className="size-4 shrink-0" />
         <span className="whitespace-nowrap text-[14px] font-medium leading-normal tracking-[0.1px] text-[#356438]">
           종량제
-        </span>
-      </div>
-    );
-  }
-
-  if (store.hasSpecialBag) {
-    chips.push(
-      <div
-        key="non"
-        className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-[#f8f2dd] py-1 pl-1.5 pr-2"
-      >
-        <div className="relative size-4 shrink-0 overflow-hidden">
-          <img src="/Img/Icon/non-fire_16.svg" alt="" width={16} height={16} className="size-4" />
-        </div>
-        <span className="whitespace-nowrap text-[14px] font-medium leading-normal tracking-[0.1px] text-[#6f522a]">
-          불연성마대
         </span>
       </div>
     );
@@ -52,7 +37,23 @@ export function StoreProductChips({ store }: { store: StoreData }) {
     );
   }
 
+  if (store.hasSpecialBag) {
+    chips.push(
+      <div
+        key="non"
+        className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-[#f8f2dd] py-1 pl-1.5 pr-2"
+      >
+        <div className="relative size-4 shrink-0 overflow-hidden">
+          <img src="/Img/Icon/non-fire_16.svg" alt="" width={16} height={16} className="size-4" />
+        </div>
+        <span className="whitespace-nowrap text-[14px] font-medium leading-normal tracking-[0.1px] text-[#6f522a]">
+          불연성마대
+        </span>
+      </div>
+    );
+  }
+
   if (chips.length === 0) return null;
 
-  return <div className="flex flex-wrap gap-[2px]">{chips}</div>;
+  return <div className="flex flex-wrap gap-0.5">{chips}</div>;
 }

@@ -43,6 +43,45 @@ function cleanParams(params: ShareAnalyticsParams) {
  * - Clarity: 세션 상세 또는 필터에서 `share_store_success` 확인
  * - 브라우저 콘솔에서 `[share-analytics]` 디버그 로그 확인
  */
+export type RegionAnalyticsEventName =
+  | "open_region_view"
+  | "select_region"
+  | "select_store_category"
+  | "click_region_store";
+
+export type RegionAnalyticsParams = {
+  province?: string;
+  city?: string;
+  district?: string;
+  category?: string;
+  region_path?: string;
+  store_id?: string;
+};
+
+function cleanRegionParams(params: RegionAnalyticsParams) {
+  return Object.fromEntries(
+    Object.entries(params).filter(([, value]) => value !== undefined && value !== "")
+  ) as Record<string, string>;
+}
+
+/**
+ * 지역으로 보기 플로우 (GA4 + Clarity). sendGtagEvent와 동일하게 prod·GA ID 있을 때만 GA 전송.
+ */
+export function trackRegionEvent(
+  eventName: RegionAnalyticsEventName,
+  params: RegionAnalyticsParams
+): void {
+  if (typeof window === "undefined") return;
+  const cleaned = cleanRegionParams(params);
+  sendGtagEvent(eventName, cleaned);
+  if (typeof window.clarity === "function") {
+    window.clarity("event", eventName);
+    for (const [key, value] of Object.entries(cleaned)) {
+      window.clarity("set", key, String(value));
+    }
+  }
+}
+
 export function trackShareEvent(eventName: ShareAnalyticsEventName, params: ShareAnalyticsParams): void {
   if (typeof window === "undefined") return;
 
