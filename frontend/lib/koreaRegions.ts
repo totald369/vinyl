@@ -14,6 +14,8 @@ export type RegionCityDef = {
   nameKo: string;
   districts?: RegionDistrictDef[];
   cityOnlyNeedles?: string[];
+  /** `districts`가 있을 때 `/도/시` 두 세그먼트(시 전체) URL·필터용 */
+  legacyCityWideNeedles?: string[];
 };
 
 export type ProvinceDef = {
@@ -37,6 +39,26 @@ export type ResolvedRegionLeaf = {
 
 function r(slug: string, nameKo: string, needles: string[]): RegionDistrictDef {
   return { slug, nameKo, needles };
+}
+
+/** 시·군 단위(구 없음): 주소 문자열에 provinceNeedle·cityNeedle가 함께 포함되면 매칭 */
+function cityOnly(slug: string, nameKo: string, provinceNeedle: string, cityNeedle: string): RegionCityDef {
+  return { slug, nameKo, cityOnlyNeedles: [provinceNeedle, cityNeedle] };
+}
+
+/** 자치구가 있는 시: `districts` + 기존 `/도/시` 두 세그먼트 URL용 `legacyCityWideNeedles` */
+function cityWithDistricts(
+  slug: string,
+  nameKo: string,
+  legacyWide: [string, string],
+  districts: RegionDistrictDef[]
+): RegionCityDef {
+  return {
+    slug,
+    nameKo,
+    districts,
+    legacyCityWideNeedles: [legacyWide[0], legacyWide[1]]
+  };
 }
 
 function seo(gu: string): string[] {
@@ -125,7 +147,11 @@ const GYEONGGI_CITIES: RegionCityDef[] = [
       r("dongan", "동안구", ["경기", "안양", "동안구"])
     ]
   },
-  { slug: "bucheon", nameKo: "부천시", cityOnlyNeedles: ["경기", "부천"] },
+  cityWithDistricts("bucheon", "부천시", ["경기", "부천"], [
+    r("bucheon-wonmi", "원미구", ["경기", "부천", "원미구"]),
+    r("bucheon-sosa", "소사구", ["경기", "부천", "소사구"]),
+    r("bucheon-ojeong", "오정구", ["경기", "부천", "오정구"])
+  ]),
   {
     slug: "ansan",
     nameKo: "안산시",
@@ -137,7 +163,10 @@ const GYEONGGI_CITIES: RegionCityDef[] = [
   { slug: "uijeongbu", nameKo: "의정부시", cityOnlyNeedles: ["경기", "의정부"] },
   { slug: "namyangju", nameKo: "남양주시", cityOnlyNeedles: ["경기", "남양주"] },
   { slug: "hwaseong", nameKo: "화성시", cityOnlyNeedles: ["경기", "화성"] },
-  { slug: "pyeongtaek", nameKo: "평택시", cityOnlyNeedles: ["경기", "평택"] },
+  cityWithDistricts("pyeongtaek", "평택시", ["경기", "평택"], [
+    r("pyeongtaek-gu", "평택구", ["경기", "평택", "평택구"]),
+    r("songtan", "송탄구", ["경기", "평택", "송탄구"])
+  ]),
   { slug: "siheung", nameKo: "시흥시", cityOnlyNeedles: ["경기", "시흥"] },
   { slug: "paju", nameKo: "파주시", cityOnlyNeedles: ["경기", "파주"] },
   { slug: "gimpo", nameKo: "김포시", cityOnlyNeedles: ["경기", "김포"] },
@@ -154,7 +183,19 @@ const GYEONGGI_CITIES: RegionCityDef[] = [
       r("giheung", "기흥구", ["경기", "용인", "기흥구"]),
       r("suji", "수지구", ["경기", "용인", "수지구"])
     ]
-  }
+  },
+  cityOnly("dongducheon", "동두천시", "경기", "동두천"),
+  cityOnly("guri", "구리시", "경기", "구리"),
+  cityOnly("gwacheon", "과천시", "경기", "과천"),
+  cityOnly("uiwang", "의왕시", "경기", "의왕"),
+  cityOnly("hanam", "하남시", "경기", "하남"),
+  cityOnly("anseong", "안성시", "경기", "안성"),
+  cityOnly("yeoju", "여주시", "경기", "여주"),
+  cityOnly("yangju", "양주시", "경기", "양주"),
+  cityOnly("pocheon", "포천시", "경기", "포천"),
+  cityOnly("gapyeong", "가평군", "경기", "가평"),
+  cityOnly("yeoncheon", "연천군", "경기", "연천"),
+  cityOnly("yangpyeong", "양평군", "경기", "양평")
 ];
 
 function bg(slug: string, gu: string): RegionDistrictDef {
@@ -236,6 +277,169 @@ const ULSAN_GU: RegionDistrictDef[] = [
   us("ulju", "울주군")
 ];
 
+const GANGWON_CITIES: RegionCityDef[] = [
+  cityOnly("chuncheon", "춘천시", "강원", "춘천"),
+  cityOnly("wonju", "원주시", "강원", "원주"),
+  cityOnly("gangneung", "강릉시", "강원", "강릉"),
+  cityOnly("donghae", "동해시", "강원", "동해"),
+  cityOnly("taebaek", "태백시", "강원", "태백"),
+  cityOnly("sokcho", "속초시", "강원", "속초"),
+  cityOnly("samcheok", "삼척시", "강원", "삼척"),
+  cityOnly("hongcheon", "홍천군", "강원", "홍천"),
+  cityOnly("hoengseong", "횡성군", "강원", "횡성"),
+  cityOnly("yeongwol", "영월군", "강원", "영월"),
+  cityOnly("pyeongchang", "평창군", "강원", "평창"),
+  cityOnly("jeongseon", "정선군", "강원", "정선"),
+  cityOnly("cheorwon", "철원군", "강원", "철원"),
+  cityOnly("hwacheon", "화천군", "강원", "화천"),
+  cityOnly("yanggu-gw", "양구군", "강원", "양구"),
+  cityOnly("inje", "인제군", "강원", "인제"),
+  cityOnly("goseong-gw", "고성군", "강원", "고성군"),
+  cityOnly("yangyang", "양양군", "강원", "양양")
+];
+
+const CHUNGBUK_CITIES: RegionCityDef[] = [
+  cityWithDistricts("cheongju-cb", "청주시", ["충북", "청주"], [
+    r("sangdang", "상당구", ["충북", "청주", "상당구"]),
+    r("seowon", "서원구", ["충북", "청주", "서원구"]),
+    r("heungdeok", "흥덕구", ["충북", "청주", "흥덕구"]),
+    r("cheongwon", "청원구", ["충북", "청주", "청원구"])
+  ]),
+  cityOnly("chungju", "충주시", "충북", "충주"),
+  cityOnly("jecheon", "제천시", "충북", "제천"),
+  cityOnly("boeun", "보은군", "충북", "보은"),
+  cityOnly("okcheon", "옥천군", "충북", "옥천"),
+  cityOnly("yeongdong", "영동군", "충북", "영동"),
+  cityOnly("jeungpyeong", "증평군", "충북", "증평"),
+  cityOnly("jincheon", "진천군", "충북", "진천"),
+  cityOnly("goesan", "괴산군", "충북", "괴산"),
+  cityOnly("eumseong", "음성군", "충북", "음성"),
+  cityOnly("danyang", "단양군", "충북", "단양")
+];
+
+const CHUNGNAM_CITIES: RegionCityDef[] = [
+  cityWithDistricts("cheonan", "천안시", ["충남", "천안"], [
+    r("dongnam-cn", "동남구", ["충남", "천안", "동남구"]),
+    r("seobuk-cn", "서북구", ["충남", "천안", "서북구"])
+  ]),
+  cityOnly("gongju", "공주시", "충남", "공주"),
+  cityOnly("boryeong", "보령시", "충남", "보령"),
+  cityOnly("asan", "아산시", "충남", "아산"),
+  cityOnly("seosan", "서산시", "충남", "서산"),
+  cityOnly("nonsan", "논산시", "충남", "논산"),
+  cityOnly("gyeryong", "계룡시", "충남", "계룡"),
+  cityOnly("dangjin", "당진시", "충남", "당진"),
+  cityOnly("geumsan", "금산군", "충남", "금산"),
+  cityOnly("buyeo", "부여군", "충남", "부여"),
+  cityOnly("seocheon", "서천군", "충남", "서천"),
+  cityOnly("cheongyang", "청양군", "충남", "청양"),
+  cityOnly("hongseong", "홍성군", "충남", "홍성"),
+  cityOnly("yesan", "예산군", "충남", "예산"),
+  cityOnly("taean", "태안군", "충남", "태안")
+];
+
+const GYEONGBUK_CITIES: RegionCityDef[] = [
+  cityWithDistricts("pohang-gb", "포항시", ["경북", "포항"], [
+    r("pohang-nam", "남구", ["경북", "포항", "남구"]),
+    r("pohang-buk", "북구", ["경북", "포항", "북구"])
+  ]),
+  cityOnly("gyeongju", "경주시", "경북", "경주"),
+  cityOnly("gimcheon", "김천시", "경북", "김천"),
+  cityOnly("andong", "안동시", "경북", "안동"),
+  cityWithDistricts("gumi", "구미시", ["경북", "구미"], [
+    r("gumi-wonmi", "원미구", ["경북", "구미", "원미구"]),
+    r("gumi-seonsan", "선산구", ["경북", "구미", "선산구"])
+  ]),
+  cityOnly("yeongju", "영주시", "경북", "영주"),
+  cityOnly("yeongcheon", "영천시", "경북", "영천"),
+  cityOnly("sangju", "상주시", "경북", "상주"),
+  cityOnly("mungyeong", "문경시", "경북", "문경"),
+  cityOnly("gyeongsan", "경산시", "경북", "경산"),
+  cityOnly("gunwi", "군위군", "경북", "군위"),
+  cityOnly("uiseong", "의성군", "경북", "의성"),
+  cityOnly("cheongsong", "청송군", "경북", "청송"),
+  cityOnly("yeongyang", "영양군", "경북", "영양"),
+  cityOnly("yeongdeok", "영덕군", "경북", "영덕"),
+  cityOnly("cheongdo", "청도군", "경북", "청도"),
+  cityOnly("goryeong", "고령군", "경북", "고령"),
+  cityOnly("seongju", "성주군", "경북", "성주"),
+  cityOnly("chilgok", "칠곡군", "경북", "칠곡"),
+  cityOnly("yecheon", "예천군", "경북", "예천"),
+  cityOnly("bonghwa", "봉화군", "경북", "봉화"),
+  cityOnly("uljin", "울진군", "경북", "울진"),
+  cityOnly("ulleung", "울릉군", "경북", "울릉")
+];
+
+const GYEONGNAM_CITIES: RegionCityDef[] = [
+  cityOnly("changwon", "창원시", "경남", "창원"),
+  cityOnly("jinju", "진주시", "경남", "진주"),
+  cityOnly("tongyeong", "통영시", "경남", "통영"),
+  cityOnly("sacheon", "사천시", "경남", "사천"),
+  cityOnly("gimhae", "김해시", "경남", "김해"),
+  cityOnly("miryang", "밀양시", "경남", "밀양"),
+  cityOnly("geoje", "거제시", "경남", "거제"),
+  cityOnly("yangsan", "양산시", "경남", "양산"),
+  cityOnly("uiryeong", "의령군", "경남", "의령"),
+  cityOnly("haman", "함안군", "경남", "함안"),
+  cityOnly("changnyeong", "창녕군", "경남", "창녕"),
+  cityOnly("goseong-gn", "고성군", "경남", "고성군"),
+  cityOnly("namhae", "남해군", "경남", "남해"),
+  cityOnly("hadong", "하동군", "경남", "하동"),
+  cityOnly("sancheong", "산청군", "경남", "산청"),
+  cityOnly("hamyang", "함양군", "경남", "함양"),
+  cityOnly("geochang", "거창군", "경남", "거창"),
+  cityOnly("hapcheon", "합천군", "경남", "합천")
+];
+
+const JEONBUK_CITIES: RegionCityDef[] = [
+  cityWithDistricts("jeonju", "전주시", ["전북", "전주"], [
+    r("wansan", "완산구", ["전북", "전주", "완산구"]),
+    r("deokjin", "덕진구", ["전북", "전주", "덕진구"])
+  ]),
+  cityOnly("gunsan", "군산시", "전북", "군산"),
+  cityOnly("iksan", "익산시", "전북", "익산"),
+  cityOnly("jeongeup", "정읍시", "전북", "정읍"),
+  cityOnly("namwon", "남원시", "전북", "남원"),
+  cityOnly("gimje", "김제시", "전북", "김제"),
+  cityOnly("wanju", "완주군", "전북", "완주"),
+  cityOnly("jinan", "진안군", "전북", "진안"),
+  cityOnly("muju", "무주군", "전북", "무주"),
+  cityOnly("jangsu", "장수군", "전북", "장수"),
+  cityOnly("imsil", "임실군", "전북", "임실"),
+  cityOnly("sunchang", "순창군", "전북", "순창"),
+  cityOnly("gochang", "고창군", "전북", "고창"),
+  cityOnly("buan", "부안군", "전북", "부안")
+];
+
+const JEONNAM_CITIES: RegionCityDef[] = [
+  cityOnly("mokpo", "목포시", "전남", "목포"),
+  cityOnly("yeosu", "여수시", "전남", "여수"),
+  cityOnly("suncheon", "순천시", "전남", "순천"),
+  cityOnly("naju", "나주시", "전남", "나주"),
+  cityOnly("gwangyang", "광양시", "전남", "광양"),
+  cityOnly("damyang", "담양군", "전남", "담양"),
+  cityOnly("gokseong", "곡성군", "전남", "곡성"),
+  cityOnly("gurye", "구례군", "전남", "구례"),
+  cityOnly("hwasun", "화순군", "전남", "화순"),
+  cityOnly("boseong", "보성군", "전남", "보성"),
+  cityOnly("jangheung", "장흥군", "전남", "장흥"),
+  cityOnly("gangjin", "강진군", "전남", "강진"),
+  cityOnly("haenam", "해남군", "전남", "해남"),
+  cityOnly("yeongam", "영암군", "전남", "영암"),
+  cityOnly("muan", "무안군", "전남", "무안"),
+  cityOnly("hampyeong", "함평군", "전남", "함평"),
+  cityOnly("yeonggwang", "영광군", "전남", "영광"),
+  cityOnly("jangseong", "장성군", "전남", "장성"),
+  cityOnly("wando", "완도군", "전남", "완도"),
+  cityOnly("jindo", "진도군", "전남", "진도"),
+  cityOnly("sinan", "신안군", "전남", "신안")
+];
+
+const JEJU_CITIES: RegionCityDef[] = [
+  { slug: "jeju-si", nameKo: "제주시", cityOnlyNeedles: ["제주", "제주시"] },
+  { slug: "seogwipo", nameKo: "서귀포시", cityOnlyNeedles: ["제주", "서귀포"] }
+];
+
 /** 시·도 레벨: 피그마 좌측 열 순서 */
 export const PROVINCES_ORDERED: ProvinceDef[] = [
   {
@@ -260,7 +464,7 @@ export const PROVINCES_ORDERED: ProvinceDef[] = [
     slug: "gangwon",
     shortNameKo: "강원",
     nameKo: "강원특별자치도",
-    cities: [{ slug: "chuncheon", nameKo: "춘천시", cityOnlyNeedles: ["강원", "춘천"] }]
+    cities: GANGWON_CITIES
   },
   {
     slug: "daejeon",
@@ -272,13 +476,13 @@ export const PROVINCES_ORDERED: ProvinceDef[] = [
     slug: "chungbuk",
     shortNameKo: "충북",
     nameKo: "충청북도",
-    cities: [{ slug: "cheongju-cb", nameKo: "청주시", cityOnlyNeedles: ["충북", "청주"] }]
+    cities: CHUNGBUK_CITIES
   },
   {
     slug: "chungnam",
     shortNameKo: "충남",
     nameKo: "충청남도",
-    cities: [{ slug: "cheonan", nameKo: "천안시", cityOnlyNeedles: ["충남", "천안"] }]
+    cities: CHUNGNAM_CITIES
   },
   {
     slug: "daegu",
@@ -302,13 +506,13 @@ export const PROVINCES_ORDERED: ProvinceDef[] = [
     slug: "gyeongbuk",
     shortNameKo: "경북",
     nameKo: "경상북도",
-    cities: [{ slug: "pohang-gb", nameKo: "포항시", cityOnlyNeedles: ["경북", "포항"] }]
+    cities: GYEONGBUK_CITIES
   },
   {
     slug: "gyeongnam",
     shortNameKo: "경남",
     nameKo: "경상남도",
-    cities: [{ slug: "changwon", nameKo: "창원시", cityOnlyNeedles: ["경남", "창원"] }]
+    cities: GYEONGNAM_CITIES
   },
   {
     slug: "gwangju",
@@ -320,19 +524,19 @@ export const PROVINCES_ORDERED: ProvinceDef[] = [
     slug: "jeonbuk",
     shortNameKo: "전북",
     nameKo: "전북특별자치도",
-    cities: [{ slug: "jeonju", nameKo: "전주시", cityOnlyNeedles: ["전북", "전주"] }]
+    cities: JEONBUK_CITIES
   },
   {
     slug: "jeonnam",
     shortNameKo: "전남",
     nameKo: "전라남도",
-    cities: [{ slug: "yeosu", nameKo: "여수시", cityOnlyNeedles: ["전남", "여수"] }]
+    cities: JEONNAM_CITIES
   },
   {
     slug: "jeju",
     shortNameKo: "제주",
     nameKo: "제주특별자치도",
-    cities: [{ slug: "jeju-si", nameKo: "제주시", cityOnlyNeedles: ["제주", "제주시"] }]
+    cities: JEJU_CITIES
   }
 ];
 
@@ -413,6 +617,16 @@ export function resolveRegionLeafFromSlugPath(
       };
     }
     if (city.districts?.length) {
+      if (segments.length === 2 && city.legacyCityWideNeedles?.length) {
+        return {
+          provinceSlug: p.slug,
+          shortNameKo: p.shortNameKo,
+          citySlug: city.slug,
+          cityNameKo: city.nameKo,
+          needles: city.legacyCityWideNeedles,
+          headingLabelKo: `${p.shortNameKo} ${city.nameKo}`.trim()
+        };
+      }
       if (segments.length < 3) return null;
       const dist = city.districts.find((d) => d.slug === segments[2]);
       if (!dist) return null;
@@ -468,6 +682,9 @@ export function enumerateRegionLeafPathnames(): string[] {
           paths.push(regionHrefFromSegments([p.slug, c.slug]));
         }
         if (hasDistricts && c.districts) {
+          if (c.legacyCityWideNeedles?.length) {
+            paths.push(regionHrefFromSegments([p.slug, c.slug]));
+          }
           for (const dist of c.districts) {
             paths.push(regionHrefFromSegments([p.slug, c.slug, dist.slug]));
           }

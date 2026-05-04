@@ -60,6 +60,18 @@ function applyInitialSelection(
         selectedDistrictKey: `${provinceSlug}/${leaf.citySlug}/${leaf.districtSlug}`
       };
     }
+    if (
+      city?.districts?.length &&
+      city.legacyCityWideNeedles?.length &&
+      leaf.citySlug &&
+      !leaf.districtSlug
+    ) {
+      return {
+        provinceSlug,
+        expandedCitySlug: leaf.citySlug,
+        selectedDistrictKey: `${provinceSlug}/${leaf.citySlug}`
+      };
+    }
     if (city?.cityOnlyNeedles) {
       return {
         provinceSlug,

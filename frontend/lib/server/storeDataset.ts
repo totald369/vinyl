@@ -31,6 +31,7 @@ export function getMergedStores() {
   const reportRows = readJsonArray<RawReportRow>("reports_rows.json");
   const guroNoncombustRows = readJsonArray<RawStoreRow>("stores.guro-noncombust.json");
   const gwanakNoncombustRows = readJsonArray<RawStoreRow>("stores.gwanak-noncombust.json");
+  const dobongNoncombustRows = readJsonArray<RawStoreRow>("stores.dobong-noncombust.json");
   const busanNamguTrashRows = readJsonArray<RawStoreRow>("stores.busan-namgu-trash.json");
   const busanJungguTrashRows = readJsonArray<RawStoreRow>("stores.busan-junggu-trash.json");
   const busanJungguPpRows = readJsonArray<RawStoreRow>("stores.busan-junggu-pp.json");
@@ -62,6 +63,7 @@ export function getMergedStores() {
     reportRows,
     guroNoncombustRows,
     gwanakNoncombustRows,
+    dobongNoncombustRows,
     busanNamguTrashRows,
     busanJungguTrashRows,
     busanJungguPpRows,

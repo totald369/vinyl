@@ -12,6 +12,7 @@ const SOURCE_FILES = [
   "stores.goyang-sticker.json",
   "stores.guro-noncombust.json",
   "stores.gwanak-noncombust.json",
+  "stores.dobong-noncombust.json",
   "stores.busan-namgu-trash.json",
   "stores.busan-junggu-trash.json",
   "stores.busan-junggu-pp.json",

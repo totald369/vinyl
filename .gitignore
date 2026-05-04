@@ -31,6 +31,7 @@ frontend/scripts/geocode-cache-nowon.json
 frontend/scripts/geocode-cache-nowon-gdms.json
 frontend/scripts/geocode-cache-nowon-gdms-trash.json
 frontend/scripts/geocode-cache-dobong.json
+frontend/scripts/geocode-cache-dobong-nominatim.json
 frontend/scripts/geocode-cache-dobong-tistory.json
 frontend/scripts/geocode-cache-gangbuk.json
 frontend/scripts/geocode-cache-eunpyeong.json
