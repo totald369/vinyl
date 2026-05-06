@@ -67,6 +67,9 @@ export function getMergedStores() {
   const incheonBupyeongTrashStickerSpecialRows = readJsonArray<RawStoreRow>(
     "stores.incheon-bupyeong-trash-sticker-special.json"
   );
+  const incheonGyeyangGbmsRows = readJsonArray<RawStoreRow>(
+    "stores.incheon-gyeyang-gbms.json"
+  );
 
   cached = mergeStoreSources(
     mainRows,
@@ -97,7 +100,8 @@ export function getMergedStores() {
     incheonMichuholTrashRows,
     incheonYeonsuTrashStickerRows,
     incheonNamdongTrashRows,
-    incheonBupyeongTrashStickerSpecialRows
+    incheonBupyeongTrashStickerSpecialRows,
+    incheonGyeyangGbmsRows
   );
   return cached;
 }

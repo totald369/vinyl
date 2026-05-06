@@ -163,10 +163,7 @@ const GYEONGGI_CITIES: RegionCityDef[] = [
   { slug: "uijeongbu", nameKo: "의정부시", cityOnlyNeedles: ["경기", "의정부"] },
   { slug: "namyangju", nameKo: "남양주시", cityOnlyNeedles: ["경기", "남양주"] },
   { slug: "hwaseong", nameKo: "화성시", cityOnlyNeedles: ["경기", "화성"] },
-  cityWithDistricts("pyeongtaek", "평택시", ["경기", "평택"], [
-    r("pyeongtaek-gu", "평택구", ["경기", "평택", "평택구"]),
-    r("songtan", "송탄구", ["경기", "평택", "송탄구"])
-  ]),
+  cityOnly("pyeongtaek", "평택시", "경기", "평택"),
   { slug: "siheung", nameKo: "시흥시", cityOnlyNeedles: ["경기", "시흥"] },
   { slug: "paju", nameKo: "파주시", cityOnlyNeedles: ["경기", "파주"] },
   { slug: "gimpo", nameKo: "김포시", cityOnlyNeedles: ["경기", "김포"] },
