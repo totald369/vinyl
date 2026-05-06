@@ -29,7 +29,11 @@ const SOURCE_FILES = [
   "stores.busan-yeongdo-trash.json",
   "stores.gyeonggi-gwangju-findstore.json",
   "stores.gwangju-trash-lifeinsights.json",
-  "stores.daegu-buk-dalseo-trash.json"
+  "stores.daegu-buk-dalseo-trash.json",
+  "stores.incheon-michuhol-trash.json",
+  "stores.incheon-yeonsu-trash-sticker.json",
+  "stores.incheon-namdong-trash.json",
+  "stores.incheon-bupyeong-trash-sticker-special.json"
 ] as const;
 
 type LoadedFile = {
