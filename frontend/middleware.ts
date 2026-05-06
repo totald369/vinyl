@@ -9,6 +9,7 @@ const BLOCKED_DATA_FILES = new Set([
   "stores.gunpo.json",
   "stores.goyang.json",
   "stores.goyang-sticker.json",
+  "stores.bucheon-gbms.json",
   "stores.busan-namgu-trash.json",
   "stores.busan-junggu-trash.json",
   "stores.busan-junggu-pp.json",
