@@ -295,23 +295,24 @@ const GANGWON_CITIES: RegionCityDef[] = [
   cityOnly("yangyang", "양양군", "강원", "양양")
 ];
 
+/** 공식 주소는 `충청북도` — `충북` 단독은 부분 문자열로 안 잡힘 */
 const CHUNGBUK_CITIES: RegionCityDef[] = [
-  cityWithDistricts("cheongju-cb", "청주시", ["충북", "청주"], [
-    r("sangdang", "상당구", ["충북", "청주", "상당구"]),
-    r("seowon", "서원구", ["충북", "청주", "서원구"]),
-    r("heungdeok", "흥덕구", ["충북", "청주", "흥덕구"]),
-    r("cheongwon", "청원구", ["충북", "청주", "청원구"])
+  cityWithDistricts("cheongju-cb", "청주시", ["충청북도", "청주"], [
+    r("sangdang", "상당구", ["충청북도", "청주", "상당구"]),
+    r("seowon", "서원구", ["충청북도", "청주", "서원구"]),
+    r("heungdeok", "흥덕구", ["충청북도", "청주", "흥덕구"]),
+    r("cheongwon", "청원구", ["충청북도", "청주", "청원구"])
   ]),
-  cityOnly("chungju", "충주시", "충북", "충주"),
-  cityOnly("jecheon", "제천시", "충북", "제천"),
-  cityOnly("boeun", "보은군", "충북", "보은"),
-  cityOnly("okcheon", "옥천군", "충북", "옥천"),
-  cityOnly("yeongdong", "영동군", "충북", "영동"),
-  cityOnly("jeungpyeong", "증평군", "충북", "증평"),
-  cityOnly("jincheon", "진천군", "충북", "진천"),
-  cityOnly("goesan", "괴산군", "충북", "괴산"),
-  cityOnly("eumseong", "음성군", "충북", "음성"),
-  cityOnly("danyang", "단양군", "충북", "단양")
+  cityOnly("chungju", "충주시", "충청북도", "충주"),
+  cityOnly("jecheon", "제천시", "충청북도", "제천"),
+  cityOnly("boeun", "보은군", "충청북도", "보은"),
+  cityOnly("okcheon", "옥천군", "충청북도", "옥천"),
+  cityOnly("yeongdong", "영동군", "충청북도", "영동"),
+  cityOnly("jeungpyeong", "증평군", "충청북도", "증평"),
+  cityOnly("jincheon", "진천군", "충청북도", "진천"),
+  cityOnly("goesan", "괴산군", "충청북도", "괴산"),
+  cityOnly("eumseong", "음성군", "충청북도", "음성"),
+  cityOnly("danyang", "단양군", "충청북도", "단양")
 ];
 
 const CHUNGNAM_CITIES: RegionCityDef[] = [
