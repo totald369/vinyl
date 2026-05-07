@@ -54,6 +54,8 @@ frontend/scripts/geocode-cache-daejeon-yuseong-trash.json
 frontend/scripts/geocode-cache-daejeon-daedeok-trash.json
 frontend/scripts/geocode-cache-gangwon-wonju-trash.json
 frontend/scripts/geocode-cache-gangwon-taebaek-trash.json
+frontend/scripts/geocode-cache-ulsan-donggu-trash.json
+frontend/scripts/geocode-cache-chungbuk-chungju-trash.json
 
 # Import scratch
 frontend/scripts/_tmp*
