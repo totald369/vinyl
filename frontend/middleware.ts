@@ -32,6 +32,9 @@ const BLOCKED_DATA_FILES = new Set([
   "stores.incheon-bupyeong-trash-sticker-special.json",
   "stores.incheon-gyeyang-gbms.json",
   "stores.gyeonggi-siheung-trash.json",
+  "stores.daejeon-donggu-trash.json",
+  "stores.daejeon-yuseong-trash.json",
+  "stores.daejeon-daedeok-trash.json",
   "reports_rows.json"
 ]);
 

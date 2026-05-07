@@ -125,7 +125,10 @@ export function mergeStoreSources(
   incheonNamdongTrashRows: RawStoreRow[],
   incheonBupyeongTrashStickerSpecialRows: RawStoreRow[],
   incheonGyeyangGbmsRows: RawStoreRow[],
-  gyeonggiSiheungTrashRows: RawStoreRow[]
+  gyeonggiSiheungTrashRows: RawStoreRow[],
+  daejeonDongguTrashRows: RawStoreRow[],
+  daejeonYuseongTrashRows: RawStoreRow[],
+  daejeonDaedeokTrashRows: RawStoreRow[]
 ): StoreData[] {
   const verifiedIds = collectVerifiedStoreIdsFromReports(reportRows);
   const extraRaw = reportRowsToExtraRawStores(reportRows);
@@ -160,7 +163,10 @@ export function mergeStoreSources(
     ...incheonNamdongTrashRows,
     ...incheonBupyeongTrashStickerSpecialRows,
     ...incheonGyeyangGbmsRows,
-    ...gyeonggiSiheungTrashRows
+    ...gyeonggiSiheungTrashRows,
+    ...daejeonDongguTrashRows,
+    ...daejeonYuseongTrashRows,
+    ...daejeonDaedeokTrashRows
   ]
     .map(normalizeRow)
     .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng))

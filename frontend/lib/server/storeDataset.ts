@@ -73,6 +73,15 @@ export function getMergedStores() {
   const gyeonggiSiheungTrashRows = readJsonArray<RawStoreRow>(
     "stores.gyeonggi-siheung-trash.json"
   );
+  const daejeonDongguTrashRows = readJsonArray<RawStoreRow>(
+    "stores.daejeon-donggu-trash.json"
+  );
+  const daejeonYuseongTrashRows = readJsonArray<RawStoreRow>(
+    "stores.daejeon-yuseong-trash.json"
+  );
+  const daejeonDaedeokTrashRows = readJsonArray<RawStoreRow>(
+    "stores.daejeon-daedeok-trash.json"
+  );
 
   cached = mergeStoreSources(
     mainRows,
@@ -105,7 +114,10 @@ export function getMergedStores() {
     incheonNamdongTrashRows,
     incheonBupyeongTrashStickerSpecialRows,
     incheonGyeyangGbmsRows,
-    gyeonggiSiheungTrashRows
+    gyeonggiSiheungTrashRows,
+    daejeonDongguTrashRows,
+    daejeonYuseongTrashRows,
+    daejeonDaedeokTrashRows
   );
   return cached;
 }
