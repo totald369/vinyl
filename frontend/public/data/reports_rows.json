@@ -1,19 +1,35 @@
 [
   {
-    "id": "086641f1-a6e6-4209-88be-6cb70f47f0de",
+    "id": "b4f216ab-7de6-43df-a55c-5bd6f174d9ec",
     "report_type": "new_store",
     "store_id": null,
-    "name": "CU 광주오포대주점",
-    "road_address": "경기 광주시 마루들길 292",
-    "detail_address": "대주파크빌제1차B블럭 B1층 B01호",
-    "lat": 37.3776557247622,
-    "lng": 127.262631886619,
+    "name": "세븐일레븐 봉담푸르지오점",
+    "road_address": "경기도 화성시 봉담읍 와우로34번길 12",
+    "detail_address": "",
+    "lat": 37.2136084838866,
+    "lng": 126.96898900129,
+    "has_trash_bag": false,
+    "has_special_bag": true,
+    "has_large_waste_sticker": false,
+    "message": "불연성 마대",
+    "status": "pending",
+    "created_at": "2026-05-09 07:20:55.673933+00"
+  },
+  {
+    "id": "1f55340f-dc05-4b82-a8a2-12a5f8044235",
+    "report_type": "new_store",
+    "store_id": null,
+    "name": "송산사지",
+    "road_address": "경기 의정부시 민락로 296",
+    "detail_address": "292호",
+    "lat": 37.7475100286069,
+    "lng": 127.109974995626,
     "has_trash_bag": true,
     "has_special_bag": false,
     "has_large_waste_sticker": false,
     "message": "종량제 봉투",
     "status": "pending",
-    "created_at": "2026-04-02 02:10:52.769711+00"
+    "created_at": "2026-04-07 01:46:52.051071+00"
   },
   {
     "id": "928b0f3b-39b9-4402-9796-e1b95f6e30f8",
@@ -32,19 +48,19 @@
     "created_at": "2026-04-02 22:53:34.097608+00"
   },
   {
-    "id": "1f55340f-dc05-4b82-a8a2-12a5f8044235",
+    "id": "086641f1-a6e6-4209-88be-6cb70f47f0de",
     "report_type": "new_store",
     "store_id": null,
-    "name": "송산사지",
-    "road_address": "경기 의정부시 민락로 296",
-    "detail_address": "292호",
-    "lat": 37.7475100286069,
-    "lng": 127.109974995626,
+    "name": "CU 광주오포대주점",
+    "road_address": "경기 광주시 마루들길 292",
+    "detail_address": "대주파크빌제1차B블럭 B1층 B01호",
+    "lat": 37.3776557247622,
+    "lng": 127.262631886619,
     "has_trash_bag": true,
     "has_special_bag": false,
     "has_large_waste_sticker": false,
     "message": "종량제 봉투",
     "status": "pending",
-    "created_at": "2026-04-07 01:46:52.051071+00"
+    "created_at": "2026-04-02 02:10:52.769711+00"
   }
 ]

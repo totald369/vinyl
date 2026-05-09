@@ -11,6 +11,7 @@
     "start": "next start",
     "lint": "next lint",
     "shortcodes:assign": "tsx scripts/assignShortCodes.ts",
+    "data:import-reports-csv": "tsx scripts/importReportsCsv.ts",
     "data:import-guro-nc": "python3 scripts/importGuroNoncombustFromXlsx.py"
   },
   "dependencies": {
