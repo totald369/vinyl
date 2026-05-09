@@ -7,6 +7,30 @@ const MAX_REQUESTS = 120;
 /** IP별 슬라이딩 윈도 카운터 (서버리스 인스턴스마다 독립 — 난이도 상승용) */
 const rateBuckets = new Map<string, { t: number; n: number }>();
 
+/**
+ * 메모리 누수 방지: 장기 실행 인스턴스(VM/edge)에서 windowMs 가 지난 항목을 주기적으로 제거.
+ *
+ * 변경 전: rateBuckets 가 IP 만큼 무한정 누적 → 메모리 증가, GC 압박.
+ * 변경 후: 1분 간격으로 windowMs 보다 오래된 항목 제거 — 활성 IP 수 만큼만 유지.
+ * 측정: long-running 인스턴스 RSS, GC pause 빈도(있다면).
+ */
+const RATE_LIMIT_CLEANUP_INTERVAL_MS = 60_000;
+let rateLimitCleanupStarted = false;
+function ensureRateLimitCleanup() {
+  if (rateLimitCleanupStarted) return;
+  if (typeof setInterval !== "function") return;
+  rateLimitCleanupStarted = true;
+  const handle = setInterval(() => {
+    const cutoff = Date.now() - WINDOW_MS;
+    for (const [ip, b] of rateBuckets) {
+      if (b.t < cutoff) rateBuckets.delete(ip);
+    }
+  }, RATE_LIMIT_CLEANUP_INTERVAL_MS);
+  if (typeof (handle as { unref?: () => void }).unref === "function") {
+    (handle as { unref: () => void }).unref();
+  }
+}
+
 function getClientIp(request: NextRequest): string {
   const xf = request.headers.get("x-forwarded-for");
   if (xf) {
@@ -69,6 +93,7 @@ export function checkReferer(request: NextRequest): { ok: true } | { ok: false; 
 }
 
 export function checkRateLimit(ip: string): { ok: true } | { ok: false } {
+  ensureRateLimitCleanup();
   const now = Date.now();
   const b = rateBuckets.get(ip);
   if (!b || now - b.t > WINDOW_MS) {

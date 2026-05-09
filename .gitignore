@@ -60,6 +60,9 @@ frontend/scripts/geocode-cache-chungbuk-chungju-trash.json
 # Import scratch
 frontend/scripts/_tmp*
 
+# Build-time merged store cache (regenerated each build)
+frontend/public/data/_merged_cache.json
+
 # TypeScript incremental
 **/tsconfig.tsbuildinfo
 

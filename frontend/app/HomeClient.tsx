@@ -35,9 +35,18 @@ const DETAIL_OPEN_PERF_LABEL = "[perf] detail-open";
 export type HomeClientProps = {
   /** Server entry from `/s/{shortCode}` when the URL has no `?s=` query. */
   initialShortCode?: string | null;
+  /**
+   * 서버에서 미리 가져온 DEFAULT_REGION 기준 초기 매장 목록.
+   * 변경 전: 빈 배열로 시작 → /api/stores 응답 전까지 마커/리스트 비어있음.
+   * 변경 후: 첫 페인트에 즉시 표시 → 빈 화면 지속 시간 단축.
+   */
+  initialStores?: StoreData[];
 };
 
-export default function HomeClient({ initialShortCode = null }: HomeClientProps) {
+export default function HomeClient({
+  initialShortCode = null,
+  initialStores
+}: HomeClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isLoading, error } = useKakaoMapLoader();
@@ -83,7 +92,8 @@ export default function HomeClient({ initialShortCode = null }: HomeClientProps)
   } = useStores(userLocation, {
     activeFilter,
     listReference: exploreAnchor,
-    searchQuery: searchOpen ? searchQuery : ""
+    searchQuery: searchOpen ? searchQuery : "",
+    initialStores
   });
 
   const searchOverlayResults = useMemo(() => {

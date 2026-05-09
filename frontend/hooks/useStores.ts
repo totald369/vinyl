@@ -115,11 +115,22 @@ export function useStores(
     districtScope?: DistrictListScope | null;
     districtSlug?: string;
     searchQuery?: string;
+    /**
+     * 서버 prefetch 결과(DEFAULT_REGION 기준). 첫 렌더 시 빈 배열 대신 사용해
+     * 빈 화면 지속 시간을 줄임. 사용자 위치가 잡히는 즉시 useStores 가 자체 fetch 로 갱신.
+     */
+    initialStores?: StoreData[];
   }
 ) {
-  const [stores, setStores] = useState<StoreData[]>([]);
+  const initialStoresProp = options?.initialStores;
+  const initialFromServer = useMemo(
+    () => (Array.isArray(initialStoresProp) ? initialStoresProp : []),
+    [initialStoresProp]
+  );
+  const hasInitialServerStoresRef = useRef(initialFromServer.length > 0);
+  const [stores, setStores] = useState<StoreData[]>(initialFromServer);
   const [selectedStore, setSelectedStore] = useState<StoreData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(initialFromServer.length === 0);
   const [error, setError] = useState<string | null>(null);
   const [searchTotal, setSearchTotal] = useState(0);
   const [searchHasMore, setSearchHasMore] = useState(false);
@@ -223,6 +234,13 @@ export function useStores(
       setSearchHasMore(false);
     }
 
+    /**
+     * 서버 prefetch 결과가 있는 첫 실행에서는 SWR 처럼 화면을 비우지 않고 백그라운드 갱신만 수행.
+     * (한 번만 적용되면 충분 — flag down)
+     */
+    const useServerInitialThisRun = hasInitialServerStoresRef.current;
+    hasInitialServerStoresRef.current = false;
+
     const url = listUrl;
     const perfLabel = `[perf] stores-list:${fetchDepsKey}`;
     perfTimeStart(perfLabel);
@@ -290,7 +308,9 @@ export function useStores(
       return () => ac.abort();
     }
 
-    setLoading(true);
+    if (!useServerInitialThisRun) {
+      setLoading(true);
+    }
 
     const p = fetchStoresPayload(url, ac.signal)
       .then((payload) => {

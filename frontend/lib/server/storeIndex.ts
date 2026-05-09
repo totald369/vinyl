@@ -98,3 +98,36 @@ export function collectGridBucketStores(idx: StoreSearchIndexes, lat: number, ln
   }
   return out;
 }
+
+/**
+ * 지정 반경(km) 안의 그리드 셀만 훑어 후보를 모음. 거리 검사는 호출자에서 수행.
+ *
+ * 변경 전: 검색(q=) 분기는 lat/lng 가 와도 99k 전체를 선형 스캔.
+ * 변경 후: 사용자 위치가 있으면 radiusKm 만큼의 그리드 칸(수~수십개)만 후보로 추려
+ *          텍스트 매칭 비용을 99k → 보통 수백~수천으로 축소.
+ * 측정: /api/stores?q=... p95 응답 시간(서버 CPU 시간), 후보 매장 수 로그.
+ */
+export function collectStoresWithinRadius(
+  idx: StoreSearchIndexes,
+  lat: number,
+  lng: number,
+  radiusKm: number
+): StoreData[] {
+  const ringSteps = Math.max(1, Math.ceil(radiusKm / 1.1));
+  const bi = Math.floor(lat / GRID_STEP);
+  const bj = Math.floor(lng / GRID_STEP);
+  const seen = new Set<string>();
+  const out: StoreData[] = [];
+  for (let di = -ringSteps; di <= ringSteps; di++) {
+    for (let dj = -ringSteps; dj <= ringSteps; dj++) {
+      const bucket = idx.grid.get(`${bi + di},${bj + dj}`);
+      if (!bucket) continue;
+      for (const s of bucket) {
+        if (seen.has(s.id)) continue;
+        seen.add(s.id);
+        out.push(s);
+      }
+    }
+  }
+  return out;
+}

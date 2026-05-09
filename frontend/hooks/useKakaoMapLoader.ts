@@ -34,11 +34,17 @@ function devError(...args: unknown[]) {
   console.error(...args);
 }
 
-/** SDK 엔드포인트/쿼리 스킴은 카카오 정책상 유지, clusterer 라이브러리만 추가 */
+/**
+ * SDK 엔드포인트.
+ * 변경 전: `&libraries=clusterer` 포함 → MapView가 clusterer를 안 쓰는데도
+ *          ~40KB 추가 다운로드 + 추가 평가 비용.
+ * 변경 후: 미사용 라이브러리 제거 — 첫 지도 렌더 전 네트워크/메인 스레드 단축.
+ * 측정: Network에서 sdk.js 응답 크기 / Performance Main thread "Compile script" 시간.
+ */
 function sdkSrc(appKey: string): string {
   return `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(
     appKey
-  )}&autoload=false&libraries=clusterer`;
+  )}&autoload=false`;
 }
 
 function loadKakaoSdk(appKey: string): Promise<void> {

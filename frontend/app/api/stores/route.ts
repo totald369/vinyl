@@ -10,9 +10,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { getDistrictTrashbagConfig } from "@/lib/districtTrashbagSeo";
-import { parseSearchTokens, textMatchesAllTokens } from "@/lib/searchTokens";
+import {
+  parseSearchTokens,
+  precomputeHangulTokens,
+  textMatchesAllTokens
+} from "@/lib/searchTokens";
 import {
   collectGridBucketStores,
+  collectStoresWithinRadius,
   getStoreSearchIndexes
 } from "@/lib/server/storeIndex";
 import {
@@ -31,9 +36,15 @@ export const runtime = "nodejs";
 const DEFAULT_RADIUS_KM = 2;
 const MAX_RADIUS_KM = 2;
 
-/** short/detail: 개인화·민감 가능 → private. 그 외 공개 캐시로 엣지 재사용 */
+/**
+ * short/detail: 개인화·민감 가능 → private. 그 외 공개 캐시로 엣지 재사용.
+ *
+ * 변경 전: s-maxage=60 → 트래픽 낮은 시간대에는 거의 매 요청이 origin 도달.
+ * 변경 후: 데이터는 배포 시점에만 갱신되므로 10분 캐시 + 1시간 SWR 로 origin 부하/p95 단축.
+ *          (배포 즉시 반영이 필요하면 next deploy 시 자동 무효화되거나 max-age 단축으로 회귀 가능)
+ */
 const CACHE_PRIVATE = "private, max-age=60, stale-while-revalidate=120";
-const CACHE_PUBLIC = "public, s-maxage=60, stale-while-revalidate=300";
+const CACHE_PUBLIC = "public, s-maxage=600, stale-while-revalidate=3600";
 
 /** 검색(q) 매칭 후 거리순으로 잘라 보내는 상한. */
 function getSearchLimit(): number {
@@ -324,12 +335,38 @@ export async function GET(request: NextRequest) {
     const { offset: rawOffset, limit } = parseSearchOffsetLimit(searchParams);
     const maxServe = getSearchLimit();
 
-    const candidates: StoreData[] = [];
-    for (const s of idx.byId.values()) {
-      if (!matchesProductFilter(s, productFilter)) continue;
-      const blob = idx.searchBlobLowerById.get(s.id) ?? "";
-      if (!textMatchesAllTokens(blob, tokens)) continue;
-      candidates.push(s);
+    /**
+     * 변경 전: 99k 전체를 매 검색마다 선형 스캔.
+     * 변경 후: 1) 토큰 한글 변환 1회 메모이제이션, 2) 사용자 좌표 주변 반경 후보로 사전 필터,
+     *          3) 후보가 너무 적으면 전역 스캔 폴백 (예: "전주" in 서울 origin) — 정확성 유지.
+     * 측정: 후보 매장 수, 매칭/정렬 self time, p95 응답 시간.
+     */
+    const hangulTokens = precomputeHangulTokens(tokens);
+
+    const runMatch = (pool: Iterable<StoreData>): StoreData[] => {
+      const out: StoreData[] = [];
+      for (const s of pool) {
+        if (!matchesProductFilter(s, productFilter)) continue;
+        const blob = idx.searchBlobLowerById.get(s.id) ?? "";
+        if (!textMatchesAllTokens(blob, tokens, hangulTokens)) continue;
+        out.push(s);
+      }
+      return out;
+    };
+
+    const FAST_RADIUS_KM = 30;
+    /**
+     * 사용자 좌표 주변에서 한 페이지(30개)를 못 채우면 전역 스캔으로 폴백.
+     * 예) 사용자는 서울에 있고 "전주" 검색 — 주변에 매칭이 거의 없으면 전라북도 매장으로 채움.
+     */
+    const FALLBACK_THRESHOLD = SEARCH_PAGE_DEFAULT;
+
+    let candidates = runMatch(
+      collectStoresWithinRadius(idx, origin.lat, origin.lng, FAST_RADIUS_KM)
+    );
+
+    if (candidates.length < FALLBACK_THRESHOLD) {
+      candidates = runMatch(idx.byId.values());
     }
 
     const withDist = candidates.map((s) => ({
