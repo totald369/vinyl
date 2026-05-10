@@ -13,7 +13,9 @@ import type { StoreListFilter } from "@/hooks/useStores";
 import type { BottomSheetSnap } from "@/lib/bottomSheetSnap";
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
 import { sendGtagEvent } from "@/lib/gtag";
+import { expandProvinceAliasesForSearch } from "@/lib/koreaProvinceAliases";
 import { filterStoresForSearch } from "@/lib/storeSearch";
+import { parseSearchTokens, precomputeHangulTokens, textMatchesAllTokens } from "@/lib/searchTokens";
 import type { LatLng } from "@/lib/types";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
 import { useStoreDetailAugment } from "@/hooks/useStoreDetailAugment";
@@ -60,12 +62,22 @@ export default function DistrictTrashbagClient({ config }: Props) {
     }
   );
 
+  const districtFilter = useMemo(() => {
+    const tokens = parseSearchTokens(config.addressKeyword);
+    const hangul = tokens.length ? precomputeHangulTokens(tokens) : undefined;
+    return { tokens, hangul };
+  }, [config.addressKeyword]);
+
   const districtStores = useMemo(() => {
-    const n = config.addressKeyword.toLowerCase();
-    return stores.filter((s) =>
-      `${s.roadAddress ?? ""} ${s.address ?? ""}`.toLowerCase().includes(n)
-    );
-  }, [stores, config.addressKeyword]);
+    const { tokens, hangul } = districtFilter;
+    if (!tokens.length) return stores;
+    return stores.filter((s) => {
+      const blob = expandProvinceAliasesForSearch(
+        `${s.roadAddress ?? ""} ${s.address ?? ""}`.toLowerCase().replace(/\s+/g, " ").trim()
+      );
+      return textMatchesAllTokens(blob, tokens, hangul);
+    });
+  }, [districtFilter, stores]);
 
   const searchReference = useMemo(
     () =>

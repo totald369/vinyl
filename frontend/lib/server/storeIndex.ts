@@ -7,6 +7,7 @@
  * 측정: /api/stores radius·search TTFB(서버 CPU 시간), cold path 대비 p95 Latency.
  */
 import type { StoreData } from "@/lib/storeData";
+import { expandProvinceAliasesForSearch } from "@/lib/koreaProvinceAliases";
 import { getMergedStores } from "@/lib/server/storeDataset";
 import { isValidShortCode } from "@/lib/shortLink";
 
@@ -69,8 +70,8 @@ export function getStoreSearchIndexes(): StoreSearchIndexes {
     const addr = (s.address ?? "").trim();
     const name = (s.name ?? "").trim();
     const norm = (t: string) => t.toLowerCase().replace(/\s+/g, " ").trim();
-    searchBlobLowerById.set(s.id, norm(`${name} ${road} ${addr}`));
-    addressBlobLowerById.set(s.id, norm(`${road} ${addr}`));
+    searchBlobLowerById.set(s.id, expandProvinceAliasesForSearch(norm(`${name} ${road} ${addr}`)));
+    addressBlobLowerById.set(s.id, expandProvinceAliasesForSearch(norm(`${road} ${addr}`)));
   }
 
   cached = {

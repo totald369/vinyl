@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import StoreDetailPageActions from "@/components/StoreDetailPageActions";
 import { StoreProductChips } from "@/components/StoreProductChips";
+import { normalizeProvinceAbbrevForDisplay } from "@/lib/koreaProvinceAliases";
 import { kakaoDestinationOnlyUrl } from "@/lib/kakaoDirectionsUrl";
 import { getMergedStoreById } from "@/lib/server/getMergedStoreById";
 import { SITE_BRAND_KO } from "@/lib/seoBrand";
@@ -28,7 +29,8 @@ export default function StoreDetailPage({ params }: Props) {
     notFound();
   }
 
-  const addressLine = store.roadAddress?.trim() || store.address?.trim() || "";
+  const rawAddr = store.roadAddress?.trim() || store.address?.trim() || "";
+  const addressLine = rawAddr ? normalizeProvinceAbbrevForDisplay(rawAddr) : "";
   const phoneLine = store.phone?.trim();
   const directionsHref = kakaoDestinationOnlyUrl(store);
   const telHref = phoneLine ? `tel:${phoneLine.replace(/\D/g, "")}` : "";

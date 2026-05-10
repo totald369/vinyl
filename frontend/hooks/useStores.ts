@@ -11,7 +11,8 @@
  *       sortedStores에서 불필요한 haversine 재계산 제거 시 메인 스레드 시간.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { parseSearchTokens, textMatchesAllTokens } from "@/lib/searchTokens";
+import { expandProvinceAliasesForSearch } from "@/lib/koreaProvinceAliases";
+import { parseSearchTokens, precomputeHangulTokens, textMatchesAllTokens } from "@/lib/searchTokens";
 import type { StoreData } from "@/lib/storeData";
 import { perfTimeEnd, perfTimeStart } from "@/lib/perfMarks";
 import { DEFAULT_REGION, LatLng } from "@/lib/types";
@@ -421,6 +422,7 @@ export function useStores(
     const filter = options?.activeFilter ?? "payBag";
     const ds = options?.districtScope;
     const addrTokens = ds ? parseSearchTokens(ds.addressContains) : [];
+    const addrHangulTokens = addrTokens.length ? precomputeHangulTokens(addrTokens) : undefined;
     const maxRadiusKm =
       ds != null
         ? ds.listRadiusKm == null
@@ -445,8 +447,10 @@ export function useStores(
       }))
       .filter((store) => {
         if (!addrTokens.length) return true;
-        const blob = `${store.roadAddress ?? ""} ${store.address ?? ""}`.toLowerCase();
-        return textMatchesAllTokens(blob, addrTokens);
+        const blob = expandProvinceAliasesForSearch(
+          `${store.roadAddress ?? ""} ${store.address ?? ""}`.toLowerCase().replace(/\s+/g, " ").trim()
+        );
+        return textMatchesAllTokens(blob, addrTokens, addrHangulTokens);
       })
       .filter((store) => {
         if (filter === "nonBurnable") return store.hasSpecialBag;

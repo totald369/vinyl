@@ -1,6 +1,7 @@
 import type { StoreData } from "@/lib/storeData";
 import type { StoreListFilter } from "@/hooks/useStores";
-import { parseSearchTokens, textMatchesAllTokens } from "@/lib/searchTokens";
+import { expandProvinceAliasesForSearch } from "@/lib/koreaProvinceAliases";
+import { parseSearchTokens, precomputeHangulTokens, textMatchesAllTokens } from "@/lib/searchTokens";
 import type { LatLng } from "@/lib/types";
 import { getDistanceKm } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ export function filterStoresForSearch(
 ): StoreData[] {
   const tokens = parseSearchTokens(query);
   if (!tokens.length) return [];
+  const hangulTokens = precomputeHangulTokens(tokens);
 
   const sorted = stores
     .filter((s) => {
@@ -25,8 +27,13 @@ export function filterStoresForSearch(
       return s.hasTrashBag;
     })
     .filter((s) => {
-      const blob = `${s.name ?? ""} ${(s.roadAddress || s.address) ?? ""}`.toLowerCase();
-      return textMatchesAllTokens(blob, tokens);
+      const blob = expandProvinceAliasesForSearch(
+        `${s.name ?? ""} ${(s.roadAddress || s.address) ?? ""}`
+          .toLowerCase()
+          .replace(/\s+/g, " ")
+          .trim()
+      );
+      return textMatchesAllTokens(blob, tokens, hangulTokens);
     })
     .map((s) => ({
       ...s,

@@ -9,6 +9,7 @@ import { StoreData } from "@/hooks/useStores";
 import { formatDatasetUpdateLabel } from "@/lib/datasetDate";
 import { SHOW_STORE_EDIT_REQUEST_BUTTON } from "@/lib/featureFlags";
 import type { LatLng } from "@/lib/types";
+import { normalizeProvinceAbbrevForDisplay } from "@/lib/koreaProvinceAliases";
 import { resolveKakaoDirectionsUrl } from "@/lib/kakaoDirectionsUrl";
 import { isValidShortCode } from "@/lib/shortLink";
 import type { StoreShareFallbackPayload } from "@/lib/storeShareClient";
@@ -68,7 +69,10 @@ function StoreDetailSheetInner({
     }, 2200);
   }, []);
 
-  const addressLine = store.roadAddress?.trim() || store.address?.trim() || "";
+  const addressLine = (() => {
+    const raw = store.roadAddress?.trim() || store.address?.trim() || "";
+    return raw ? normalizeProvinceAbbrevForDisplay(raw) : "";
+  })();
   const phoneLine = store.phone?.trim();
   const telHref = phoneLine ? `tel:${phoneLine.replace(/\D/g, "")}` : "";
 
