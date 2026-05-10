@@ -1,3 +1,5 @@
+import { stableShortCodeFromSeed } from "@/lib/shortLink";
+
 /** useStores `normalizeRow`에 넣을 수 있는 행 */
 export type ReportStoreJsonRow = {
   id?: string;
@@ -71,8 +73,10 @@ export function reportRowsToExtraRawStores(rows: RawReportRow[]): ReportStoreJso
     const created = row.created_at?.trim() ?? "";
     const datePart = created.length >= 10 ? created.slice(0, 10) : undefined;
 
+    const reportKey = `report:${row.id}`;
     out.push({
-      id: `report:${row.id}`,
+      id: reportKey,
+      shortCode: stableShortCodeFromSeed(reportKey),
       name: row.name ?? "",
       lat,
       lng,

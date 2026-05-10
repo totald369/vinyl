@@ -56,6 +56,7 @@ frontend/scripts/geocode-cache-gangwon-wonju-trash.json
 frontend/scripts/geocode-cache-gangwon-taebaek-trash.json
 frontend/scripts/geocode-cache-ulsan-donggu-trash.json
 frontend/scripts/geocode-cache-ulsan-bukgu.json
+frontend/scripts/geocode-cache-ulsan-junggu.json
 frontend/scripts/geocode-cache-chungbuk-chungju-trash.json
 
 # Import scratch

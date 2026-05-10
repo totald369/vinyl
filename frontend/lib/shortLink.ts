@@ -34,6 +34,24 @@ export function generateShortCode(): string {
 }
 
 /**
+ * 제보 등 JSON에 shortCode가 없는 행용: 시드만 같으면 항상 동일한 6자 코드(공공데이터와 충돌 확률은 무시 가능 수준).
+ */
+export function stableShortCodeFromSeed(seed: string): string {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  let out = "";
+  let x = h >>> 0;
+  for (let i = 0; i < SHORT_CODE_LENGTH; i++) {
+    out += CHARSET[x % CHARSET.length]!;
+    x = (Math.imul(x, 1597334677) + i + 1) >>> 0;
+  }
+  return out;
+}
+
+/**
  * Runtime must not generate new shortCode.
  * Missing/invalid/duplicate codes should be fixed by `npm run shortcodes:assign`.
  */
