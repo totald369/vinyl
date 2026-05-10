@@ -48,6 +48,8 @@ const SOURCE_FILES = [
   "stores.ulsan-junggu-special.json",
   "stores.chungbuk-chungju-trash.json",
   "stores.chungnam-trash.json",
+  "stores.chungnam-gongju-trash.json",
+  "stores.chungnam-gongju-special.json",
   "stores.chungbuk-cheongju-trash.json"
 ] as const;
 
