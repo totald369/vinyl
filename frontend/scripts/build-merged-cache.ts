@@ -76,6 +76,7 @@ function main() {
     readJsonArray<RawStoreRow>("stores.ulsan-junggu-trash.json"),
     readJsonArray<RawStoreRow>("stores.ulsan-junggu-special.json"),
     readJsonArray<RawStoreRow>("stores.chungbuk-chungju-trash.json"),
+    readJsonArray<RawStoreRow>("stores.chungnam-trash.json"),
     readJsonArray<RawStoreRow>("stores.chungbuk-cheongju-trash.json")
   );
 

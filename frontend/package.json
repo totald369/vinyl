@@ -13,7 +13,8 @@
     "lint": "next lint",
     "shortcodes:assign": "tsx scripts/assignShortCodes.ts",
     "data:import-reports-csv": "tsx scripts/importReportsCsv.ts",
-    "data:import-guro-nc": "python3 scripts/importGuroNoncombustFromXlsx.py"
+    "data:import-guro-nc": "python3 scripts/importGuroNoncombustFromXlsx.py",
+    "data:import-chungnam-trash": "python3 scripts/import_chungnam_trash_from_xlsx.py"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
