@@ -20,6 +20,25 @@ const nextConfig = {
     return [{ source: "/favicon.ico", destination: "/Img/Icon/trash_bag_24.svg" }];
   },
 
+  /**
+   * Permissions-Policy: unload=*
+   * - 우리 코드에는 unload/beforeunload 핸들러가 없으나, 서드파티 SDK(gtag, clarity, adsbygoogle)가
+   *   내부적으로 unload 리스너를 등록하려 시도하면서 Chrome 이 "Permissions policy violation: unload
+   *   is not allowed in this document" 위반 로그를 콘솔에 남깁니다(기능 영향 없음, 노이즈).
+   * - unload=* 로 모든 컨텍스트에서 허용해 위반 로그를 제거합니다. 우리 코드는 unload 미사용이므로
+   *   보안적·기능적 차이 없음. 서드파티의 unload 마이그레이션이 끝나면 이 헤더는 제거해도 됩니다.
+   */
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "Permissions-Policy", value: "unload=*" }
+        ]
+      }
+    ];
+  },
+
   webpack: (config, { dev }) => {
     if (dev && process.env.NEXT_DEV_POLL === "1") {
       config.watchOptions = {
