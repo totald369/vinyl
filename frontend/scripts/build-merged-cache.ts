@@ -79,7 +79,8 @@ function main() {
     readJsonArray<RawStoreRow>("stores.chungnam-trash.json"),
     readJsonArray<RawStoreRow>("stores.chungnam-gongju-trash.json"),
     readJsonArray<RawStoreRow>("stores.chungnam-gongju-special.json"),
-    readJsonArray<RawStoreRow>("stores.chungbuk-cheongju-trash.json")
+    readJsonArray<RawStoreRow>("stores.chungbuk-cheongju-trash.json"),
+    readJsonArray<RawStoreRow>("stores.chungbuk-jeungpyeong-trash.json")
   );
 
   if (!fs.existsSync(DATA_DIR)) {

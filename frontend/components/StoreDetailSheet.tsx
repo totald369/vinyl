@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PurchaseFeedbackCard } from "@/components/PurchaseFeedbackCard";
 import StoreShareFallback from "@/components/StoreShareFallback";
 import { StoreProductChips } from "@/components/StoreProductChips";
 import { StoreData } from "@/hooks/useStores";
@@ -13,6 +14,13 @@ import { normalizeProvinceAbbrevForDisplay } from "@/lib/koreaProvinceAliases";
 import { resolveKakaoDirectionsUrl } from "@/lib/kakaoDirectionsUrl";
 import { isValidShortCode } from "@/lib/shortLink";
 import type { StoreShareFallbackPayload } from "@/lib/storeShareClient";
+import { getPurchaseFeedbackStats, submitPurchaseFeedback } from "@/lib/purchaseFeedbackClient";
+import { getOrCreateDeviceKey } from "@/lib/purchaseFeedbackDeviceKey";
+import {
+  hasSubmittedPurchaseFeedback,
+  markPurchaseFeedbackSubmitted,
+  type PurchaseFeedbackType
+} from "@/lib/purchaseFeedbackStorage";
 import { getShareButtonHint, shareStoreWithTracking } from "@/lib/storeShareClient";
 
 type Props = {
@@ -41,7 +49,13 @@ function StoreDetailSheetInner({
   const scrollHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [scrolling, setScrolling] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; variant: "default" | "purchase" } | null>(null);
+  const [purchaseFb, setPurchaseFb] = useState<{
+    success: number;
+    failure: number;
+    loading: boolean;
+    submitted: boolean;
+  }>({ success: 0, failure: 0, loading: true, submitted: false });
   const [shareFallback, setShareFallback] = useState<StoreShareFallbackPayload | null>(null);
 
   const handleScroll = useCallback(() => {
@@ -60,14 +74,82 @@ function StoreDetailSheetInner({
     };
   }, []);
 
-  const showToast = useCallback((message: string) => {
-    setToastMessage(message);
+  const showToast = useCallback((message: string, variant: "default" | "purchase" = "default") => {
+    setToast({ message, variant });
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => {
-      setToastMessage(null);
+      setToast(null);
       toastTimerRef.current = null;
-    }, 2200);
+    }, variant === "purchase" ? 2600 : 2200);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPurchaseFb((s) => ({ ...s, loading: true, submitted: hasSubmittedPurchaseFeedback(store.id) }));
+    void getPurchaseFeedbackStats(store.id).then((stats) => {
+      if (cancelled) return;
+      setPurchaseFb({
+        success: stats.successCount,
+        failure: stats.failureCount,
+        loading: false,
+        submitted: hasSubmittedPurchaseFeedback(store.id)
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [store.id]);
+
+  const handlePurchaseFeedbackSubmit = useCallback(
+    async (type: PurchaseFeedbackType) => {
+      if (hasSubmittedPurchaseFeedback(store.id)) {
+        showToast("이미 알려주셨어요.");
+        return;
+      }
+      setPurchaseFb((s) => ({
+        ...s,
+        success: type === "success" ? s.success + 1 : s.success,
+        failure: type === "failure" ? s.failure + 1 : s.failure
+      }));
+      try {
+        const deviceKey = getOrCreateDeviceKey();
+        const res = await submitPurchaseFeedback(store.id, type, deviceKey);
+        if (res.persisted) {
+          markPurchaseFeedbackSubmitted(store.id, type);
+          setPurchaseFb((s) => ({
+            ...s,
+            success: res.successCount,
+            failure: res.failureCount,
+            submitted: true
+          }));
+          showToast("알려줘서 고마워요!", "purchase");
+        } else {
+          setPurchaseFb((s) => ({
+            ...s,
+            success: type === "success" ? Math.max(0, s.success - 1) : s.success,
+            failure: type === "failure" ? Math.max(0, s.failure - 1) : s.failure,
+            submitted: hasSubmittedPurchaseFeedback(store.id)
+          }));
+          showToast("반영에 실패했어요. 잠시 후 다시 시도해주세요.");
+        }
+      } catch (e) {
+        if (process.env.NODE_ENV === "development") {
+          console.error("[handlePurchaseFeedbackSubmit]", e);
+        }
+        setPurchaseFb((s) => ({
+          ...s,
+          success: type === "success" ? Math.max(0, s.success - 1) : s.success,
+          failure: type === "failure" ? Math.max(0, s.failure - 1) : s.failure
+        }));
+        const devHint =
+          process.env.NODE_ENV === "development" && e instanceof Error && e.message
+            ? ` (${e.message})`
+            : "";
+        showToast(`반영에 실패했어요. 잠시 후 다시 시도해주세요.${devHint}`);
+      }
+    },
+    [showToast, store.id]
+  );
 
   const addressLine = (() => {
     const raw = store.roadAddress?.trim() || store.address?.trim() || "";
@@ -273,6 +355,18 @@ function StoreDetailSheetInner({
             )}
           </div>
 
+          {!isAugmentingDetail ? (
+            <PurchaseFeedbackCard
+              storeId={store.id}
+              successCount={purchaseFb.success}
+              failureCount={purchaseFb.failure}
+              showCountRows={purchaseFb.success + purchaseFb.failure > 0}
+              isLoading={purchaseFb.loading}
+              hasSubmitted={purchaseFb.submitted}
+              onSubmit={(t) => void handlePurchaseFeedbackSubmit(t)}
+            />
+          ) : null}
+
           <div className="flex w-full gap-1 pb-2">
             {canShare ? (
               <button
@@ -306,14 +400,20 @@ function StoreDetailSheetInner({
         </div>
       </section>
 
-      {toastMessage ? (
+      {toast ? (
         <div
           className="pointer-events-none fixed bottom-[max(100px,calc(18dvh+env(safe-area-inset-bottom,0px)))] left-1/2 z-toast max-w-[min(90vw,320px)] -translate-x-1/2"
           role="status"
           aria-live="polite"
         >
-          <div className="rounded-full bg-[#171717] px-4 py-3 text-center text-[14px] font-semibold leading-normal text-white shadow-elevation-3">
-            {toastMessage}
+          <div
+            className={
+              toast.variant === "purchase"
+                ? "rounded-[999px] bg-[rgba(17,17,17,0.9)] px-6 py-3 text-center text-[14px] font-medium leading-[1.5] text-white shadow-[0px_12px_24px_0px_rgba(0,0,0,0.07)]"
+                : "rounded-full bg-[#171717] px-4 py-3 text-center text-[14px] font-semibold leading-normal text-white shadow-elevation-3"
+            }
+          >
+            {toast.message}
           </div>
         </div>
       ) : null}
