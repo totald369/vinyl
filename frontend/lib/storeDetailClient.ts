@@ -1,10 +1,17 @@
 /**
  * Lazy store detail: list API returns lean rows; open sheet then fetches full row by id.
- * Dedupes in-flight requests and caches by id + origin (for distance field).
+ * Dedupes in-flight requests and caches by id only (distance computed per call).
+ *
+ * 변경 전: 캐시 키 = `${id}:${origin.lat.toFixed(5)}:${origin.lng.toFixed(5)}` → 동일 매장이라도
+ *          지도 중심이 약 1m만 달라져도 cache miss 로 동일 데이터 재요청.
+ * 변경 후: 캐시 키 = id 만, 거리는 좌표 기반으로 클라이언트에서 재계산해 store.distance 에 주입.
+ *          → prefetch 효율 상승, 시트 재오픈 즉시 채움.
+ * 측정: 동일 매장 클릭 시 추가 /api/stores?id= 발생 여부, 시트 첫 렌더 ~ 본문 채워지는 시간.
  */
 import type { StoreData } from "@/lib/storeData";
 import type { LatLng } from "@/lib/types";
 import { perfTimeEnd, perfTimeStart } from "@/lib/perfMarks";
+import { getDistanceKm } from "@/lib/utils";
 
 type DetailResponse = { mode?: string; store?: StoreData };
 
@@ -19,9 +26,8 @@ let prefetchDraining = false;
 const PREFETCH_SPACING_MS = 320;
 
 function enqueuePrefetch(job: PrefetchJob): boolean {
-  const key = cacheKey(job.id, job.origin);
-  if (cache.has(key) || inflight.has(key)) return false;
-  if (prefetchQueue.some((p) => cacheKey(p.id, p.origin) === key)) return false;
+  if (cache.has(job.id) || inflight.has(job.id)) return false;
+  if (prefetchQueue.some((p) => p.id === job.id)) return false;
   prefetchQueue.push(job);
   return true;
 }
@@ -32,8 +38,7 @@ async function drainPrefetchQueue(): Promise<void> {
   try {
     while (prefetchQueue.length > 0) {
       const job = prefetchQueue.shift()!;
-      const key = cacheKey(job.id, job.origin);
-      if (cache.has(key) || inflight.has(key)) continue;
+      if (cache.has(job.id) || inflight.has(job.id)) continue;
       try {
         await fetchStoreDetail(job.id, job.origin);
       } catch {
@@ -49,12 +54,17 @@ async function drainPrefetchQueue(): Promise<void> {
   }
 }
 
-function cacheKey(id: string, origin: LatLng): string {
-  return `${id}:${origin.lat.toFixed(5)}:${origin.lng.toFixed(5)}`;
+function withDistance(store: StoreData, origin: LatLng): StoreData {
+  const d = getDistanceKm(origin.lat, origin.lng, store.lat, store.lng);
+  if (typeof store.distance === "number" && Math.abs(store.distance - d) < 1e-6) {
+    return store;
+  }
+  return { ...store, distance: d };
 }
 
 export function getCachedStoreDetail(id: string, origin: LatLng): StoreData | undefined {
-  return cache.get(cacheKey(id, origin));
+  const hit = cache.get(id);
+  return hit ? withDistance(hit, origin) : undefined;
 }
 
 /** Warm cache from hover / touchstart without awaiting */
@@ -67,12 +77,11 @@ export async function fetchStoreDetail(
   origin: LatLng,
   opts?: { signal?: AbortSignal }
 ): Promise<StoreData> {
-  const key = cacheKey(id, origin);
-  const hit = cache.get(key);
-  if (hit) return hit;
+  const hit = cache.get(id);
+  if (hit) return withDistance(hit, origin);
 
-  const pending = inflight.get(key);
-  if (pending) return pending;
+  const pending = inflight.get(id);
+  if (pending) return pending.then((s) => withDistance(s, origin));
 
   const label = `[perf] store-detail-fetch:${id}`;
   perfTimeStart(label);
@@ -94,15 +103,16 @@ export async function fetchStoreDetail(
     if (!store?.id) {
       throw new Error("detail_missing");
     }
-    cache.set(key, store);
+    cache.set(id, store);
     return store;
   })();
 
-  inflight.set(key, p);
+  inflight.set(id, p);
   try {
-    return await p;
+    const store = await p;
+    return withDistance(store, origin);
   } finally {
-    inflight.delete(key);
+    inflight.delete(id);
     perfTimeEnd(label);
   }
 }
