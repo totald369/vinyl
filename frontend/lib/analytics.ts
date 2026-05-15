@@ -1,6 +1,7 @@
 "use client";
 
 import { sendGtagEvent } from "@/lib/gtag";
+import type { PurchaseFeedbackType } from "@/lib/purchaseFeedbackStorage";
 
 export type ShareAnalyticsEventName =
   | "share_store_attempt"
@@ -99,5 +100,81 @@ export function trackShareEvent(eventName: ShareAnalyticsEventName, params: Shar
   }
 
   console.debug("[share-analytics]", eventName, cleaned);
+}
+
+const PURCHASE_FEEDBACK_STORE_NAME_MAX = 120;
+
+/** GA4/Clarity에 넣지 않을 수 있는 문자열(전화·URL·이메일 등)을 걸러 짧은 라벨만 허용 */
+function sanitizePurchaseFeedbackErrorMessage(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const t = raw.trim().replace(/\s+/g, " ").slice(0, 120);
+  if (!t) return undefined;
+  if (/https?:\/\//i.test(t)) return "error_redacted";
+  if (/@/.test(t)) return "error_redacted";
+  if (/\d{9,}/.test(t)) return "error_redacted";
+  return t;
+}
+
+function truncateStoreNameForAnalytics(name: string): string {
+  const s = name.trim();
+  if (s.length <= PURCHASE_FEEDBACK_STORE_NAME_MAX) return s;
+  return s.slice(0, PURCHASE_FEEDBACK_STORE_NAME_MAX);
+}
+
+export type TrackPurchaseFeedbackParams = {
+  storeId: string;
+  storeName: string;
+  feedbackType: PurchaseFeedbackType;
+  feedbackLabel: "샀어요" | "못 샀어요";
+  result: "success" | "duplicate" | "error";
+  isDuplicateAttempt: boolean;
+  hasPhoneNumber: boolean;
+  hasSpecialBag: boolean;
+  hasTrashBag: boolean;
+  hasLargeWasteSticker: boolean;
+  errorMessage?: string;
+};
+
+/**
+ * 구매 여부 피드백 (GA4 + Clarity). `sendGtagEvent`와 동일하게 프로덕션·GA ID 있을 때만 GA 전송.
+ * Clarity는 스크립트가 로드된 경우에만 동작(루트 layout에서 프로덕션 로드).
+ * 개발 환경에서는 `console.debug`로 페이로드만 확인(운영 콘솔 스팸 없음).
+ */
+export function trackPurchaseFeedbackEvent(params: TrackPurchaseFeedbackParams): void {
+  if (typeof window === "undefined") return;
+
+  const submittedAt = new Date().toISOString();
+  const gtagPayload: Record<string, string | number | boolean> = {
+    store_id: params.storeId,
+    store_name: truncateStoreNameForAnalytics(params.storeName),
+    feedback_type: params.feedbackType,
+    feedback_label: params.feedbackLabel,
+    has_phone_number: params.hasPhoneNumber,
+    has_special_bag: params.hasSpecialBag,
+    has_trash_bag: params.hasTrashBag,
+    has_large_waste_sticker: params.hasLargeWasteSticker,
+    source: "store_detail",
+    submitted_at: submittedAt,
+    is_duplicate_attempt: params.isDuplicateAttempt,
+    result: params.result
+  };
+
+  const safeErr = sanitizePurchaseFeedbackErrorMessage(params.errorMessage);
+  if (params.result === "error" && safeErr) {
+    gtagPayload.error_message = safeErr;
+  }
+
+  sendGtagEvent("purchase_feedback_submit", gtagPayload);
+
+  if (typeof window.clarity === "function") {
+    window.clarity("event", "purchase_feedback_submit");
+    window.clarity("set", "purchase_feedback_type", params.feedbackType);
+    window.clarity("set", "purchase_feedback_result", params.result);
+    window.clarity("set", "purchase_feedback_store_id", params.storeId);
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    console.debug("[purchase-feedback-analytics]", "purchase_feedback_submit", gtagPayload);
+  }
 }
 

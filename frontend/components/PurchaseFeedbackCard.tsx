@@ -9,6 +9,8 @@ export type PurchaseFeedbackCardProps = {
   /** true면 Figma StoreDetail(데이터 있음) — 카운트 두 줄 노출 */
   showCountRows: boolean;
   isLoading: boolean;
+  /** API 응답 전까지 버튼 비활성·대체 UI — 연타로 중복 insert 방지 */
+  isSubmitting?: boolean;
   hasSubmitted: boolean;
   onSubmit: (type: PurchaseFeedbackType) => void;
 };
@@ -16,37 +18,55 @@ export type PurchaseFeedbackCardProps = {
 /** Figma 155:703 — 집계 없음·미선택 시 안내 2줄 + 버튼만 */
 function EmptyPurchaseFeedbackPrompt({
   disabled,
+  isSubmitting,
   onSubmit
 }: {
   disabled: boolean;
+  isSubmitting: boolean;
   onSubmit: (type: PurchaseFeedbackType) => void;
 }) {
+  const buttonsDisabled = disabled || isSubmitting;
   return (
     <div className="flex w-full flex-col items-center gap-3 text-center leading-[1.5] not-italic whitespace-nowrap">
       <div className="flex flex-col items-center">
         <p className="text-[16px] font-bold text-black">방문 후 구매 여부를 알려주세요.</p>
         <p className="text-[14px] font-medium text-[#666666]">다른 사용자의 헛걸음을 줄일 수 있어요.</p>
       </div>
-      <div className="flex w-full gap-1 font-bold text-[#171717]">
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => onSubmit("success")}
-          className="flex h-12 min-w-[60px] flex-1 items-center justify-center gap-0.5 rounded-lg border border-[#dddddd] bg-white px-4 py-2 text-[16px] leading-[1.5] outline-none transition-opacity disabled:cursor-not-allowed disabled:opacity-40 active:bg-[rgba(23,23,23,0.04)] focus-visible:ring-2 focus-visible:ring-brand-500"
-          aria-label="이 판매처에서 구매했어요"
+      {isSubmitting ? (
+        <div
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-lg border border-[#dddddd] bg-white text-[14px] font-medium text-[#666666]"
+          aria-live="polite"
+          aria-busy="true"
+          aria-label="구매 여부 보내는 중"
         >
-          샀어요<span className="text-[20px] leading-none">👍</span>
-        </button>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => onSubmit("failure")}
-          className="flex h-12 min-w-[60px] flex-1 items-center justify-center gap-0.5 rounded-lg border border-[#dddddd] bg-white px-4 py-2 text-[16px] leading-[1.5] outline-none transition-opacity disabled:cursor-not-allowed disabled:opacity-40 active:bg-[rgba(23,23,23,0.04)] focus-visible:ring-2 focus-visible:ring-brand-500"
-          aria-label="이 판매처에서 구매하지 못했어요"
-        >
-          못 샀어요<span className="text-[20px] leading-none">😭</span>
-        </button>
-      </div>
+          <span
+            className="size-4 shrink-0 animate-spin rounded-full border-2 border-[#dddddd] border-t-[#171717]"
+            aria-hidden
+          />
+          보내는 중…
+        </div>
+      ) : (
+        <div className="flex w-full gap-1 font-bold text-[#171717]">
+          <button
+            type="button"
+            disabled={buttonsDisabled}
+            onClick={() => onSubmit("success")}
+            className="flex h-12 min-w-[60px] flex-1 items-center justify-center gap-0.5 rounded-lg border border-[#dddddd] bg-white px-4 py-2 text-[16px] leading-[1.5] outline-none transition-opacity disabled:cursor-not-allowed disabled:opacity-40 active:bg-[rgba(23,23,23,0.04)] focus-visible:ring-2 focus-visible:ring-brand-500"
+            aria-label="이 판매처에서 구매했어요"
+          >
+            샀어요<span className="text-[20px] leading-none">👍</span>
+          </button>
+          <button
+            type="button"
+            disabled={buttonsDisabled}
+            onClick={() => onSubmit("failure")}
+            className="flex h-12 min-w-[60px] flex-1 items-center justify-center gap-0.5 rounded-lg border border-[#dddddd] bg-white px-4 py-2 text-[16px] leading-[1.5] outline-none transition-opacity disabled:cursor-not-allowed disabled:opacity-40 active:bg-[rgba(23,23,23,0.04)] focus-visible:ring-2 focus-visible:ring-brand-500"
+            aria-label="이 판매처에서 구매하지 못했어요"
+          >
+            못 샀어요<span className="text-[20px] leading-none">😭</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -63,6 +83,7 @@ export function PurchaseFeedbackCard({
   failureCount,
   showCountRows,
   isLoading,
+  isSubmitting = false,
   hasSubmitted,
   onSubmit
 }: PurchaseFeedbackCardProps) {
@@ -148,7 +169,11 @@ export function PurchaseFeedbackCard({
             </div>
           </div>
         ) : (
-          <EmptyPurchaseFeedbackPrompt disabled={hasSubmitted || isLoading} onSubmit={onSubmit} />
+          <EmptyPurchaseFeedbackPrompt
+            disabled={hasSubmitted || isLoading}
+            isSubmitting={isSubmitting}
+            onSubmit={onSubmit}
+          />
         )}
       </section>
     );
@@ -191,7 +216,11 @@ export function PurchaseFeedbackCard({
           </div>
           <div className="flex flex-col gap-4">
             <div className="h-px w-full shrink-0 bg-[rgba(17,17,17,0.07)]" aria-hidden />
-            <EmptyPurchaseFeedbackPrompt disabled={hasSubmitted || isLoading} onSubmit={onSubmit} />
+            <EmptyPurchaseFeedbackPrompt
+              disabled={hasSubmitted || isLoading}
+              isSubmitting={isSubmitting}
+              onSubmit={onSubmit}
+            />
           </div>
         </div>
       )}

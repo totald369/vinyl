@@ -21,6 +21,7 @@ import {
   markPurchaseFeedbackSubmitted,
   type PurchaseFeedbackType
 } from "@/lib/purchaseFeedbackStorage";
+import { trackPurchaseFeedbackEvent } from "@/lib/analytics";
 import { getShareButtonHint, shareStoreWithTracking } from "@/lib/storeShareClient";
 
 type Props = {
@@ -56,6 +57,9 @@ function StoreDetailSheetInner({
     loading: boolean;
     submitted: boolean;
   }>({ success: 0, failure: 0, loading: true, submitted: false });
+  /** 연타·더블탭 시 API 두 번 호출 방지 (setState보다 먼저 동기적으로 막음) */
+  const purchaseFeedbackSubmitLockRef = useRef(false);
+  const [purchaseFeedbackSubmitting, setPurchaseFeedbackSubmitting] = useState(false);
   const [shareFallback, setShareFallback] = useState<StoreShareFallbackPayload | null>(null);
 
   const handleScroll = useCallback(() => {
@@ -85,6 +89,8 @@ function StoreDetailSheetInner({
 
   useEffect(() => {
     let cancelled = false;
+    purchaseFeedbackSubmitLockRef.current = false;
+    setPurchaseFeedbackSubmitting(false);
     setPurchaseFb((s) => ({ ...s, loading: true, submitted: hasSubmittedPurchaseFeedback(store.id) }));
     void getPurchaseFeedbackStats(store.id).then((stats) => {
       if (cancelled) return;
@@ -102,53 +108,105 @@ function StoreDetailSheetInner({
 
   const handlePurchaseFeedbackSubmit = useCallback(
     async (type: PurchaseFeedbackType) => {
+      const feedbackLabel: "샀어요" | "못 샀어요" = type === "success" ? "샀어요" : "못 샀어요";
+      const basePurchaseFeedbackAnalytics = {
+        storeId: store.id,
+        storeName: store.name,
+        feedbackType: type,
+        feedbackLabel,
+        hasPhoneNumber: Boolean(store.phone?.trim()),
+        hasSpecialBag: store.hasSpecialBag,
+        hasTrashBag: store.hasTrashBag,
+        hasLargeWasteSticker: store.hasLargeWasteSticker
+      };
+
       if (hasSubmittedPurchaseFeedback(store.id)) {
         showToast("이미 알려주셨어요.");
+        trackPurchaseFeedbackEvent({
+          ...basePurchaseFeedbackAnalytics,
+          result: "duplicate",
+          isDuplicateAttempt: true
+        });
         return;
       }
-      setPurchaseFb((s) => ({
-        ...s,
-        success: type === "success" ? s.success + 1 : s.success,
-        failure: type === "failure" ? s.failure + 1 : s.failure
-      }));
+      if (purchaseFeedbackSubmitLockRef.current) {
+        return;
+      }
+      purchaseFeedbackSubmitLockRef.current = true;
+      setPurchaseFeedbackSubmitting(true);
       try {
-        const deviceKey = getOrCreateDeviceKey();
-        const res = await submitPurchaseFeedback(store.id, type, deviceKey);
-        if (res.persisted) {
-          markPurchaseFeedbackSubmitted(store.id, type);
-          setPurchaseFb((s) => ({
-            ...s,
-            success: res.successCount,
-            failure: res.failureCount,
-            submitted: true
-          }));
-          showToast("알려줘서 고마워요!", "purchase");
-        } else {
+        setPurchaseFb((s) => ({
+          ...s,
+          success: type === "success" ? s.success + 1 : s.success,
+          failure: type === "failure" ? s.failure + 1 : s.failure
+        }));
+        try {
+          const deviceKey = getOrCreateDeviceKey();
+          const res = await submitPurchaseFeedback(store.id, type, deviceKey);
+          if (res.persisted) {
+            markPurchaseFeedbackSubmitted(store.id, type);
+            setPurchaseFb((s) => ({
+              ...s,
+              success: res.successCount,
+              failure: res.failureCount,
+              submitted: true
+            }));
+            showToast("알려줘서 고마워요!", "purchase");
+            trackPurchaseFeedbackEvent({
+              ...basePurchaseFeedbackAnalytics,
+              result: "success",
+              isDuplicateAttempt: false
+            });
+          } else {
+            setPurchaseFb((s) => ({
+              ...s,
+              success: type === "success" ? Math.max(0, s.success - 1) : s.success,
+              failure: type === "failure" ? Math.max(0, s.failure - 1) : s.failure,
+              submitted: hasSubmittedPurchaseFeedback(store.id)
+            }));
+            showToast("반영에 실패했어요. 잠시 후 다시 시도해주세요.");
+            trackPurchaseFeedbackEvent({
+              ...basePurchaseFeedbackAnalytics,
+              result: "error",
+              isDuplicateAttempt: false,
+              errorMessage: "not_persisted"
+            });
+          }
+        } catch (e) {
+          if (process.env.NODE_ENV === "development") {
+            console.error("[handlePurchaseFeedbackSubmit]", e);
+          }
           setPurchaseFb((s) => ({
             ...s,
             success: type === "success" ? Math.max(0, s.success - 1) : s.success,
-            failure: type === "failure" ? Math.max(0, s.failure - 1) : s.failure,
-            submitted: hasSubmittedPurchaseFeedback(store.id)
+            failure: type === "failure" ? Math.max(0, s.failure - 1) : s.failure
           }));
-          showToast("반영에 실패했어요. 잠시 후 다시 시도해주세요.");
+          const devHint =
+            process.env.NODE_ENV === "development" && e instanceof Error && e.message
+              ? ` (${e.message})`
+              : "";
+          showToast(`반영에 실패했어요. 잠시 후 다시 시도해주세요.${devHint}`);
+          trackPurchaseFeedbackEvent({
+            ...basePurchaseFeedbackAnalytics,
+            result: "error",
+            isDuplicateAttempt: false,
+            errorMessage: e instanceof Error ? e.message : "unknown_error"
+          });
         }
-      } catch (e) {
-        if (process.env.NODE_ENV === "development") {
-          console.error("[handlePurchaseFeedbackSubmit]", e);
-        }
-        setPurchaseFb((s) => ({
-          ...s,
-          success: type === "success" ? Math.max(0, s.success - 1) : s.success,
-          failure: type === "failure" ? Math.max(0, s.failure - 1) : s.failure
-        }));
-        const devHint =
-          process.env.NODE_ENV === "development" && e instanceof Error && e.message
-            ? ` (${e.message})`
-            : "";
-        showToast(`반영에 실패했어요. 잠시 후 다시 시도해주세요.${devHint}`);
+      } finally {
+        purchaseFeedbackSubmitLockRef.current = false;
+        setPurchaseFeedbackSubmitting(false);
       }
     },
-    [showToast, store.id]
+    [
+      showToast,
+      store.id,
+      store.name,
+      store.phone,
+      store.hasTrashBag,
+      store.hasSpecialBag,
+      store.hasLargeWasteSticker
+    ]
   );
 
   const addressLine = (() => {
@@ -362,6 +420,7 @@ function StoreDetailSheetInner({
               failureCount={purchaseFb.failure}
               showCountRows={purchaseFb.success + purchaseFb.failure > 0}
               isLoading={purchaseFb.loading}
+              isSubmitting={purchaseFeedbackSubmitting}
               hasSubmitted={purchaseFb.submitted}
               onSubmit={(t) => void handlePurchaseFeedbackSubmit(t)}
             />
