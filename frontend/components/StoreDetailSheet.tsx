@@ -14,7 +14,12 @@ import { normalizeProvinceAbbrevForDisplay } from "@/lib/koreaProvinceAliases";
 import { resolveKakaoDirectionsUrl } from "@/lib/kakaoDirectionsUrl";
 import { isValidShortCode } from "@/lib/shortLink";
 import type { StoreShareFallbackPayload } from "@/lib/storeShareClient";
-import { getPurchaseFeedbackStats, submitPurchaseFeedback } from "@/lib/purchaseFeedbackClient";
+import {
+  getCachedPurchaseFeedbackStats,
+  getPurchaseFeedbackStats,
+  primePurchaseFeedbackStats,
+  submitPurchaseFeedback
+} from "@/lib/purchaseFeedbackClient";
 import { getOrCreateDeviceKey } from "@/lib/purchaseFeedbackDeviceKey";
 import {
   hasSubmittedPurchaseFeedback,
@@ -91,7 +96,24 @@ function StoreDetailSheetInner({
     let cancelled = false;
     purchaseFeedbackSubmitLockRef.current = false;
     setPurchaseFeedbackSubmitting(false);
-    setPurchaseFb((s) => ({ ...s, loading: true, submitted: hasSubmittedPurchaseFeedback(store.id) }));
+
+    /**
+     * 변경 전: 시트가 열릴 때마다 loading=true 로 두고 매번 fetch → 동일 매장 재오픈도 RTT 만큼 지연.
+     * 변경 후: 메모리 캐시(30초 TTL) 히트 시 loading=false 로 즉시 본문 렌더,
+     *         백그라운드 SWR 갱신은 별도 fetch 로 진행.
+     */
+    const cached = getCachedPurchaseFeedbackStats(store.id);
+    if (cached) {
+      setPurchaseFb({
+        success: cached.successCount,
+        failure: cached.failureCount,
+        loading: false,
+        submitted: hasSubmittedPurchaseFeedback(store.id)
+      });
+    } else {
+      setPurchaseFb((s) => ({ ...s, loading: true, submitted: hasSubmittedPurchaseFeedback(store.id) }));
+    }
+
     void getPurchaseFeedbackStats(store.id).then((stats) => {
       if (cancelled) return;
       setPurchaseFb({
@@ -145,6 +167,10 @@ function StoreDetailSheetInner({
           const res = await submitPurchaseFeedback(store.id, type, deviceKey);
           if (res.persisted) {
             markPurchaseFeedbackSubmitted(store.id, type);
+            primePurchaseFeedbackStats(store.id, {
+              successCount: res.successCount,
+              failureCount: res.failureCount
+            });
             setPurchaseFb((s) => ({
               ...s,
               success: res.successCount,

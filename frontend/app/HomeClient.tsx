@@ -233,6 +233,27 @@ export default function HomeClient({
     }
   }, [sheetView, selectedStore]);
 
+  /**
+   * StoreDetailSheet 는 `dynamic(...)` 으로 코드 분할되어 첫 마커 클릭 시 청크 다운로드가
+   * 메인 스레드/네트워크와 경합 → 첫 시트 표시가 느림.
+   * 변경 후: 메인 hydration 직후 idle 시점에 청크를 미리 import 해 캐시에 적재.
+   *         이후 마커 클릭은 클릭→렌더 사이에 다운로드 단계가 사라짐.
+   * 측정: 첫 marker click → 시트 첫 페인트(`[perf] detail-open`).
+   */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const idle: (cb: () => void) => number =
+      (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback ??
+      ((cb) => window.setTimeout(cb, 1));
+    const cancel: (id: number) => void =
+      (window as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback ??
+      ((id) => window.clearTimeout(id));
+    const handle = idle(() => {
+      void import("@/components/StoreDetailSheet");
+    });
+    return () => cancel(handle);
+  }, []);
+
   const handleMoveToLocation = useCallback(() => {
     keepSelectedOutsideListRef.current = false;
     sendGtagEvent("click_my_location");

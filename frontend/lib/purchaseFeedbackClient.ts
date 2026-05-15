@@ -10,7 +10,29 @@ export type PurchaseFeedbackSubmitResult = PurchaseFeedbackStats & {
   persisted: boolean;
 };
 
-export async function getPurchaseFeedbackStats(storeId: string): Promise<PurchaseFeedbackStats> {
+/**
+ * 변경 전: 시트가 열릴 때마다 stats 를 매번 fetch (cache: no-store) → 동일 매장 재오픈에도 RTT.
+ * 변경 후: storeId 키로 30초 TTL 메모리 캐시 + in-flight 디듀프.
+ *          `getCachedPurchaseFeedbackStats` 가 있으면 시트는 즉시 카운트 표시,
+ *          submit 시 stats 도 즉시 갱신해 정합성 유지(`primePurchaseFeedbackStats`).
+ */
+type StatsCacheEntry = { ts: number; data: PurchaseFeedbackStats };
+const STATS_TTL_MS = 30_000;
+const statsCache = new Map<string, StatsCacheEntry>();
+const statsInflight = new Map<string, Promise<PurchaseFeedbackStats>>();
+
+export function getCachedPurchaseFeedbackStats(storeId: string): PurchaseFeedbackStats | null {
+  const e = statsCache.get(storeId);
+  if (!e) return null;
+  if (Date.now() - e.ts > STATS_TTL_MS) return null;
+  return e.data;
+}
+
+export function primePurchaseFeedbackStats(storeId: string, data: PurchaseFeedbackStats): void {
+  statsCache.set(storeId, { ts: Date.now(), data });
+}
+
+async function fetchPurchaseFeedbackStatsRaw(storeId: string): Promise<PurchaseFeedbackStats> {
   const res = await fetch(`/api/stores/${encodeURIComponent(storeId)}/purchase-feedback`, {
     method: "GET",
     cache: "no-store"
@@ -26,6 +48,21 @@ export async function getPurchaseFeedbackStats(storeId: string): Promise<Purchas
     successCount: Number.isFinite(successCount) ? Math.max(0, Math.floor(successCount)) : 0,
     failureCount: Number.isFinite(failureCount) ? Math.max(0, Math.floor(failureCount)) : 0
   };
+}
+
+export async function getPurchaseFeedbackStats(storeId: string): Promise<PurchaseFeedbackStats> {
+  const pending = statsInflight.get(storeId);
+  if (pending) return pending;
+  const p = fetchPurchaseFeedbackStatsRaw(storeId)
+    .then((data) => {
+      primePurchaseFeedbackStats(storeId, data);
+      return data;
+    })
+    .finally(() => {
+      statsInflight.delete(storeId);
+    });
+  statsInflight.set(storeId, p);
+  return p;
 }
 
 export async function submitPurchaseFeedback(

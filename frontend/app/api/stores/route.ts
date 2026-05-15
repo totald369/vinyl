@@ -135,8 +135,16 @@ function roundCoord6(n: number): number {
   return Math.round(n * 1e6) / 1e6;
 }
 
+/**
+ * 변경 전: list 모드 응답에서 dataReferenceDate / phone / businessStatus 제거 →
+ *         시트 열 때 /api/stores?id= 2-hop fetch 가 필수, RTT 만큼 스켈레톤 노출.
+ * 변경 후: list 응답에도 포함 → 클라이언트 `storeRowNeedsDetailFetch` 가 false 가 되어
+ *         augment 라운드트립 자체가 사라짐. 시트가 즉시 본문 렌더.
+ *         페이로드 증가: 30행 기준 ~1KB 미만(brotli 후 거의 무의미).
+ */
 function toListStore(s: StoreData, distanceKm?: number) {
   const road = (s.roadAddress ?? s.address ?? "").trim();
+  const phone = s.phone?.trim();
   return {
     id: s.id,
     name: s.name,
@@ -149,18 +157,17 @@ function toListStore(s: StoreData, distanceKm?: number) {
     hasSpecialBag: s.hasSpecialBag,
     hasLargeWasteSticker: s.hasLargeWasteSticker,
     adminVerified: s.adminVerified === true,
+    /** "" 도 hasOwnProperty 가 true → useStoreDetailAugment 가 fetch 를 건너뜀. */
+    dataReferenceDate: s.dataReferenceDate ?? "",
+    businessStatus: s.businessStatus ?? "",
+    ...(phone ? { phone } : {}),
     ...(distanceKm != null ? { distance: distanceKm } : {})
   };
 }
 
+/** 디테일 응답은 list 와 동일 shape — 별도 augment fetch 가 사라졌지만 short/id 직접 조회는 유지. */
 function toDetailStore(s: StoreData, distanceKm?: number) {
-  const phone = s.phone?.trim();
-  return {
-    ...toListStore(s, distanceKm),
-    dataReferenceDate: s.dataReferenceDate,
-    businessStatus: s.businessStatus,
-    ...(phone ? { phone } : {})
-  };
+  return toListStore(s, distanceKm);
 }
 
 function jsonCached(data: unknown, visibility: "private" | "public") {
