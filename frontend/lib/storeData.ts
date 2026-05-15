@@ -303,7 +303,8 @@ export function mergeStoreSources(
   chungnamGongjuTrashRows: RawStoreRow[],
   chungnamGongjuSpecialRows: RawStoreRow[],
   chungbukCheongjuTrashRows: RawStoreRow[],
-  chungbukJeungpyeongTrashRows: RawStoreRow[]
+  chungbukJeungpyeongTrashRows: RawStoreRow[],
+  seoulYangcheonSpecialRows: RawStoreRow[]
 ): StoreData[] {
   const verifiedIds = collectVerifiedStoreIdsFromReports(reportRows);
   const extraRaw = reportRowsToExtraRawStores(reportRows);
@@ -354,7 +355,8 @@ export function mergeStoreSources(
     ...chungnamGongjuTrashRows,
     ...chungnamGongjuSpecialRows,
     ...chungbukCheongjuTrashRows,
-    ...chungbukJeungpyeongTrashRows
+    ...chungbukJeungpyeongTrashRows,
+    ...seoulYangcheonSpecialRows
   ]
     .map(normalizeRow)
     .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng))

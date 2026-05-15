@@ -51,7 +51,8 @@ const SOURCE_FILES = [
   "stores.chungnam-gongju-trash.json",
   "stores.chungnam-gongju-special.json",
   "stores.chungbuk-cheongju-trash.json",
-  "stores.chungbuk-jeungpyeong-trash.json"
+  "stores.chungbuk-jeungpyeong-trash.json",
+  "stores.seoul-yangcheon-special.json"
 ] as const;
 
 type LoadedFile = {
