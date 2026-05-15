@@ -101,11 +101,26 @@ export default function RootLayout({
         <link rel="preconnect" href="https://dapi.kakao.com" />
         <link rel="dns-prefetch" href="https://dapi.kakao.com" />
         {/**
-         * [LCP] Kakao SDK 스크립트는 클라이언트 훅(`useKakaoMapLoader`)에서 동적으로 주입되므로
-         * preload로 다운로드만 미리 띄워 hydration → SDK fetch 의 직렬 대기를 단축.
+         * [지도 첫 페인트] Kakao SDK 로딩 최적화.
+         *
+         * 변경 전: `<link rel="preload">` 만 두고, 실제 `<script>` 는 `useKakaoMapLoader` 의
+         *          useEffect(=hydration 이후) 에서 동적 attach.
+         *          → SDK 파싱/실행이 hydration 후에야 시작되어 첫 마커까지 ~300–1000ms 추가 지연.
+         * 변경 후: `next/script strategy="beforeInteractive"` 로 HTML head 에 인라인.
+         *          → SDK 다운로드 + 파싱이 hydration 이전에 끝나, hook 마운트 시 즉시 `window.kakao.maps`
+         *          가 존재해 `maps.load()` 1번 호출로 ready. autoload=false 라 즉시 맵 초기화는 안 함.
+         *          useKakaoMapLoader 는 `data-kakao-map-sdk='true'` 로 이 태그를 인식해 중복 로드 안 함.
+         * 측정: 새로고침 → 첫 마커 표시까지 ms.
          */}
         {kakaoSdkUrl ? (
-          <link rel="preload" as="script" href={kakaoSdkUrl} />
+          /**
+           * 일반 async script: HTML 파싱 막지 않고 다운로드 → 다운로드 끝나는 즉시 실행.
+           * 보통 React JS 다운로드와 병렬로 끝나 hydration 시점에는 `window.kakao` 가 이미 존재.
+           * useKakaoMapLoader 는 `data-kakao-map-sdk='true'` 로 이 태그를 인식해 중복 attach 안 함.
+           * autoload=false 라 즉시 맵 초기화는 안 하고, `maps.load()` 호출만 hook 에서 실행.
+           * (next/script beforeInteractive 는 app router 에서 동기 로드라 FCP 약간 지연시킬 수 있어 채택 안 함)
+           */
+          <script src={kakaoSdkUrl} async data-kakao-map-sdk="true" />
         ) : null}
         {/**
          * [LCP] AdSense는 비핵심 → next/script lazyOnload 로 옮겨 초기 네트워크/메인 스레드 경합 제거.

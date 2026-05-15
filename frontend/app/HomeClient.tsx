@@ -359,7 +359,13 @@ export default function HomeClient({
               center={center}
               centerVersion={centerVersion}
               preferredMapLevel={exploreAnchor != null ? 6 : 5}
-              stores={loading ? [] : mapStores}
+              /**
+               * 변경 전: `loading ? [] : mapStores` 로 백그라운드 갱신 중에도 마커를 빈 배열로 강제 →
+               *         새로고침 직후 SSR 데이터가 보이다가 두 번째 fetch 가 시작되면 마커 일제히 사라짐.
+               * 변경 후: SWR 패턴 — loading 중에도 이전 데이터 유지(실제 비어있을 때만 자연스럽게 [])
+               *         → 새로고침 시 깜빡임 제거.
+               */
+              stores={mapStores}
               activeFilter={activeFilter}
               selectedStoreId={selectedStore?.id}
               onSelectStore={handleMapMarkerSelect}
@@ -448,7 +454,12 @@ export default function HomeClient({
             />
           ) : (
             <BottomSheetList
-              stores={loading ? [] : sortedStores}
+              /**
+               * 변경 전: `loading ? [] : sortedStores` 로 백그라운드 갱신 중 리스트가 잠깐 비었다 다시 채워짐.
+               * 변경 후: SWR — 실제 비어있을 때만 [] (sortedStores 자연 상태), loading 중 이전 데이터 유지.
+               * `listLoading` 은 그대로 두어 컴포넌트가 빈 상태 placeholder 등 처리 가능.
+               */
+              stores={sortedStores}
               selectedStoreId={selectedStore?.id}
               onSelectStore={handleSelectStoreWithPan}
               activeFilter={activeFilter}
