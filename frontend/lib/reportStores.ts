@@ -30,6 +30,8 @@ export type RawReportRow = {
   has_trash_bag?: boolean | null;
   has_special_bag?: boolean | null;
   has_large_waste_sticker?: boolean | null;
+  /** 사용자/관리자 메시지. `[closed] ...` 접두로 폐업 제보 표현. */
+  message?: string | null;
   status?: string | null;
   created_at?: string | null;
 };
@@ -43,16 +45,81 @@ function isApproved(status: string | null | undefined): boolean {
   return (status ?? "").toLowerCase() === "approved";
 }
 
-/** 제보 행 → 기존 공공데이터 매장 id만 인증 처리 */
+/**
+ * edit_request + 메시지 `[closed]` 접두 → 폐업 신고로 간주.
+ * (rejected 상태는 무시)
+ */
+function isClosedReport(row: RawReportRow): boolean {
+  if (isRejected(row.status ?? undefined)) return false;
+  if ((row.report_type ?? "") !== "edit_request") return false;
+  const msg = (row.message ?? "").trim().toLowerCase();
+  return msg.startsWith("[closed]");
+}
+
+function trimmedStoreId(row: RawReportRow): string | null {
+  const sid = row.store_id;
+  if (sid == null) return null;
+  const t = String(sid).trim();
+  return t === "" ? null : t;
+}
+
+/** 제보 행 → 기존 공공데이터 매장 id만 인증 처리 (폐업 제보는 제외) */
 export function collectVerifiedStoreIdsFromReports(rows: RawReportRow[]): Set<string> {
   const ids = new Set<string>();
   for (const row of rows) {
     if (isRejected(row.status ?? undefined)) continue;
-    const sid = row.store_id;
-    if (sid == null || String(sid).trim() === "") continue;
-    ids.add(String(sid).trim());
+    if (isClosedReport(row)) continue;
+    const sid = trimmedStoreId(row);
+    if (sid == null) continue;
+    ids.add(sid);
   }
   return ids;
+}
+
+/** 폐업/판매 중단 제보 → 병합 결과에서 제외할 매장 id 집합 */
+export function collectClosedStoreIdsFromReports(rows: RawReportRow[]): Set<string> {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (!isClosedReport(row)) continue;
+    const sid = trimmedStoreId(row);
+    if (sid == null) continue;
+    ids.add(sid);
+  }
+  return ids;
+}
+
+export type ReportProductFlagUpdate = {
+  hasTrashBag: boolean;
+  hasSpecialBag: boolean;
+  hasLargeWasteSticker: boolean;
+};
+
+/**
+ * edit_request(폐업 아님) 중 has_* 플래그를 OR-merge 로 반영할 매장 id → 플래그 맵.
+ * 같은 매장 여러 제보가 있으면 true 가 한 번이라도 있으면 true.
+ */
+export function collectProductFlagUpdatesFromReports(
+  rows: RawReportRow[]
+): Map<string, ReportProductFlagUpdate> {
+  const out = new Map<string, ReportProductFlagUpdate>();
+  for (const row of rows) {
+    if (isRejected(row.status ?? undefined)) continue;
+    if ((row.report_type ?? "") !== "edit_request") continue;
+    if (isClosedReport(row)) continue;
+    const sid = trimmedStoreId(row);
+    if (sid == null) continue;
+
+    const next: ReportProductFlagUpdate = out.get(sid) ?? {
+      hasTrashBag: false,
+      hasSpecialBag: false,
+      hasLargeWasteSticker: false
+    };
+    if (row.has_trash_bag === true) next.hasTrashBag = true;
+    if (row.has_special_bag === true) next.hasSpecialBag = true;
+    if (row.has_large_waste_sticker === true) next.hasLargeWasteSticker = true;
+    out.set(sid, next);
+  }
+  return out;
 }
 
 /**
@@ -63,6 +130,7 @@ export function reportRowsToExtraRawStores(rows: RawReportRow[]): ReportStoreJso
   const out: ReportStoreJsonRow[] = [];
   for (const row of rows) {
     if (isRejected(row.status ?? undefined)) continue;
+    if (isClosedReport(row)) continue;
     const sid = row.store_id;
     if (sid != null && String(sid).trim() !== "") continue;
 

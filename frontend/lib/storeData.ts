@@ -5,6 +5,8 @@ import {
 import { pickDataReferenceDateFromRow } from "@/lib/datasetDate";
 import { ensureShortCodesOnStores, isValidShortCode } from "@/lib/shortLink";
 import {
+  collectClosedStoreIdsFromReports,
+  collectProductFlagUpdatesFromReports,
   collectVerifiedStoreIdsFromReports,
   reportRowsToExtraRawStores,
   type RawReportRow
@@ -307,6 +309,8 @@ export function mergeStoreSources(
   seoulYangcheonSpecialRows: RawStoreRow[]
 ): StoreData[] {
   const verifiedIds = collectVerifiedStoreIdsFromReports(reportRows);
+  const closedIds = collectClosedStoreIdsFromReports(reportRows);
+  const productUpdates = collectProductFlagUpdatesFromReports(reportRows);
   const extraRaw = reportRowsToExtraRawStores(reportRows);
 
   const normalizedMain = [
@@ -360,6 +364,26 @@ export function mergeStoreSources(
   ]
     .map(normalizeRow)
     .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng))
+    /**
+     * 폐업/판매 중단 제보(edit_request + [closed]) 매장은 데이터셋에서 제외.
+     * - 인증 배지 부여 대상에서도 빠짐(collectVerifiedStoreIdsFromReports 가 이미 필터)
+     */
+    .filter((row) => !closedIds.has(row.id))
+    /**
+     * edit_request 제보의 has_* 플래그를 OR-merge 로 반영.
+     * 사용자가 "여기는 종량제 봉투 팔아요" 라고 제보하면 hasTrashBag=true 가 됨.
+     * (true→false 되돌리기는 [closed] 제보로 매장 삭제하는 경로만 사용)
+     */
+    .map((row) => {
+      const upd = productUpdates.get(row.id);
+      if (!upd) return row;
+      return {
+        ...row,
+        hasTrashBag: row.hasTrashBag || upd.hasTrashBag,
+        hasSpecialBag: row.hasSpecialBag || upd.hasSpecialBag,
+        hasLargeWasteSticker: row.hasLargeWasteSticker || upd.hasLargeWasteSticker
+      };
+    })
     .map((row) => ({
       ...row,
       adminVerified: !!(row.adminVerified || verifiedIds.has(row.id))
