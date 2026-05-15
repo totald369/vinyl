@@ -173,28 +173,17 @@ export function useStores(
   const centerForFetch =
     districtSlug || debouncedSearch ? fetchCenter : debouncedRadiusCenter;
 
-  const fetchDepsKey = useMemo(() => {
+  const { fetchDepsKey, listUrl } = useMemo(() => {
+    let fetchDepsKeyInner: string;
     if (districtSlug && districtScope) {
-      return `district:${districtSlug}:${districtScope.sortFrom.lat}:${districtScope.sortFrom.lng}`;
-    }
-    if (debouncedSearch) {
+      fetchDepsKeyInner = `district:${districtSlug}:${districtScope.sortFrom.lat}:${districtScope.sortFrom.lng}`;
+    } else if (debouncedSearch) {
       const f = options?.activeFilter ?? "payBag";
-      return `search:${fetchCenter.lat}:${fetchCenter.lng}:q:${debouncedSearch}:f:${f}`;
+      fetchDepsKeyInner = `search:${fetchCenter.lat}:${fetchCenter.lng}:q:${debouncedSearch}:f:${f}`;
+    } else {
+      fetchDepsKeyInner = `home:${centerForFetch.lat}:${centerForFetch.lng}:radius`;
     }
-    return `home:${centerForFetch.lat}:${centerForFetch.lng}:radius`;
-  }, [
-    districtSlug,
-    districtScope?.sortFrom.lat,
-    districtScope?.sortFrom.lng,
-    fetchCenter.lat,
-    fetchCenter.lng,
-    centerForFetch.lat,
-    centerForFetch.lng,
-    debouncedSearch,
-    options?.activeFilter
-  ]);
 
-  const listUrl = useMemo(() => {
     const params = new URLSearchParams();
     params.set("lat", String(centerForFetch.lat));
     params.set("lng", String(centerForFetch.lng));
@@ -209,13 +198,18 @@ export function useStores(
     } else {
       params.set("radiusKm", String(LIST_RADIUS_KM));
     }
-    return `/api/stores?${params.toString()}`;
+    const listUrlInner = `/api/stores?${params.toString()}`;
+
+    return { fetchDepsKey: fetchDepsKeyInner, listUrl: listUrlInner };
   }, [
+    districtSlug,
+    districtScope?.sortFrom.lat,
+    districtScope?.sortFrom.lng,
+    debouncedSearch,
+    fetchCenter.lat,
+    fetchCenter.lng,
     centerForFetch.lat,
     centerForFetch.lng,
-    debouncedSearch,
-    districtScope,
-    districtSlug,
     options?.activeFilter
   ]);
 

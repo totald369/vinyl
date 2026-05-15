@@ -105,16 +105,21 @@ export default function HomeClient({
 
   const [manualCenter, setManualCenter] = useState(defaultCenter);
   const [centerVersion, setCenterVersion] = useState(0);
+  const sortedStoreIdSet = useMemo(() => new Set(sortedStores.map((s) => s.id)), [sortedStores]);
   const mapStores = useMemo(() => {
     if (!selectedStore) return sortedStores;
-    const existsInMap = sortedStores.some((store) => store.id === selectedStore.id);
-    if (existsInMap) return sortedStores;
+    if (sortedStoreIdSet.has(selectedStore.id)) return sortedStores;
     // 원거리 검색 결과도 맵에서 선택 상태를 유지할 수 있게 selectedStore를 합쳐 렌더
     return [selectedStore, ...sortedStores];
-  }, [selectedStore, sortedStores]);
+  }, [selectedStore, sortedStores, sortedStoreIdSet]);
+
+  const centerLat =
+    mapCenterOverride?.lat ?? userLocation?.lat ?? manualCenter.lat;
+  const centerLng =
+    mapCenterOverride?.lng ?? userLocation?.lng ?? manualCenter.lng;
   const center = useMemo(
-    () => mapCenterOverride ?? userLocation ?? manualCenter,
-    [mapCenterOverride, manualCenter, userLocation]
+    () => ({ lat: centerLat, lng: centerLng }),
+    [centerLat, centerLng]
   );
 
   /** Deep-link fetch must not abort when `stores` change (list refetch after exploreAnchor). */
@@ -129,8 +134,9 @@ export default function HomeClient({
   );
 
   const onPrefetchStore = useCallback(
-    (store: StoreData) => prefetchStoreDetail(store.id, center),
-    [center]
+    (store: StoreData) =>
+      prefetchStoreDetail(store.id, { lat: centerLat, lng: centerLng }),
+    [centerLat, centerLng]
   );
 
   const handleFilterChange = useCallback((filter: StoreListFilter) => {

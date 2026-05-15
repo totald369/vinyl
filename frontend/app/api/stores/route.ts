@@ -26,7 +26,7 @@ import {
   checkUserAgent,
   getClientIp
 } from "@/lib/server/storesApiSecurity";
-import { resolveRegionLeafFromSlugPath } from "@/lib/koreaRegions";
+import { leafToRegionPath, resolveRegionLeafFromSlugPath } from "@/lib/koreaRegions";
 import { isValidShortCode } from "@/lib/shortLink";
 import type { StoreData } from "@/lib/storeData";
 import { getDistanceKm } from "@/lib/utils";
@@ -45,6 +45,28 @@ const MAX_RADIUS_KM = 2;
  */
 const CACHE_PRIVATE = "private, max-age=60, stale-while-revalidate=120";
 const CACHE_PUBLIC = "public, s-maxage=600, stale-while-revalidate=3600";
+
+/** region 모드 JSON 직렬화·정렬 결과 재사용 (동일 regionPath·offset·필터·정렬기준) */
+const REGION_RESPONSE_LRU_MAX = 96;
+const regionResponseLru = new Map<string, unknown>();
+
+function regionLruTouch(key: string, val: unknown) {
+  if (regionResponseLru.has(key)) regionResponseLru.delete(key);
+  regionResponseLru.set(key, val);
+  while (regionResponseLru.size > REGION_RESPONSE_LRU_MAX) {
+    const first = regionResponseLru.keys().next().value as string | undefined;
+    if (first === undefined) break;
+    regionResponseLru.delete(first);
+  }
+}
+
+function regionLruGet(key: string): unknown | undefined {
+  const v = regionResponseLru.get(key);
+  if (v === undefined) return undefined;
+  regionResponseLru.delete(key);
+  regionResponseLru.set(key, v);
+  return v;
+}
 
 /** 검색(q) 매칭 후 거리순으로 잘라 보내는 상한. */
 function getSearchLimit(): number {
@@ -109,13 +131,17 @@ function matchesProductFilter(s: StoreData, filter: ProductFilter): boolean {
   return s.hasTrashBag;
 }
 
+function roundCoord6(n: number): number {
+  return Math.round(n * 1e6) / 1e6;
+}
+
 function toListStore(s: StoreData, distanceKm?: number) {
   const road = (s.roadAddress ?? s.address ?? "").trim();
   return {
     id: s.id,
     name: s.name,
-    lat: s.lat,
-    lng: s.lng,
+    lat: roundCoord6(s.lat),
+    lng: roundCoord6(s.lng),
     roadAddress: road,
     address: road,
     shortCode: s.shortCode ?? "",
@@ -223,16 +249,38 @@ export async function GET(request: NextRequest) {
     }
     const productFilter = parseProductFilter(searchParams);
     const { offset, limit } = parseRegionOffsetLimit(searchParams);
-    const candidates: StoreData[] = [];
-
-    for (const s of idx.byId.values()) {
-      if (!matchesProductFilter(s, productFilter)) continue;
-      const blob = idx.addressBlobLowerById.get(s.id) ?? "";
-      if (!matchesAllNeedles(blob, leaf.needles)) continue;
-      candidates.push(s);
+    const regionPathKey = leafToRegionPath(leaf);
+    const originOpt = parseLatLng(searchParams);
+    const lruKey = [
+      regionPathKey,
+      productFilter,
+      String(offset),
+      String(limit),
+      originOpt ? `${originOpt.lat},${originOpt.lng}` : ""
+    ].join("\x1e");
+    const lruHit = regionLruGet(lruKey);
+    if (lruHit != null) {
+      return jsonCached(lruHit, "public");
     }
 
-    const originOpt = parseLatLng(searchParams);
+    const pathBucket = idx.byRegionPath.get(regionPathKey);
+    let candidates: StoreData[];
+    if (pathBucket !== undefined) {
+      candidates = [];
+      for (const s of pathBucket) {
+        if (!matchesProductFilter(s, productFilter)) continue;
+        candidates.push(s);
+      }
+    } else {
+      candidates = [];
+      for (const s of idx.byId.values()) {
+        if (!matchesProductFilter(s, productFilter)) continue;
+        const blob = idx.addressBlobLowerById.get(s.id) ?? "";
+        if (!matchesAllNeedles(blob, leaf.needles)) continue;
+        candidates.push(s);
+      }
+    }
+
     type SortRow = { store: StoreData; d: number };
     let sorted: SortRow[];
     if (originOpt != null) {
@@ -255,25 +303,24 @@ export async function GET(request: NextRequest) {
     const pageSlice = sorted.slice(offset, offset + limit);
     const hasMore = offset + pageSlice.length < total;
 
-    return jsonCached(
-      {
-        mode: "region",
-        total,
-        offset,
-        limit,
-        hasMore,
-        headingLabelKo: leaf.headingLabelKo,
-        province: leaf.shortNameKo,
-        city:
-          leaf.cityNameKo ??
-          (!leaf.citySlug && leaf.districtNameKo ? leaf.districtNameKo : ""),
-        district: leaf.citySlug ? (leaf.districtNameKo ?? "") : "",
-        stores: pageSlice.map(({ store, d }) =>
-          toListStore(store, Number.isFinite(d) ? d : undefined)
-        )
-      },
-      "public"
-    );
+    const regionPayload = {
+      mode: "region",
+      total,
+      offset,
+      limit,
+      hasMore,
+      headingLabelKo: leaf.headingLabelKo,
+      province: leaf.shortNameKo,
+      city:
+        leaf.cityNameKo ??
+        (!leaf.citySlug && leaf.districtNameKo ? leaf.districtNameKo : ""),
+      district: leaf.citySlug ? (leaf.districtNameKo ?? "") : "",
+      stores: pageSlice.map(({ store, d }) =>
+        toListStore(store, Number.isFinite(d) ? d : undefined)
+      )
+    };
+    regionLruTouch(lruKey, regionPayload);
+    return jsonCached(regionPayload, "public");
   }
 
   const origin = parseLatLng(searchParams);

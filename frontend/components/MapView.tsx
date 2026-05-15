@@ -103,7 +103,7 @@ const FILTER_MARKER_MAP: Record<StoreListFilter, { src: string; selectedSrc: str
 };
 
 function createStoreMarkerElements(
-  store: StoreData,
+  _store: StoreData,
   filter: StoreListFilter,
   isSelected: boolean
 ): { root: HTMLDivElement; img: HTMLImageElement } {
@@ -160,13 +160,50 @@ function MapViewInner({
   const idleHandlerRef = useRef<(() => void) | null>(null);
   const idleAttachedRef = useRef(false);
 
-  const visibleForMarkers = useMemo(
-    () => pickStoresForMapMarkers(stores, center, mapBounds, selectedStoreId ?? null),
-    [stores, center, mapBounds, selectedStoreId]
-  );
+  const markerElPoolRef = useRef<{ root: HTMLDivElement; img: HTMLImageElement }[]>([]);
+  const MAX_MARKER_POOL = MAX_MAP_MARKERS * 2;
+
+  const centerLat = Number(center.lat);
+  const centerLng = Number(center.lng);
+  const mbSwLat = mapBounds?.swLat;
+  const mbSwLng = mapBounds?.swLng;
+  const mbNeLat = mapBounds?.neLat;
+  const mbNeLng = mapBounds?.neLng;
+
+  const visibleForMarkers = useMemo(() => {
+    const boundsBox =
+      mbSwLat != null && mbSwLng != null && mbNeLat != null && mbNeLng != null
+        ? { swLat: mbSwLat, swLng: mbSwLng, neLat: mbNeLat, neLng: mbNeLng }
+        : null;
+    return pickStoresForMapMarkers(
+      stores,
+      { lat: centerLat, lng: centerLng },
+      boundsBox,
+      selectedStoreId ?? null
+    );
+  }, [stores, centerLat, centerLng, mbSwLat, mbSwLng, mbNeLat, mbNeLng, selectedStoreId]);
 
   const storesPickRef = useRef<StoreData[]>(visibleForMarkers);
   storesPickRef.current = visibleForMarkers;
+
+  const acquireMarkerDom = (
+    store: StoreData,
+    filter: StoreListFilter,
+    isSelected: boolean
+  ): { root: HTMLDivElement; img: HTMLImageElement } => {
+    const pooled = markerElPoolRef.current.pop();
+    if (pooled) {
+      const meta = FILTER_MARKER_MAP[filter];
+      pooled.img.src = isSelected ? meta.selectedSrc : meta.src;
+      return pooled;
+    }
+    return createStoreMarkerElements(store, filter, isSelected);
+  };
+
+  const releaseMarkerDomToPool = (root: HTMLDivElement, img: HTMLImageElement) => {
+    if (markerElPoolRef.current.length >= MAX_MARKER_POOL) return;
+    markerElPoolRef.current.push({ root, img });
+  };
 
   const pickListenerAttachedRef = useRef(false);
   const mapInitMeasuredRef = useRef(false);
@@ -341,7 +378,12 @@ function MapViewInner({
 
     for (const id of [...cur.keys()]) {
       if (!desired.has(id)) {
-        cur.get(id)!.overlay.setMap(null);
+        const ent = cur.get(id)!;
+        ent.overlay.setMap(null);
+        const root = ent.img.parentElement;
+        if (root instanceof HTMLDivElement) {
+          releaseMarkerDomToPool(root, ent.img);
+        }
         cur.delete(id);
       }
     }
@@ -357,7 +399,7 @@ function MapViewInner({
       const entry = cur.get(store.id);
 
       if (!entry) {
-        const { root, img } = createStoreMarkerElements(store, activeFilter, isSelected);
+        const { root, img } = acquireMarkerDom(store, activeFilter, isSelected);
         const overlay = new kakao.CustomOverlay({
           map,
           position: new kakao.LatLng(lat, lng),

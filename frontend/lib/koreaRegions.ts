@@ -692,3 +692,46 @@ export function enumerateRegionLeafPathnames(): string[] {
   }
   return paths;
 }
+
+/**
+ * `/api/stores?regionPath=` 인덱스용 — leaf별 pathKey·needles (enumerateRegionLeafPathnames와 동일 범위).
+ * 런타임 1회 byRegionPath 맵 구축에 사용.
+ */
+export function enumerateRegionIndexEntries(): ReadonlyArray<{
+  pathKey: string;
+  needles: readonly string[];
+}> {
+  const out: { pathKey: string; needles: readonly string[] }[] = [];
+  for (const p of PROVINCES_ORDERED) {
+    if (p.directDistricts?.length) {
+      for (const d of p.directDistricts) {
+        const leaf = resolveRegionLeafFromSlugPath([p.slug, d.slug]);
+        if (!leaf) continue;
+        out.push({ pathKey: leafToRegionPath(leaf), needles: leaf.needles });
+      }
+    }
+    if (p.cities?.length) {
+      for (const c of p.cities) {
+        const hasDistricts = Boolean(c.districts?.length);
+        if (!hasDistricts && c.cityOnlyNeedles?.length) {
+          const leaf = resolveRegionLeafFromSlugPath([p.slug, c.slug]);
+          if (!leaf) continue;
+          out.push({ pathKey: leafToRegionPath(leaf), needles: leaf.needles });
+        }
+        if (hasDistricts && c.districts) {
+          if (c.legacyCityWideNeedles?.length) {
+            const leaf = resolveRegionLeafFromSlugPath([p.slug, c.slug]);
+            if (!leaf) continue;
+            out.push({ pathKey: leafToRegionPath(leaf), needles: leaf.needles });
+          }
+          for (const dist of c.districts) {
+            const leaf = resolveRegionLeafFromSlugPath([p.slug, c.slug, dist.slug]);
+            if (!leaf) continue;
+            out.push({ pathKey: leafToRegionPath(leaf), needles: leaf.needles });
+          }
+        }
+      }
+    }
+  }
+  return out;
+}

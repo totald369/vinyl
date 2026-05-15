@@ -30,6 +30,9 @@ let cached: ReturnType<typeof mergeStoreSources> | null = null;
  *          `public/data/_merged_cache.json` 만 read → init 시간 대폭 단축.
  *          캐시 파일이 없으면(개발/스크립트 환경) 기존 다중 파일 병합으로 폴백.
  * 측정: 첫 요청 TTFB(서버 cold), Vercel function init 시간.
+ *
+ * 성능: 대용량 `stores.json` 등은 클라이언트 번들에 포함하지 않고, 이 모듈·`getMergedStores`만
+ * 서버(또는 Node 빌드 스크립트)에서 fs 경로로 로드합니다.
  */
 export function getMergedStores() {
   if (cached) return cached;

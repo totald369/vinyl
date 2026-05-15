@@ -1,13 +1,16 @@
 /**
- * 매장 검색 인덱스 — getMergedStores() 결과에서 한 번만 구축(모듈 캐시).
+ * 매장 검색 인덱스 — getMergedStores() 결과에서 lazy singleton 1회 구축.
  *
  * 변경 전: 매 요청마다 배열 전체를 .filter/.find로 훑어 CPU·메모리 압력.
  * 변경 후: id/shortCode O(1), 반경 검색은 0.01° 그리드 9버킷만 후보 순회,
- *          검색은 행마다 문자열 결합 대신 사전 계산된 소문자 blob 조회.
- * 측정: /api/stores radius·search TTFB(서버 CPU 시간), cold path 대비 p95 Latency.
+ *          검색은 행마다 문자열 결합 대신 사전 계산된 소문자 blob 조회,
+ *          regionPath는 byRegionPath O(1) (전역 순회 제거).
+ * dev HMR: globalThis에 인덱스 보관해 모듈 재평가 시 재구축 비용 제거.
+ * 측정: /api/stores radius·search·region TTFB(서버 CPU 시간), cold path 대비 p95 Latency.
  */
 import type { StoreData } from "@/lib/storeData";
 import { expandProvinceAliasesForSearch } from "@/lib/koreaProvinceAliases";
+import { enumerateRegionIndexEntries } from "@/lib/koreaRegions";
 import { getMergedStores } from "@/lib/server/storeDataset";
 import { isValidShortCode } from "@/lib/shortLink";
 
@@ -20,9 +23,24 @@ export type StoreSearchIndexes = {
   grid: Map<string, StoreData[]>;
   searchBlobLowerById: Map<string, string>;
   addressBlobLowerById: Map<string, string>;
+  /** `leafToRegionPath(leaf)` 키 — 주소 needle 매칭된 매장(제품 필터 전) */
+  byRegionPath: Map<string, StoreData[]>;
 };
 
 let cached: StoreSearchIndexes | null = null;
+
+type GlobalWithStoreIdx = typeof globalThis & {
+  __storeSearchIndexes?: StoreSearchIndexes | null;
+};
+
+function matchesAllNeedles(blobLower: string, needles: readonly string[]): boolean {
+  for (const n of needles) {
+    const t = (n ?? "").trim().toLowerCase();
+    if (!t) continue;
+    if (!blobLower.includes(t)) return false;
+  }
+  return true;
+}
 
 function gridKey(lat: number, lng: number): string {
   const bi = Math.floor(lat / GRID_STEP);
@@ -43,9 +61,7 @@ export function neighborGridKeys(lat: number, lng: number): string[] {
   return keys;
 }
 
-export function getStoreSearchIndexes(): StoreSearchIndexes {
-  if (cached) return cached;
-
+function buildIndexes(): StoreSearchIndexes {
   const all = getMergedStores();
   const byId = new Map<string, StoreData>();
   const byShortCode = new Map<string, StoreData>();
@@ -74,13 +90,39 @@ export function getStoreSearchIndexes(): StoreSearchIndexes {
     addressBlobLowerById.set(s.id, expandProvinceAliasesForSearch(norm(`${road} ${addr}`)));
   }
 
-  cached = {
+  const byRegionPath = new Map<string, StoreData[]>();
+  for (const { pathKey, needles } of enumerateRegionIndexEntries()) {
+    const bucket: StoreData[] = [];
+    for (const s of all) {
+      const blob = addressBlobLowerById.get(s.id) ?? "";
+      if (matchesAllNeedles(blob, needles)) bucket.push(s);
+    }
+    byRegionPath.set(pathKey, bucket);
+  }
+
+  return {
     byId,
     byShortCode,
     grid,
     searchBlobLowerById,
-    addressBlobLowerById
+    addressBlobLowerById,
+    byRegionPath
   };
+}
+
+export function getStoreSearchIndexes(): StoreSearchIndexes {
+  const g = globalThis as GlobalWithStoreIdx;
+  if (process.env.NODE_ENV === "development" && g.__storeSearchIndexes) {
+    cached = g.__storeSearchIndexes;
+    return cached;
+  }
+  if (cached) return cached;
+
+  const built = buildIndexes();
+  cached = built;
+  if (process.env.NODE_ENV === "development") {
+    g.__storeSearchIndexes = built;
+  }
   return cached;
 }
 
