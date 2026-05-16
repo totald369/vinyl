@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import RegionSeoFooter from "@/components/regions/RegionSeoFooter";
 import RegionStoreListClient from "@/components/regions/RegionStoreListClient";
+import RegionStoreListSkeleton from "@/components/regions/RegionStoreListSkeleton";
 import { resolveRegionLeafFromSlugPath } from "@/lib/koreaRegions";
 import { buildRegionStoreMetadata } from "@/lib/regionPageMetadata";
 import { SITE_BRAND_KO } from "@/lib/seoBrand";
@@ -52,9 +53,7 @@ export default function RegionsLeafPage({ params }: PageProps) {
 
   return (
     <>
-      <Suspense
-        fallback={<main className="mx-auto min-h-[100dvh] max-w-md bg-bg-canvas" aria-hidden />}
-      >
+      <Suspense fallback={<RegionStoreListSkeleton />}>
         <RegionStoreListClient
           leaf={leaf}
           slugSegments={segs}

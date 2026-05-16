@@ -112,13 +112,15 @@ function loadKakaoSdk(appKey: string): Promise<void> {
   return sdkLoadPromise;
 }
 
-export function useKakaoMapLoader(): UseKakaoMapLoaderResult {
+export function useKakaoMapLoader(options?: { enabled?: boolean }): UseKakaoMapLoaderResult {
+  const enabled = options?.enabled !== false;
   const appKey = useMemo(() => process.env.NEXT_PUBLIC_KAKAO_MAP_APP_KEY ?? "", []);
   const [state, setState] = useState<LoaderState>("idle");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (!enabled) return;
 
     devLog("[KakaoMap] hook mount, key exists:", Boolean(appKey));
     setState("loading");
@@ -137,11 +139,11 @@ export function useKakaoMapLoader(): UseKakaoMapLoaderResult {
         setState("error");
         setError(e instanceof Error ? e.message : "카카오맵 로드 오류");
       });
-  }, [appKey]);
+  }, [appKey, enabled]);
 
   return {
     state,
-    isLoading: state === "loading" || state === "idle",
+    isLoading: !enabled || state === "loading" || state === "idle",
     isReady: state === "ready",
     error
   };

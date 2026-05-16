@@ -50,7 +50,7 @@ function HomeMapStageInner({
     if (shouldMount) return;
     if (typeof window === "undefined") return;
 
-    const SAFETY_FALLBACK_MS = 1200;
+    const SAFETY_FALLBACK_MS = 500;
     let timer: number | null = null;
     let io: IntersectionObserver | null = null;
 

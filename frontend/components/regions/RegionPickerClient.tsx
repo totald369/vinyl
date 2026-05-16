@@ -113,19 +113,20 @@ export default function RegionPickerClient() {
     trackRegionEvent("open_region_view", { province: "", region_path: "/regions" });
   }, []);
 
-  const navigateToSegments = useCallback(
-    (segments: string[]) => {
-      const leaf = resolveRegionLeafFromSlugPath(segments);
-      if (!leaf) return;
-      trackRegionEvent("select_region", {
-        province: leaf.shortNameKo,
-        city: leaf.cityNameKo ?? "",
-        district: leaf.districtNameKo ?? ""
-      });
-      router.push(regionHrefFromSegments(segments) as Route);
-    },
-    [router]
-  );
+  const trackSelectSegments = useCallback((segments: string[]) => {
+    const leaf = resolveRegionLeafFromSlugPath(segments);
+    if (!leaf) return;
+    trackRegionEvent("select_region", {
+      province: leaf.shortNameKo,
+      city: leaf.cityNameKo ?? "",
+      district: leaf.districtNameKo ?? ""
+    });
+  }, []);
+
+  const districtRowClass = (isSel: boolean) =>
+    `flex h-11 min-h-[44px] w-full items-center pl-8 pr-4 text-left text-[14px] outline-none focus-visible:bg-[#f7f7f7] focus-visible:ring-2 focus-visible:ring-brand-500 ${
+      isSel ? "font-semibold text-[#171717]" : "font-medium text-[#171717]"
+    }`;
 
   /**
    * 변경 전: picker 의 region 버튼이 `<button>` + `router.push` 라 prefetch 가 없었음 →
@@ -252,17 +253,16 @@ export default function RegionPickerClient() {
             const key = `${activeProvince.slug}/${dist.slug}`;
             const isSel = selectedKey === key;
             return (
-              <button
+              <Link
                 key={dist.slug}
-                type="button"
+                href={regionHrefFromSegments(segments) as Route}
+                prefetch
                 onPointerDown={() => prefetchSegments(segments)}
                 onClick={() => {
                   setSelectedKey(key);
-                  navigateToSegments(segments);
+                  trackSelectSegments(segments);
                 }}
-                className={`flex h-11 min-h-[44px] w-full items-center pl-8 pr-4 text-left text-[14px] outline-none focus-visible:bg-[#f7f7f7] focus-visible:ring-2 focus-visible:ring-brand-500 ${
-                  isSel ? "font-semibold text-[#171717]" : "font-medium text-[#171717]"
-                }`}
+                className={districtRowClass(isSel)}
               >
                 <span
                   className={
@@ -276,7 +276,7 @@ export default function RegionPickerClient() {
                     <img src="/Img/Icon/check_16.svg" alt="" width={16} height={16} />
                   ) : null}
                 </span>
-              </button>
+              </Link>
             );
           })}
 
@@ -291,48 +291,62 @@ export default function RegionPickerClient() {
                 setExpandedCitySlug(expanded ? null : city.slug);
                 return;
               }
-              const keyNoDist = `${activeProvince.slug}/${city.slug}`;
-              setSelectedKey(keyNoDist);
-              if (citySegments) navigateToSegments(citySegments);
             };
+
+            const cityOnlyKey = `${activeProvince.slug}/${city.slug}`;
 
             return (
               <div key={city.slug}>
-                <button
-                  type="button"
-                  onPointerDown={
-                    expandable || !citySegments ? undefined : () => prefetchSegments(citySegments)
-                  }
-                  onClick={onCityClick}
-                  className="flex h-11 min-h-[44px] w-full items-center gap-2 pl-8 pr-4 outline-none focus-visible:bg-[#f7f7f7] focus-visible:ring-2 focus-visible:ring-brand-500"
-                >
-                  <span className="min-w-0 flex-1 text-left text-[14px] tracking-[0.1px] text-[#171717]">
-                    {city.nameKo}
-                  </span>
-                  {expandable ? (
-                    <img
-                      src={
-                        expanded ? "/Img/Icon/chevronUp_24_grey.svg" : "/Img/Icon/chevronDown_24_grey.svg"
-                      }
-                      alt=""
-                      width={24}
-                      height={24}
-                    />
-                  ) : null}
-                </button>
+                {expandable || !citySegments ? (
+                  <button
+                    type="button"
+                    onClick={onCityClick}
+                    className="flex h-11 min-h-[44px] w-full items-center gap-2 pl-8 pr-4 outline-none focus-visible:bg-[#f7f7f7] focus-visible:ring-2 focus-visible:ring-brand-500"
+                  >
+                    <span className="min-w-0 flex-1 text-left text-[14px] tracking-[0.1px] text-[#171717]">
+                      {city.nameKo}
+                    </span>
+                    {expandable ? (
+                      <img
+                        src={
+                          expanded ? "/Img/Icon/chevronUp_24_grey.svg" : "/Img/Icon/chevronDown_24_grey.svg"
+                        }
+                        alt=""
+                        width={24}
+                        height={24}
+                      />
+                    ) : null}
+                  </button>
+                ) : (
+                  <Link
+                    href={regionHrefFromSegments(citySegments) as Route}
+                    prefetch
+                    onPointerDown={() => prefetchSegments(citySegments)}
+                    onClick={() => {
+                      setSelectedKey(cityOnlyKey);
+                      trackSelectSegments(citySegments);
+                    }}
+                    className="flex h-11 min-h-[44px] w-full items-center gap-2 pl-8 pr-4 outline-none focus-visible:bg-[#f7f7f7] focus-visible:ring-2 focus-visible:ring-brand-500"
+                  >
+                    <span className="min-w-0 flex-1 text-left text-[14px] tracking-[0.1px] text-[#171717]">
+                      {city.nameKo}
+                    </span>
+                  </Link>
+                )}
                 {expandable && expanded
                   ? city.districts?.map((dist) => {
                       const segments = [activeProvince.slug, city.slug, dist.slug];
                       const key = `${activeProvince.slug}/${city.slug}/${dist.slug}`;
                       const isSel = selectedKey === key;
                       return (
-                        <button
+                        <Link
                           key={dist.slug}
-                          type="button"
+                          href={regionHrefFromSegments(segments) as Route}
+                          prefetch
                           onPointerDown={() => prefetchSegments(segments)}
                           onClick={() => {
                             setSelectedKey(key);
-                            navigateToSegments(segments);
+                            trackSelectSegments(segments);
                           }}
                           className={`flex h-11 min-h-[44px] w-full items-center pl-10 pr-4 text-left text-[14px] outline-none focus-visible:bg-[#f7f7f7] focus-visible:ring-2 focus-visible:ring-brand-500 ${
                             isSel ? "font-semibold text-[#171717]" : "font-medium text-[#171717]"
@@ -350,7 +364,7 @@ export default function RegionPickerClient() {
                               <img src="/Img/Icon/check_16.svg" alt="" width={16} height={16} />
                             ) : null}
                           </span>
-                        </button>
+                        </Link>
                       );
                     })
                   : null}

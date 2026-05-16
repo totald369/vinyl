@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import HomeMapStage from "@/components/home/HomeMapStage";
 import LocationRequestingOverlay from "@/components/LocationRequestingOverlay";
 import { STORE_SHEET_VIRTUAL_ROW_EST_PX, StoreSheetVirtualRow } from "@/components/BottomSheetList";
+import { RegionStoreListRowSkeletons } from "@/components/regions/RegionStoreListSkeleton";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
 import type { StoreListFilter } from "@/hooks/useStores";
 import { useStoreDetailAugment } from "@/hooks/useStoreDetailAugment";
@@ -296,6 +297,10 @@ export default function RegionStoreListClient({ leaf, slugSegments, initialPaylo
         setLoadingMore(true);
       } else {
         setLoading(true);
+        setStores([]);
+        setTotal(0);
+        setHasMore(false);
+        setOffset(0);
         setErrorMsg(null);
       }
       try {
@@ -777,14 +782,7 @@ export default function RegionStoreListClient({ leaf, slugSegments, initialPaylo
                   >
                     {listStatsSlot}
                     {loading && sortedStores.length === 0 ? (
-                      Array.from({ length: 4 }, (_, i) => (
-                        <div key={`sk-${i}`} className="px-2 py-4" aria-hidden>
-                          <div className="flex flex-col gap-3">
-                            <div className="h-4 w-[72%] animate-pulse rounded-[6px] bg-neutral-200" />
-                            <div className="h-[14px] w-[48%] animate-pulse rounded-[6px] bg-neutral-100" />
-                          </div>
-                        </div>
-                      ))
+                                            <RegionStoreListRowSkeletons />
                     ) : sortedStores.length === 0 ? (
                       <div className="min-h-[40vh]">{emptyListSlot}</div>
                     ) : (

@@ -17,6 +17,7 @@ import { useMapCenterController } from "@/hooks/useMapCenterController";
 import { useStoreDetailAugment } from "@/hooks/useStoreDetailAugment";
 import { useSheetController } from "@/hooks/useSheetController";
 import { StoreData, useStores } from "@/hooks/useStores";
+import { useDeferMapMarkersAfterList } from "@/hooks/useDeferMapMarkersAfterList";
 import { useUserLocation } from "@/hooks/useUserLocation";
 import { prefetchStoreDetail } from "@/lib/storeDetailClient";
 import { perfTimeEnd, perfTimeStart } from "@/lib/perfMarks";
@@ -49,7 +50,22 @@ export default function HomeClient({
 }: HomeClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isLoading, error } = useKakaoMapLoader();
+  /**
+   * [초기 로드] 리스트·필터 UI를 먼저 그린 뒤 Kakao SDK maps.load() — layout 의 sdk.js 는
+   * 이미 내려받았지만 maps.load + MapView 마운트는 메인 스레드 비용이 큼.
+   */
+  const [mapSdkEnabled, setMapSdkEnabled] = useState(false);
+  useEffect(() => {
+    const enable = () => setMapSdkEnabled(true);
+    if (typeof requestIdleCallback !== "undefined") {
+      const id = requestIdleCallback(enable, { timeout: 1400 });
+      return () => cancelIdleCallback(id);
+    }
+    const t = window.setTimeout(enable, 80);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  const { isLoading, error } = useKakaoMapLoader({ enabled: mapSdkEnabled });
   const { userLocation, permission, requestLocation } = useUserLocation();
   const {
     locationModalOpen,
@@ -125,6 +141,14 @@ export default function HomeClient({
     () => ({ lat: centerLat, lng: centerLng }),
     [centerLat, centerLng]
   );
+
+  const listReady = !loading && sortedStores.length > 0;
+  const mapMarkerResetKey = `${centerLat.toFixed(4)},${centerLng.toFixed(4)}:${activeFilter}:${sortedStores.length}`;
+  const showMapMarkers = useDeferMapMarkersAfterList({
+    listReady,
+    resetKey: mapMarkerResetKey
+  });
+  const mapStoresForView = showMapMarkers ? mapStores : [];
 
   /** Deep-link fetch must not abort when `stores` change (list refetch after exploreAnchor). */
   const storesRef = useRef(stores);
@@ -404,7 +428,7 @@ export default function HomeClient({
                * 변경 후: SWR 패턴 — loading 중에도 이전 데이터 유지(실제 비어있을 때만 자연스럽게 [])
                *         → 새로고침 시 깜빡임 제거.
                */
-              stores={mapStores}
+              stores={mapStoresForView}
               activeFilter={activeFilter}
               selectedStoreId={selectedStore?.id}
               onSelectStore={handleMapMarkerSelect}

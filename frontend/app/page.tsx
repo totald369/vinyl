@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { unstable_cache } from "next/cache";
 import HomeClient from "./HomeClient";
+import { GEO_COOKIE_NAME, parseGeoCookieValue } from "@/lib/geoCache";
 import { getHomePageMetadata } from "@/lib/storePageMetadata";
 import { SITE_BRAND_KO } from "@/lib/seoBrand";
 import {
@@ -9,7 +11,7 @@ import {
   getStoreSearchIndexes
 } from "@/lib/server/storeIndex";
 import type { StoreData } from "@/lib/storeData";
-import { DEFAULT_REGION } from "@/lib/types";
+import { DEFAULT_REGION, type LatLng } from "@/lib/types";
 import { getDistanceKm } from "@/lib/utils";
 
 export const metadata: Metadata = getHomePageMetadata();
@@ -27,24 +29,19 @@ const INITIAL_MAX_STORES = 60;
  * 성능: getStoreSearchIndexes() 는 cold 시 수백 ms~1s+ — 매 요청마다 호출하면 모바일 첫 TTFB 폭증.
  * unstable_cache 로 동일 빌드 내 1회만 인덱스 구축·슬라이스 재사용 (revalidate: 배포 단위로 갱신).
  */
-function buildInitialStoresUncached(): StoreData[] {
+function buildInitialStoresAt(center: LatLng): StoreData[] {
   try {
     const idx = getStoreSearchIndexes();
     const candidates = collectStoresWithinRadius(
       idx,
-      DEFAULT_REGION.lat,
-      DEFAULT_REGION.lng,
+      center.lat,
+      center.lng,
       INITIAL_RADIUS_KM
     );
     return candidates
       .map((store) => ({
         ...store,
-        distance: getDistanceKm(
-          DEFAULT_REGION.lat,
-          DEFAULT_REGION.lng,
-          store.lat,
-          store.lng
-        )
+        distance: getDistanceKm(center.lat, center.lng, store.lat, store.lng)
       }))
       .filter((s) => (s.distance ?? Infinity) <= INITIAL_RADIUS_KM)
       .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0))
@@ -55,13 +52,28 @@ function buildInitialStoresUncached(): StoreData[] {
 }
 
 const getInitialStoresCached = unstable_cache(
-  async () => buildInitialStoresUncached(),
-  ["home-initial-stores-v1"],
+  async () => buildInitialStoresAt(DEFAULT_REGION),
+  ["home-initial-stores-v2"],
   { revalidate: 3600 }
 );
 
+function isDefaultRegion(center: LatLng): boolean {
+  return (
+    Math.abs(center.lat - DEFAULT_REGION.lat) < 1e-4 &&
+    Math.abs(center.lng - DEFAULT_REGION.lng) < 1e-4
+  );
+}
+
+function resolveInitialCenter(): LatLng {
+  const fromCookie = parseGeoCookieValue(cookies().get(GEO_COOKIE_NAME)?.value);
+  return fromCookie ?? DEFAULT_REGION;
+}
+
 export default async function HomePage() {
-  const initialStores = await getInitialStoresCached();
+  const center = resolveInitialCenter();
+  const initialStores = isDefaultRegion(center)
+    ? await getInitialStoresCached()
+    : buildInitialStoresAt(center);
   return (
     <>
       <p className="sr-only">
