@@ -1,53 +1,7 @@
 import "./globals.css";
-import localFont from "next/font/local";
 import type { Metadata } from "next";
-import Script from "next/script";
-
-/**
- * [CLS] Pretendard 폰트 swap 시 fallback 시스템 폰트(한글)와의 폭 차이로 발생하는
- *  대량 layout shift 를 줄이기 위한 설정.
- *  - `adjustFontFallback: "Arial"` : 라틴 글리프 폭을 Arial 기준으로 매트릭 보정.
- *  - `fallback`: 한글 fallback 우선순위를 명시(시스템 적용 시 폭 일관성↑).
- *  - weight 400/600/700 woff2 를 모두 등록 → 시트 제목·필터·총 N건 등 굵은 텍스트도
- *    fallback 폰트의 합성 굵게(synthetic bold) 대신 실제 weight 로 그려져
- *    교체 시 추가 폭 변화 제거 → 미세 CLS -0.03~0.05.
- *  - `display: "swap"` 유지(첫 페인트는 fallback, 다운로드 완료 후 교체).
- *  - preload 는 가장 사용 빈도 높은 weight 400 만 (LCP 영향 최소화).
- *    600/700 은 lazy 로딩 — 첫 페인트 뒤 필요 시 fetch 되어 폭 보정.
- */
-const pretendard = localFont({
-  src: [
-    {
-      path: "../public/fonts/Pretendard-Regular.subset.woff2",
-      weight: "400",
-      style: "normal"
-    },
-    {
-      path: "../public/fonts/Pretendard-SemiBold.subset.woff2",
-      weight: "600",
-      style: "normal"
-    },
-    {
-      path: "../public/fonts/Pretendard-Bold.subset.woff2",
-      weight: "700",
-      style: "normal"
-    }
-  ],
-  display: "swap",
-  variable: "--font-pretendard",
-  preload: true,
-  adjustFontFallback: "Arial",
-  fallback: [
-    "Apple SD Gothic Neo",
-    "Malgun Gothic",
-    "Noto Sans KR",
-    "Helvetica Neue",
-    "Arial",
-    "system-ui",
-    "sans-serif"
-  ]
-});
 import ChunkLoadRecovery from "@/components/ChunkLoadRecovery";
+import { LazyAdSense } from "@/components/LazyAdSense";
 import GlobalSeoNav from "@/components/GlobalSeoNav";
 import { GoogleAnalyticsScripts } from "@/components/GoogleAnalyticsScripts";
 import { GtagRouteTracker } from "@/components/GtagRouteTracker";
@@ -133,8 +87,10 @@ export default function RootLayout({
     : null;
 
   return (
-    <html lang="ko" className={pretendard.variable}>
+    <html lang="ko">
       <head>
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
         <link rel="preconnect" href="https://dapi.kakao.com" />
         <link rel="dns-prefetch" href="https://dapi.kakao.com" />
         {/**
@@ -150,14 +106,10 @@ export default function RootLayout({
          * 측정: 새로고침 → 첫 마커 표시까지 ms.
          */}
         {kakaoSdkUrl ? (
-          /**
-           * 일반 async script: HTML 파싱 막지 않고 다운로드 → 다운로드 끝나는 즉시 실행.
-           * 보통 React JS 다운로드와 병렬로 끝나 hydration 시점에는 `window.kakao` 가 이미 존재.
-           * useKakaoMapLoader 는 `data-kakao-map-sdk='true'` 로 이 태그를 인식해 중복 attach 안 함.
-           * autoload=false 라 즉시 맵 초기화는 안 하고, `maps.load()` 호출만 hook 에서 실행.
-           * (next/script beforeInteractive 는 app router 에서 동기 로드라 FCP 약간 지연시킬 수 있어 채택 안 함)
-           */
-          <script src={kakaoSdkUrl} async data-kakao-map-sdk="true" />
+          <>
+            <link rel="preload" href={kakaoSdkUrl} as="script" />
+            <script src={kakaoSdkUrl} async data-kakao-map-sdk="true" />
+          </>
         ) : null}
         {/**
          * [LCP] AdSense는 비핵심 → next/script lazyOnload 로 옮겨 초기 네트워크/메인 스레드 경합 제거.
@@ -170,7 +122,7 @@ export default function RootLayout({
         {isProd && GA_MEASUREMENT_ID ? <GoogleAnalyticsScripts /> : null}
         {isProd && CLARITY_PROJECT_ID ? <MicrosoftClarityScripts /> : null}
       </head>
-      <body className={pretendard.className}>
+      <body className="font-sans antialiased">
         <ChunkLoadRecovery />
         {/**
          * [Web Vitals] 모든 라우트에서 INP/CLS/LCP/FCP/TTFB 수집.
@@ -180,14 +132,7 @@ export default function RootLayout({
         {isProd && GA_MEASUREMENT_ID && GA_ROUTE_TRACKER_ENABLED ? <GtagRouteTracker /> : null}
         {children}
         <GlobalSeoNav />
-        {isProd ? (
-          <Script
-            id="adsbygoogle-loader"
-            src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1201776814995453"
-            strategy="lazyOnload"
-            crossOrigin="anonymous"
-          />
-        ) : null}
+        {isProd ? <LazyAdSense client="ca-pub-1201776814995453" /> : null}
       </body>
     </html>
   );

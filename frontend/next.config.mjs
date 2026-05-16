@@ -3,7 +3,7 @@ const nextConfig = {
   experimental: {
     typedRoutes: true,
     /** 트리쉐이킹 최적화: 큰 순수 패키지의 import 깊이 감소 — 번들 parse/전송 시간 절감 */
-    optimizePackageImports: ["es-hangul", "lottie-react"],
+    optimizePackageImports: ["es-hangul", "lottie-react", "@supabase/supabase-js"],
     /**
      * [Web Vitals] CLS/LCP/INP attribution 활성화.
      * - useReportWebVitals 콜백의 `attribution` 필드에 LargestShiftSource/LargestShiftTarget(CLS),
@@ -39,8 +39,21 @@ const nextConfig = {
     return [
       {
         source: "/:path*",
+        headers: [{ key: "Permissions-Policy", value: "unload=*" }]
+      },
+      {
+        source: "/fonts/:path*",
         headers: [
-          { key: "Permissions-Policy", value: "unload=*" }
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" }
+        ]
+      },
+      {
+        source: "/Img/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=2592000, stale-while-revalidate=86400"
+          }
         ]
       }
     ];

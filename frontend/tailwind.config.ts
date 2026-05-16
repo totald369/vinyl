@@ -6,11 +6,11 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: [
-          "var(--font-pretendard)",
           "Pretendard",
-          "-apple-system",
-          "BlinkMacSystemFont",
-          "Segoe UI",
+          "Apple SD Gothic Neo",
+          "Malgun Gothic",
+          "Noto Sans KR",
+          "system-ui",
           "sans-serif"
         ]
       },

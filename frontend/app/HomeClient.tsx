@@ -58,11 +58,10 @@ export default function HomeClient({
   useEffect(() => {
     const enable = () => setMapSdkEnabled(true);
     if (typeof requestIdleCallback !== "undefined") {
-      const id = requestIdleCallback(enable, { timeout: 1400 });
+      const id = requestIdleCallback(enable, { timeout: 500 });
       return () => cancelIdleCallback(id);
     }
-    const t = window.setTimeout(enable, 80);
-    return () => window.clearTimeout(t);
+    enable();
   }, []);
 
   const { isLoading, error } = useKakaoMapLoader({ enabled: mapSdkEnabled });
@@ -443,7 +442,14 @@ export default function HomeClient({
                 onClick={handleOpenSearch}
                 className="flex h-12 min-h-12 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-[8px] border-0 bg-white px-4 py-2 text-left shadow-[0px_0px_1px_rgba(0,0,0,0.08),0px_4px_6px_rgba(0,0,0,0.16)] outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               >
-                <img src="/Img/Icon/search_24.svg" alt="" width={24} height={24} className="shrink-0" />
+                <img
+                  src="/Img/Icon/search_24.svg"
+                  alt=""
+                  width={24}
+                  height={24}
+                  className="shrink-0"
+                  fetchPriority="low"
+                />
                 <span className="flex h-full min-w-0 flex-1 items-center text-[16px] font-normal leading-normal tracking-[-0.3px] text-[#999999]">
                   주소나 업체명을 검색해주세요
                 </span>

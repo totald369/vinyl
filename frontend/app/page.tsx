@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { unstable_cache } from "next/cache";
+import HomePageSkeleton from "@/components/HomePageSkeleton";
 import HomeClient from "./HomeClient";
 import { GEO_COOKIE_NAME, parseGeoCookieValue } from "@/lib/geoCache";
 import { getHomePageMetadata } from "@/lib/storePageMetadata";
@@ -80,11 +81,7 @@ export default async function HomePage() {
         {SITE_BRAND_KO}에서 종량제 봉투, 불연성마대, PP마대, 건설마대, 폐기물 스티커 판매처를 위치·주소·업체명으로 검색할
         수 있습니다.
       </p>
-      <Suspense
-        fallback={
-          <main className="relative mx-auto h-[100dvh] max-w-md overflow-hidden bg-bg-canvas" aria-hidden />
-        }
-      >
+      <Suspense fallback={<HomePageSkeleton />}>
         <HomeClient initialStores={initialStores} />
       </Suspense>
     </>
