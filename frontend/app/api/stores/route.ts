@@ -26,6 +26,12 @@ import {
   checkUserAgent,
   getClientIp
 } from "@/lib/server/storesApiSecurity";
+import {
+  matchesProductFilter,
+  parseProductFilterValue,
+  toListStore,
+  type ProductFilter
+} from "@/lib/server/storesApiShape";
 import { leafToRegionPath, resolveRegionLeafFromSlugPath } from "@/lib/koreaRegions";
 import { isValidShortCode } from "@/lib/shortLink";
 import type { StoreData } from "@/lib/storeData";
@@ -117,52 +123,8 @@ function parseSearchOffsetLimit(searchParams: URLSearchParams): { offset: number
   return { offset, limit };
 }
 
-type ProductFilter = "payBag" | "nonBurnable" | "largeSticker";
-
 function parseProductFilter(searchParams: URLSearchParams): ProductFilter {
-  const f = searchParams.get("filter")?.trim();
-  if (f === "nonBurnable" || f === "largeSticker") return f;
-  return "payBag";
-}
-
-function matchesProductFilter(s: StoreData, filter: ProductFilter): boolean {
-  if (filter === "nonBurnable") return s.hasSpecialBag;
-  if (filter === "largeSticker") return s.hasLargeWasteSticker;
-  return s.hasTrashBag;
-}
-
-function roundCoord6(n: number): number {
-  return Math.round(n * 1e6) / 1e6;
-}
-
-/**
- * 변경 전: list 모드 응답에서 dataReferenceDate / phone / businessStatus 제거 →
- *         시트 열 때 /api/stores?id= 2-hop fetch 가 필수, RTT 만큼 스켈레톤 노출.
- * 변경 후: list 응답에도 포함 → 클라이언트 `storeRowNeedsDetailFetch` 가 false 가 되어
- *         augment 라운드트립 자체가 사라짐. 시트가 즉시 본문 렌더.
- *         페이로드 증가: 30행 기준 ~1KB 미만(brotli 후 거의 무의미).
- */
-function toListStore(s: StoreData, distanceKm?: number) {
-  const road = (s.roadAddress ?? s.address ?? "").trim();
-  const phone = s.phone?.trim();
-  return {
-    id: s.id,
-    name: s.name,
-    lat: roundCoord6(s.lat),
-    lng: roundCoord6(s.lng),
-    roadAddress: road,
-    address: road,
-    shortCode: s.shortCode ?? "",
-    hasTrashBag: s.hasTrashBag,
-    hasSpecialBag: s.hasSpecialBag,
-    hasLargeWasteSticker: s.hasLargeWasteSticker,
-    adminVerified: s.adminVerified === true,
-    /** "" 도 hasOwnProperty 가 true → useStoreDetailAugment 가 fetch 를 건너뜀. */
-    dataReferenceDate: s.dataReferenceDate ?? "",
-    businessStatus: s.businessStatus ?? "",
-    ...(phone ? { phone } : {}),
-    ...(distanceKm != null ? { distance: distanceKm } : {})
-  };
+  return parseProductFilterValue(searchParams.get("filter"));
 }
 
 /** 디테일 응답은 list 와 동일 shape — 별도 augment fetch 가 사라졌지만 short/id 직접 조회는 유지. */

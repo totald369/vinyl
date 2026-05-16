@@ -30,7 +30,13 @@ import {
   type RegionSeoCategory
 } from "@/lib/regionPageMetadata";
 import type { StoreData } from "@/lib/storeData";
+/**
+ * server-only 모듈에서 타입만 가져온다 — `import type` 으로 표기해 webpack 모듈 그래프에
+ * 실제 구현(getStoreSearchIndexes 등) 이 끌려오지 않도록 보장.
+ */
+import type { RegionInitialPayload } from "@/lib/server/regionPayload";
 import { DEFAULT_REGION, type LatLng } from "@/lib/types";
+import { getDistanceKm } from "@/lib/utils";
 
 const StoreDetailSheet = dynamic(() => import("@/components/StoreDetailSheet"), { ssr: false });
 const HomeSearchOverlay = dynamic(() => import("@/components/HomeSearchOverlay"), { ssr: false });
@@ -40,13 +46,18 @@ const LocationPermissionModal = dynamic(() => import("@/components/LocationPermi
 
 const REGION_SEARCH_BATCH = 100;
 
+/**
+ * 변경 전: opts.lat/lng 을 쿼리로 함께 보내 서버가 거리 정렬 + distance 필드를 채움.
+ *          → 사용자별 URL 이 달라 Cache-Control: public, s-maxage=600 가 CDN/Edge 에서 hit 0.
+ *          → 위치 권한 grant/deny 전후로 같은 region 을 두 번 fetch.
+ * 변경 후: 항상 lat/lng 미지정으로 호출 → URL 이 (regionPath, filter, offset, limit) 만으로 결정 →
+ *          CDN/Edge cache hit 율 ~100%. 거리 정렬·distance 표시는 클라이언트의 sortedStores 가 채움.
+ */
 async function fetchRegionStores(opts: {
   regionPath: string;
   category: RegionSeoCategory;
   offset: number;
   limit: number;
-  lat?: number;
-  lng?: number;
 }) {
   const qs = new URLSearchParams({
     regionPath: opts.regionPath,
@@ -54,15 +65,6 @@ async function fetchRegionStores(opts: {
     offset: String(opts.offset),
     limit: String(opts.limit)
   });
-  if (
-    opts.lat != null &&
-    opts.lng != null &&
-    Number.isFinite(opts.lat) &&
-    Number.isFinite(opts.lng)
-  ) {
-    qs.set("lat", String(opts.lat));
-    qs.set("lng", String(opts.lng));
-  }
   const res = await fetch(`/api/stores?${qs.toString()}`, { credentials: "same-origin" });
   if (!res.ok) throw new Error(`region_fetch_${res.status}`);
   return res.json() as Promise<{
@@ -90,9 +92,15 @@ function centroidFromStores(list: StoreData[]): LatLng | null {
 type Props = {
   leaf: ResolvedRegionLeaf;
   slugSegments: string[];
+  /**
+   * server component(`app/regions/[...slug]/page.tsx`) 가 ISR(600s) 로 빌드한 첫 페이지 데이터.
+   * 마운트 즉시 사용 → CSR fetch round-trip 1회 + spinner 노출 시간 제거.
+   * URL 의 ?filter 가 기본값(payBag) 일 때만 사용, 그 외 카테고리는 클라이언트가 fetch.
+   */
+  initialPayload?: RegionInitialPayload;
 };
 
-export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
+export default function RegionStoreListClient({ leaf, slugSegments, initialPayload }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isLoading, error } = useKakaoMapLoader();
@@ -113,12 +121,24 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
   const [category, setCategory] = useState<RegionSeoCategory>(() =>
     parseRegionCategoryParam(searchParams.get("filter") ?? undefined)
   );
-  const [stores, setStores] = useState<StoreData[]>([]);
-  const [total, setTotal] = useState(0);
-  const [offset, setOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
+
+  /**
+   * SSR 초기 페이로드는 category === initialPayload.category 일 때만 채택.
+   * URL ?filter 가 비-기본일 경우 클라이언트가 fetch 로 보강 → 두 경로 모두 안전.
+   */
+  const useInitialPayload = !!initialPayload && initialPayload.category === category;
+
+  const [stores, setStores] = useState<StoreData[]>(() =>
+    useInitialPayload ? (initialPayload!.stores as StoreData[]) : []
+  );
+  const [total, setTotal] = useState(useInitialPayload ? initialPayload!.total : 0);
+  const [offset, setOffset] = useState(useInitialPayload ? initialPayload!.stores.length : 0);
+  const [hasMore, setHasMore] = useState(useInitialPayload ? initialPayload!.hasMore : false);
+  const [loading, setLoading] = useState(!useInitialPayload);
   const [loadingMore, setLoadingMore] = useState(false);
+
+  /** 첫 useEffect[runReload] 실행을 한 번 skip 하기 위한 latch. SSR 데이터가 있을 때만 켜진다. */
+  const initialFetchSkipRef = useRef(useInitialPayload);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const trackedOpenRef = useRef(false);
@@ -186,7 +206,32 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
     setSearchVisibleCount((c) => Math.min(c + REGION_SEARCH_BATCH, searchResultsAll.length));
   }, [searchResultsAll.length]);
 
-  const storesById = useMemo(() => new Map(stores.map((s) => [s.id, s])), [stores]);
+  const geoLat = permission === "granted" && userLocation ? userLocation.lat : undefined;
+  const geoLng = permission === "granted" && userLocation ? userLocation.lng : undefined;
+
+  /**
+   * 변경 전: 서버에서 origin lat/lng 받아 거리 정렬 + distance 채움 → URL 캐시 키 fragment 로 CDN hit 0%,
+   *          위치 권한 grant/deny 전후 같은 region 을 2회 fetch.
+   * 변경 후: 서버는 name 정렬·distance 없이 응답(단일 캐시 키 → CDN hit 100%).
+   *          사용자 위치(geo)가 있으면 클라이언트에서 거리 정렬·distance 주입.
+   *          - 위치 권한 변동만으로는 추가 fetch 발생 X (정렬만 재계산).
+   *          - 정렬 비용은 region 규모 N (구 단위 보통 < 1000) 의 O(N log N) — 단발 1ms 내외.
+   */
+  const sortedStores = useMemo<StoreData[]>(() => {
+    if (geoLat == null || geoLng == null || stores.length === 0) return stores;
+    const withDist = stores.map((s) => {
+      const d = getDistanceKm(geoLat, geoLng, Number(s.lat), Number(s.lng));
+      return Number.isFinite(d) ? ({ ...s, distance: d } as StoreData) : s;
+    });
+    withDist.sort((a, b) => {
+      const da = typeof a.distance === "number" ? a.distance : Number.POSITIVE_INFINITY;
+      const db = typeof b.distance === "number" ? b.distance : Number.POSITIVE_INFINITY;
+      return da - db;
+    });
+    return withDist;
+  }, [stores, geoLat, geoLng]);
+
+  const storesById = useMemo(() => new Map(sortedStores.map((s) => [s.id, s])), [sortedStores]);
 
   const listScrollRef = useRef<HTMLDivElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
@@ -195,7 +240,7 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
    * [INP/UX] measureElement 도입 — 실제 행 높이로 totalSize 보정 → 스크롤바 thumb·sentinel 정확도↑.
    */
   const listRowVirtualizer = useVirtualizer({
-    count: loading && stores.length === 0 ? 0 : stores.length,
+    count: loading && sortedStores.length === 0 ? 0 : sortedStores.length,
     getScrollElement: () => listScrollRef.current,
     estimateSize: () => STORE_SHEET_VIRTUAL_ROW_EST_PX,
     overscan: 10,
@@ -203,10 +248,10 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
   });
 
   const mapStores = useMemo(() => {
-    if (!selectedStore) return stores;
-    if (stores.some((s) => s.id === selectedStore.id)) return stores;
-    return [selectedStore, ...stores];
-  }, [stores, selectedStore]);
+    if (!selectedStore) return sortedStores;
+    if (sortedStores.some((s) => s.id === selectedStore.id)) return sortedStores;
+    return [selectedStore, ...sortedStores];
+  }, [sortedStores, selectedStore]);
 
   const detailAugmenting = useStoreDetailAugment(
     sheetView,
@@ -216,9 +261,6 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
   );
 
   const onPrefetchStore = useCallback((row: StoreData) => prefetchStoreDetail(row.id, center), [center]);
-
-  const geoLat = permission === "granted" && userLocation ? userLocation.lat : undefined;
-  const geoLng = permission === "granted" && userLocation ? userLocation.lng : undefined;
 
   const syncCategoryUrl = useCallback(
     (c: RegionSeoCategory) => {
@@ -250,13 +292,16 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
         setErrorMsg(null);
       }
       try {
+        /**
+         * lat/lng 미전송 — 서버는 name 정렬·distance 미포함 응답으로 통일.
+         * 거리 정렬·distance 표시는 sortedStores 가 사용자 위치 기준으로 클라이언트에서 수행.
+         * 이로써 (regionPath, filter, offset, limit) 만이 캐시 키 → s-maxage=600 CDN hit ~100%.
+         */
         const data = await fetchRegionStores({
           regionPath,
           category,
           offset: startOffset,
-          limit: 40,
-          lat: geoLat,
-          lng: geoLng
+          limit: 40
         });
         setTotal(data.total ?? 0);
         setHasMore(data.hasMore === true);
@@ -280,7 +325,8 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
         setLoadingMore(false);
       }
     },
-    [regionPath, category, geoLat, geoLng]
+    /* geoLat/geoLng 의존 제거 — 위치 권한 변동만으로는 재 fetch 가 발생하지 않는다. */
+    [regionPath, category]
   );
 
   const onLoadMore = useCallback(() => {
@@ -289,6 +335,14 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
   }, [loading, loadingMore, offset, runReload]);
 
   useEffect(() => {
+    /**
+     * SSR initialPayload 로 이미 첫 페이지 데이터가 채워져 있으면 첫 fetch 1회 skip.
+     * 이후 category 변경(runReload 재생성) 부터는 정상 수행.
+     */
+    if (initialFetchSkipRef.current) {
+      initialFetchSkipRef.current = false;
+      return;
+    }
     void runReload(0, false);
   }, [runReload]);
 
@@ -685,7 +739,7 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
                     className="scrollbar-map-list mt-2 min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-0 pb-[env(safe-area-inset-bottom,0px)]"
                   >
                     {listStatsSlot}
-                    {loading && stores.length === 0 ? (
+                    {loading && sortedStores.length === 0 ? (
                       Array.from({ length: 4 }, (_, i) => (
                         <div key={`sk-${i}`} className="px-2 py-4" aria-hidden>
                           <div className="flex flex-col gap-3">
@@ -694,13 +748,13 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
                           </div>
                         </div>
                       ))
-                    ) : stores.length === 0 ? (
+                    ) : sortedStores.length === 0 ? (
                       <div className="min-h-[40vh]">{emptyListSlot}</div>
                     ) : (
                       <>
                         <div className="relative w-full" style={{ height: listRowVirtualizer.getTotalSize() }}>
                           {listRowVirtualizer.getVirtualItems().map((vi) => {
-                            const row = stores[vi.index];
+                            const row = sortedStores[vi.index];
                             return (
                               <div
                                 key={vi.key}
@@ -713,7 +767,7 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
                                   store={row}
                                   selected={selectedStore?.id === row.id}
                                   index={vi.index}
-                                  total={stores.length}
+                                  total={sortedStores.length}
                                   onSelectStore={handleSelectStoreWithPan}
                                   onPrefetchStore={onPrefetchStore}
                                 />
