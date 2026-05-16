@@ -142,6 +142,11 @@ export default function RegionStoreListClient({ leaf, slugSegments, initialPaylo
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const trackedOpenRef = useRef(false);
+  /**
+   * `requestLocation()` 비동기 완료 전에는 userLocation 이 비어 있을 수 있음.
+   * 내 위치 버튼: 허용 상태에서 탭 시 반드시 user 좌표로 맵 이동 — 좌표 도착 시 1회 center 반영.
+   */
+  const moveToUserAfterLocationRef = useRef(false);
 
   const [sheetView, setSheetView] = useState<"list" | "detail">("list");
   const [selectedStore, setSelectedStore] = useState<StoreData | null>(null);
@@ -401,10 +406,8 @@ export default function RegionStoreListClient({ leaf, slugSegments, initialPaylo
       const resolved = storesById.get(store.id) ?? store;
       sendGtagEvent("click_marker", { store_id: resolved.id });
       trackClickRegionStore(resolved.id);
-      const pos = { lat: Number(resolved.lat), lng: Number(resolved.lng) };
+      /** 마커만 선택 — 지도 중심/줌은 유지 (리스트·검색 탭은 handleSelect* 에서만 pan). */
       setSelectedStore(resolved);
-      setMapCenterOverride(pos);
-      setCenterVersion((v) => v + 1);
       setSheetView("detail");
     },
     [storesById, trackClickRegionStore]
@@ -448,19 +451,41 @@ export default function RegionStoreListClient({ leaf, slugSegments, initialPaylo
     setSelectedStore(null);
     setSheetView("list");
     setMapCenterOverride(null);
+    moveToUserAfterLocationRef.current = true;
     if (userLocation) {
       setManualCenter(userLocation);
-    } else if (stores.length > 0) {
-      const c = centroidFromStores(stores);
-      if (c) setManualCenter(c);
+      setCenterVersion((v) => v + 1);
+      moveToUserAfterLocationRef.current = false;
     }
-    setCenterVersion((v) => v + 1);
-  }, [permission, userLocation, stores]);
+    requestLocation();
+  }, [permission, userLocation, requestLocation]);
 
+  useEffect(() => {
+    if (!moveToUserAfterLocationRef.current) return;
+    if (permission !== "granted" || !userLocation) return;
+    setManualCenter(userLocation);
+    setCenterVersion((v) => v + 1);
+    moveToUserAfterLocationRef.current = false;
+  }, [permission, userLocation]);
+
+  /**
+   * 변경 전: 모달 grant 직후 requestLocation 만 호출 → mapCenterOverride 가 살아 있으면
+   *          center 우선순위 (override ?? geo ?? manual) 에 의해 위치로 이동하지 않음.
+   * 변경 후: grant 직전 selectedStore/sheetView/mapCenterOverride 를 reset 하고,
+   *          이미 위치를 가지고 있다면 manualCenter 도 즉시 갱신 + centerVersion 증가.
+   *          UI 동일 (모달은 사용자가 명시적으로 띄운 상태).
+   */
   const handleLocationPermissionAllow = useCallback(() => {
     setLocationModalOpen(false);
+    setSelectedStore(null);
+    setSheetView("list");
+    setMapCenterOverride(null);
+    if (userLocation) {
+      setManualCenter(userLocation);
+      setCenterVersion((v) => v + 1);
+    }
     requestLocation();
-  }, [requestLocation]);
+  }, [requestLocation, userLocation]);
 
   const handleFilterChange = useCallback(
     (f: StoreListFilter) => {

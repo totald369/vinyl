@@ -127,6 +127,30 @@ export default function RegionPickerClient() {
     [router]
   );
 
+  /**
+   * 변경 전: picker 의 region 버튼이 `<button>` + `router.push` 라 prefetch 가 없었음 →
+   *          클릭 후에야 RSC payload + JS chunk 다운로드 + SSR 실행이 시작되어 ~수백 ms 빈 화면.
+   * 변경 후: onPointerDown 시점에 router.prefetch 로 RSC + chunk 를 미리 받아 캐시.
+   *          - PointerDown 은 click 보다 보통 50~150ms 빠르고, 모바일 터치도 동일하게 발화.
+   *          - prefetch 는 idempotent (중복 호출 안전), 미사용해도 RSC 캐시는 짧은 TTL 로 자동 정리.
+   *          - 사용자 의도 없는 prefetch 폭주 방지: 마지막 prefetch href 만 기록해 중복 호출 차단.
+   */
+  const lastPrefetchedHrefRef = useRef<string | null>(null);
+  const prefetchSegments = useCallback(
+    (segments: string[]) => {
+      if (!resolveRegionLeafFromSlugPath(segments)) return;
+      const href = regionHrefFromSegments(segments);
+      if (lastPrefetchedHrefRef.current === href) return;
+      lastPrefetchedHrefRef.current = href;
+      try {
+        router.prefetch(href as Route);
+      } catch {
+        /* dev 환경 또는 미지원 환경에서 silently 무시 */
+      }
+    },
+    [router]
+  );
+
   return (
     <main className="mx-auto flex max-h-[100dvh] min-h-[100dvh] min-w-0 max-w-md flex-col bg-white">
       <header className="flex shrink-0 items-center px-4 py-2 pt-[calc(8px+env(safe-area-inset-top))]">
@@ -153,6 +177,7 @@ export default function RegionPickerClient() {
                 key={q.path}
                 href={regionHrefFromSegments(q.path.split("/")) as Route}
                 className="relative size-12 shrink-0 overflow-hidden rounded-full outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                onPointerDown={() => prefetchSegments(q.path.split("/"))}
                 onClick={() =>
                   trackRegionEvent("select_region", {
                     province: "서울",
@@ -230,6 +255,7 @@ export default function RegionPickerClient() {
               <button
                 key={dist.slug}
                 type="button"
+                onPointerDown={() => prefetchSegments(segments)}
                 onClick={() => {
                   setSelectedKey(key);
                   navigateToSegments(segments);
@@ -274,6 +300,9 @@ export default function RegionPickerClient() {
               <div key={city.slug}>
                 <button
                   type="button"
+                  onPointerDown={
+                    expandable || !citySegments ? undefined : () => prefetchSegments(citySegments)
+                  }
                   onClick={onCityClick}
                   className="flex h-11 min-h-[44px] w-full items-center gap-2 pl-8 pr-4 outline-none focus-visible:bg-[#f7f7f7] focus-visible:ring-2 focus-visible:ring-brand-500"
                 >
@@ -300,6 +329,7 @@ export default function RegionPickerClient() {
                         <button
                           key={dist.slug}
                           type="button"
+                          onPointerDown={() => prefetchSegments(segments)}
                           onClick={() => {
                             setSelectedKey(key);
                             navigateToSegments(segments);

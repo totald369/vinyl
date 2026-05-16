@@ -10,7 +10,6 @@ import type { StoreListFilter } from "@/hooks/useStores";
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
 import { sendGtagEvent } from "@/lib/gtag";
 import { DEEPLINK_SHORT_STORAGE_KEY, isValidShortCode } from "@/lib/shortLink";
-import { DEFAULT_REGION } from "@/lib/types";
 import { useDeepLinkResolver } from "@/hooks/useDeepLinkResolver";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
 import { useMapCenterController } from "@/hooks/useMapCenterController";
@@ -265,15 +264,12 @@ export default function HomeClient({
     setSheetView("list");
     setExploreAnchor(null);
     setMapCenterOverride(null);
-    if (userLocation) {
-      setManualCenter(userLocation);
-    } else {
-      setManualCenter({ lat: DEFAULT_REGION.lat, lng: DEFAULT_REGION.lng });
-    }
+    /** 최신 GPS 로 갱신 — 좌표는 useEffect(permission, userLocation, mapCenterOverride) 가 반영 */
+    requestLocation();
     setCenterVersion((v) => v + 1);
   }, [
     permission,
-    userLocation,
+    requestLocation,
     setSelectedStore,
     setLocationModalOpen,
     setSheetView,
@@ -281,10 +277,38 @@ export default function HomeClient({
     setMapCenterOverride
   ]);
 
+  /**
+   * 변경 전: 모달 grant 직후 requestLocation 만 호출 → 위치 권한 grant 가 일어나면
+   *          useEffect[permission, userLocation, mapCenterOverride] 가 manualCenter 를 갱신해야 하는데,
+   *          마커 detail/검색 결과 선택 등으로 mapCenterOverride/exploreAnchor 가 살아 있으면
+   *          `!mapCenterOverride` 가드에 막혀 center 가 그대로 → 사용자 보고: "허용해도 이동 안 함".
+   * 변경 후: grant 직전에 명시적으로 selectedStore/sheetView/exploreAnchor/mapCenterOverride 를 reset.
+   *          - userLocation 이 비동기로 들어오면 useEffect 가 setManualCenter + centerVersion++ 실행.
+   *          - 이미 위치를 가지고 있다면 즉시 manualCenter 도 동기로 이동시켜 lazy mount /
+   *            geolocation 응답 지연 사이의 갭에서도 사용자가 곧바로 위치 변경을 체감.
+   *          UI/상호작용 동일 (모달은 사용자가 명시적으로 띄운 상태이므로 reset 이 의도와 일치).
+   */
   const handleLocationPermissionAllow = useCallback(() => {
     setLocationModalOpen(false);
+    keepSelectedOutsideListRef.current = false;
+    setSelectedStore(null);
+    setSheetView("list");
+    setExploreAnchor(null);
+    setMapCenterOverride(null);
+    if (userLocation) {
+      setManualCenter(userLocation);
+      setCenterVersion((v) => v + 1);
+    }
     requestLocation();
-  }, [requestLocation, setLocationModalOpen]);
+  }, [
+    requestLocation,
+    setLocationModalOpen,
+    setSelectedStore,
+    setSheetView,
+    setExploreAnchor,
+    setMapCenterOverride,
+    userLocation
+  ]);
 
   const handleCloseDetail = useCallback(() => {
     keepSelectedOutsideListRef.current = false;
