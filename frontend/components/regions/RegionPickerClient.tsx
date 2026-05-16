@@ -1,6 +1,7 @@
 "use client";
 
 import type { Route } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -161,7 +162,19 @@ export default function RegionPickerClient() {
               >
                 {chipSrc?.trim() ? (
                   <>
-                    <img src={chipSrc} alt="" className="absolute inset-0 size-full object-cover" />
+                    {/**
+                     * [LCP/CLS] chip-*.png 정적 PNG 는 next/image 로 변환:
+                     *  - avif/webp 자동 변환 + 적절한 width/sizes 로 최적 자산 다운로드.
+                     *  - 48×48(size-12) 고정 → fill 대신 width/height 명시로 CLS 0.
+                     */}
+                    <Image
+                      src={chipSrc}
+                      alt=""
+                      width={48}
+                      height={48}
+                      sizes="48px"
+                      className="absolute inset-0 size-full object-cover"
+                    />
                     <span
                       className="absolute inset-0 bg-[rgba(23,23,23,0.4)]"
                       aria-hidden

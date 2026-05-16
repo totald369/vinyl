@@ -3,7 +3,14 @@ const nextConfig = {
   experimental: {
     typedRoutes: true,
     /** 트리쉐이킹 최적화: 큰 순수 패키지의 import 깊이 감소 — 번들 parse/전송 시간 절감 */
-    optimizePackageImports: ["es-hangul", "lottie-react"]
+    optimizePackageImports: ["es-hangul", "lottie-react"],
+    /**
+     * [Web Vitals] CLS/LCP/INP attribution 활성화.
+     * - useReportWebVitals 콜백의 `attribution` 필드에 LargestShiftSource/LargestShiftTarget(CLS),
+     *   EventEntry/EventTarget(INP), Element(LCP)이 들어와 어느 DOM이 문제였는지 추적 가능.
+     * - 런타임 동작 영향 없음(콜백에 부가 데이터만 더 실어 보냄).
+     */
+    webVitalsAttribution: ["CLS", "LCP", "INP"]
   },
 
   compiler: {

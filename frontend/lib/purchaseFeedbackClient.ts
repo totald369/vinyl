@@ -65,6 +65,21 @@ export async function getPurchaseFeedbackStats(storeId: string): Promise<Purchas
   return p;
 }
 
+/**
+ * [INP/UX] 사용자가 row 를 hover/touch 한 시점(=prefetchStoreDetail 와 같은 timing)에 호출.
+ * - 30s TTL cache + in-flight dedup 로 트래픽 폭증 방지(같은 매장 hover 연쇄 → 1회 fetch).
+ * - 시트가 열리는 순간 `getCachedPurchaseFeedbackStats` 가 hit 되어 placeholder 깜빡임 제거.
+ * - 캐시 hit 이거나 in-flight 중이면 즉시 return (fire-and-forget).
+ */
+export function prefetchPurchaseFeedbackStats(storeId: string): void {
+  if (!storeId) return;
+  if (getCachedPurchaseFeedbackStats(storeId) != null) return;
+  if (statsInflight.has(storeId)) return;
+  void getPurchaseFeedbackStats(storeId).catch(() => {
+    /* 네트워크·서버 일시 오류 — 무시. 시트 열 때 자체 fetch 가 다시 시도. */
+  });
+}
+
 export async function submitPurchaseFeedback(
   storeId: string,
   feedbackType: PurchaseFeedbackType,

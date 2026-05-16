@@ -23,7 +23,7 @@ import {
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
 import { sendGtagEvent } from "@/lib/gtag";
 import { prefetchStoreDetail } from "@/lib/storeDetailClient";
-import { filterStoresForSearch } from "@/lib/storeSearch";
+import { filterStoresForSearchAsync } from "@/lib/storeSearchWorker";
 import {
   parseRegionCategoryParam,
   regionCategoryKo,
@@ -137,13 +137,40 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
     [manualCenter, mapCenterOverride, permission, userLocation]
   );
 
-  const searchResultsAll = useMemo(
-    () =>
-      loading || !searchQuery.trim()
-        ? []
-        : filterStoresForSearch(stores, searchQuery, category, center),
-    [stores, searchQuery, category, center, loading]
-  );
+  /**
+   * [INP] 변경 전: filterStoresForSearch 를 useMemo 로 매 키 입력마다 메인 스레드에서 동기 실행 →
+   *  region 데이터가 큰 도시(수백~수천 매장)에서 input INP 가 튐.
+   * 변경 후: filterStoresForSearchAsync (Web Worker) 로 분리.
+   *  - stores.length < 400 (대부분의 region) 은 동기 실행 (worker 송수신 비용 회피).
+   *  - stores.length >= 400 은 worker 로 위임 → 메인 스레드 차단 시간 ~0.
+   *  - 키 입력 race condition 은 latest seq 만 채택해 stale 결과 무시.
+   */
+  const [searchResultsAll, setSearchResultsAll] = useState<StoreData[]>([]);
+  const searchSeqRef = useRef(0);
+
+  useEffect(() => {
+    if (loading || !searchQuery.trim()) {
+      setSearchResultsAll([]);
+      return;
+    }
+    const seq = ++searchSeqRef.current;
+    let cancelled = false;
+    filterStoresForSearchAsync(stores, searchQuery, category, center)
+      .then((rows) => {
+        if (cancelled) return;
+        if (seq !== searchSeqRef.current) return;
+        setSearchResultsAll(rows);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        if (seq !== searchSeqRef.current) return;
+        setSearchResultsAll([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+    /* center 는 useMemo 로 lat/lng 동일 시 참조 안정 — 통째로 deps. */
+  }, [stores, searchQuery, category, center, loading]);
 
   useEffect(() => {
     setSearchVisibleCount(REGION_SEARCH_BATCH);
@@ -164,11 +191,15 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
   const listScrollRef = useRef<HTMLDivElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
 
+  /**
+   * [INP/UX] measureElement 도입 — 실제 행 높이로 totalSize 보정 → 스크롤바 thumb·sentinel 정확도↑.
+   */
   const listRowVirtualizer = useVirtualizer({
     count: loading && stores.length === 0 ? 0 : stores.length,
     getScrollElement: () => listScrollRef.current,
     estimateSize: () => STORE_SHEET_VIRTUAL_ROW_EST_PX,
-    overscan: 10
+    overscan: 10,
+    measureElement: (el) => el.getBoundingClientRect().height
   });
 
   const mapStores = useMemo(() => {
@@ -482,18 +513,27 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
     </>
   );
 
+  /**
+   * [CLS] loading↔결과 토글, errorMsg 등장/소멸 시 위쪽 한 줄이 추가되며 아래 리스트를 밀어냈음.
+   * 변경 후: 카운트 줄(min-h-[20px])과 에러 줄(min-h-[18px]) 모두 컨테이너 높이를 미리 예약.
+   * UI: 동일 문구, 동일 위치 — 영역만 안정화.
+   */
   const listStatsSlot = (
     <div className="shrink-0 pb-2 pt-4">
-      {!loading ? (
-        <p className="pl-2 text-[14px] tracking-[0.1px] text-black">
-          <span className="font-normal">총 </span>
-          <span className="font-bold tabular-nums">{total}</span>
-          <span className="font-normal">건</span>
-        </p>
-      ) : (
-        <p className="pl-2 text-[14px] font-normal text-[#999]">불러오는 중…</p>
-      )}
-      {errorMsg ? <p className="pl-2 pt-2 text-[13px] text-danger-700">{errorMsg}</p> : null}
+      <div className="min-h-[20px]">
+        {!loading ? (
+          <p className="pl-2 text-[14px] tracking-[0.1px] text-black">
+            <span className="font-normal">총 </span>
+            <span className="font-bold tabular-nums">{total}</span>
+            <span className="font-normal">건</span>
+          </p>
+        ) : (
+          <p className="pl-2 text-[14px] font-normal text-[#999]">불러오는 중…</p>
+        )}
+      </div>
+      <div className="min-h-[18px] pt-2">
+        {errorMsg ? <p className="pl-2 text-[13px] text-danger-700">{errorMsg}</p> : null}
+      </div>
     </div>
   );
 
@@ -606,9 +646,18 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
             </section>
           ) : null}
 
-          {sheetView === "list" ? (
-            <div className="pointer-events-auto fixed inset-0 z-[60] flex justify-center bg-white">
-              <div className="relative flex h-[100dvh] w-full max-w-md flex-col bg-white pt-[env(safe-area-inset-top,0px)]">
+          {/**
+           * [INP] 변경 전: sheetView 토글마다 fullscreen list 영역 + virtualizer + 60+ DOM 행이
+           *   unmount/mount → 인터랙션 직후 next-paint INP 폭증.
+           * 변경 후: 항상 mount, sheetView !== "list" 일 때 visibility:hidden + pointer-events-none.
+           */}
+          <div
+            className={`pointer-events-auto fixed inset-0 z-[60] flex justify-center bg-white ${
+              sheetView !== "list" ? "pointer-events-none invisible" : ""
+            }`}
+            aria-hidden={sheetView !== "list"}
+          >
+            <div className="relative flex h-[100dvh] w-full max-w-md flex-col bg-white pt-[env(safe-area-inset-top,0px)]">
                 <header className="flex shrink-0 items-center gap-1 pr-2">
                   <button
                     type="button"
@@ -655,6 +704,8 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
                             return (
                               <div
                                 key={vi.key}
+                                data-index={vi.index}
+                                ref={listRowVirtualizer.measureElement}
                                 className="absolute left-0 top-0 w-full"
                                 style={{ transform: `translateY(${vi.start}px)` }}
                               >
@@ -719,7 +770,6 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
                 ) : null}
               </div>
             </div>
-          ) : null}
 
           <LocationPermissionModal
             open={locationModalOpen}
@@ -749,14 +799,23 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
             </div>
           ) : null}
 
-          {selectedStore && sheetView === "detail" ? (
-            <StoreDetailSheet
-              store={selectedStore}
-              onClose={handleCloseDetailSheet}
-              userLocation={permission === "granted" && userLocation ? userLocation : null}
-              kakaoMapsReady={!isLoading && !error}
-              isAugmentingDetail={detailAugmenting}
-            />
+          {/**
+           * [INP] selectedStore 가 한 번이라도 있으면 DetailSheet 를 mount 한 상태로 유지,
+           * sheetView !== "detail" 일 때 visibility 만 끔. 두 번째 마커 클릭부터는 prop 갱신만.
+           */}
+          {selectedStore ? (
+            <div
+              className={sheetView !== "detail" ? "pointer-events-none invisible" : ""}
+              aria-hidden={sheetView !== "detail"}
+            >
+              <StoreDetailSheet
+                store={selectedStore}
+                onClose={handleCloseDetailSheet}
+                userLocation={permission === "granted" && userLocation ? userLocation : null}
+                kakaoMapsReady={!isLoading && !error}
+                isAugmentingDetail={detailAugmenting}
+              />
+            </div>
           ) : null}
         </div>
       </div>

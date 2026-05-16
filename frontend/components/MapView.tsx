@@ -39,15 +39,18 @@ function mapPointToXY(pt: KakaoMapPoint | { x: number; y: number }): { x: number
   return { x: p.x, y: p.y };
 }
 
-/** Subset of stores to draw as markers (bounds + cap). */
+/**
+ * [INP] 변경 전: selectedId 까지 의존성에 받아, selected 변경마다 전체 정렬 재실행 + 새 배열 반환.
+ *   결과 useMemo 참조가 매번 새로 바뀌어 effect 가 240개 마커 diff 를 처음부터 다시 돌렸음.
+ * 변경 후: 본 함수는 selected 와 무관하게 bounds·center·stores 만으로 결정.
+ *   선택 마커의 강조(zIndex/img.src)는 별도 effect 에서 1~2개만 변경.
+ *   selected store 가 pool 에 없는 경우(원거리 검색 결과)는 별도 effect 가 동적으로 추가.
+ */
 function pickStoresForMapMarkers(
   stores: StoreData[],
   mapCenter: LatLng,
-  bounds: MapBoundsBox | null,
-  selectedId: string | null
+  bounds: MapBoundsBox | null
 ): StoreData[] {
-  const selected = selectedId ? stores.find((s) => s.id === selectedId) : undefined;
-
   const inPad = (lat: number, lng: number, b: MapBoundsBox) =>
     lat >= b.swLat && lat <= b.neLat && lng >= b.swLng && lng <= b.neLng;
 
@@ -78,12 +81,6 @@ function pickStoresForMapMarkers(
       .map((x) => x.s);
   }
 
-  if (selected && !pool.some((s) => s.id === selected.id)) {
-    pool = [selected, ...pool];
-    if (pool.length > MAX_MAP_MARKERS) {
-      pool = pool.slice(0, MAX_MAP_MARKERS);
-    }
-  }
   return pool;
 }
 
@@ -170,18 +167,30 @@ function MapViewInner({
   const mbNeLat = mapBounds?.neLat;
   const mbNeLng = mapBounds?.neLng;
 
-  const visibleForMarkers = useMemo(() => {
+  /**
+   * [INP] visibleForMarkers 는 selectedStoreId 와 무관 — 선택 변경만으로 정렬·diff 가 재실행되지 않게.
+   * 선택 store 가 pool 에 없는 경우는 아래 별도 useMemo 에서 합성한다.
+   */
+  const baseVisibleForMarkers = useMemo(() => {
     const boundsBox =
       mbSwLat != null && mbSwLng != null && mbNeLat != null && mbNeLng != null
         ? { swLat: mbSwLat, swLng: mbSwLng, neLat: mbNeLat, neLng: mbNeLng }
         : null;
-    return pickStoresForMapMarkers(
-      stores,
-      { lat: centerLat, lng: centerLng },
-      boundsBox,
-      selectedStoreId ?? null
-    );
-  }, [stores, centerLat, centerLng, mbSwLat, mbSwLng, mbNeLat, mbNeLng, selectedStoreId]);
+    return pickStoresForMapMarkers(stores, { lat: centerLat, lng: centerLng }, boundsBox);
+  }, [stores, centerLat, centerLng, mbSwLat, mbSwLng, mbNeLat, mbNeLng]);
+
+  /**
+   * selected 가 base pool 에 이미 있으면 base 그대로 (참조 동일) → diff effect 트리거 X.
+   * 없을 때만 새 배열 생성. (원거리 검색 결과 등 보호 케이스)
+   */
+  const visibleForMarkers = useMemo(() => {
+    if (!selectedStoreId) return baseVisibleForMarkers;
+    const selected = stores.find((s) => s.id === selectedStoreId);
+    if (!selected) return baseVisibleForMarkers;
+    if (baseVisibleForMarkers.some((s) => s.id === selectedStoreId)) return baseVisibleForMarkers;
+    const merged = [selected, ...baseVisibleForMarkers];
+    return merged.length > MAX_MAP_MARKERS ? merged.slice(0, MAX_MAP_MARKERS) : merged;
+  }, [baseVisibleForMarkers, selectedStoreId, stores]);
 
   const storesPickRef = useRef<StoreData[]>(visibleForMarkers);
   storesPickRef.current = visibleForMarkers;
@@ -282,6 +291,12 @@ function MapViewInner({
       onIdle();
     }
 
+    /**
+     * [INP] 변경 전: visible 마커 N개 모두 new kakao.LatLng() + proj.pointFromCoords() 호출 (N=240 시 20~40ms).
+     * 변경 후: 1) 클릭 좌표 주변 작은 위·경도 박스로 1차 필터 (제곱근 없이 좌표 차이만) → 보통 ~3~10개.
+     *        2) 후보만 픽셀 거리 검사.
+     *   결과: 평균 N→ ~10개로 줄어 click → next-paint 비용 1/10 수준.
+     */
     const onMapClick = (...args: unknown[]) => {
       const mouseEvent = args[0] as { latLng: { getLat: () => number; getLng: () => number } };
       if (!mouseEvent?.latLng) return;
@@ -292,7 +307,26 @@ function MapViewInner({
       const proj = map.getProjection();
       if (!proj?.pointFromCoords) return;
 
+      const clickLat = mouseEvent.latLng.getLat();
+      const clickLng = mouseEvent.latLng.getLng();
       const clickXY = mapPointToXY(proj.pointFromCoords(mouseEvent.latLng));
+
+      /** 픽 반경(58px) → 대략적인 좌표 반경. 위·경도 차이가 이 이상이면 후보 제외. */
+      let latRadius = 0.005;
+      let lngRadius = 0.005;
+      try {
+        const b = map.getBounds();
+        const sw = b.getSouthWest();
+        const ne = b.getNorthEast();
+        const mapWidthPx = containerRef.current?.clientWidth ?? 360;
+        const mapHeightPx = containerRef.current?.clientHeight ?? 640;
+        const pxPerLat = mapHeightPx / Math.max(1e-6, ne.getLat() - sw.getLat());
+        const pxPerLng = mapWidthPx / Math.max(1e-6, ne.getLng() - sw.getLng());
+        latRadius = (STORE_PICK_MAX_DISTANCE_PX / pxPerLat) * 1.2;
+        lngRadius = (STORE_PICK_MAX_DISTANCE_PX / pxPerLng) * 1.2;
+      } catch {
+        /* bounds not ready — fallback radius 그대로 */
+      }
 
       let best: StoreData | null = null;
       let bestDist = Infinity;
@@ -301,6 +335,8 @@ function MapViewInner({
         const lat = Number(store.lat);
         const lng = Number(store.lng);
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+        if (Math.abs(lat - clickLat) > latRadius) continue;
+        if (Math.abs(lng - clickLng) > lngRadius) continue;
 
         const mXY = mapPointToXY(proj.pointFromCoords(new kakao.LatLng(lat, lng)));
         const d = Math.hypot(mXY.x - clickXY.x, mXY.y - clickXY.y);
@@ -364,9 +400,13 @@ function MapViewInner({
 
   /**
    * 변경 전: visible 목록 변경 시 전체 오버레이 `setMap(null)` 후 재생성 → idle마다 레이아웃·DOM 비용 폭증.
-   * 변경 후: id별 add / position·아이콘 update / 불필요 id remove 만 수행(CustomOverlay 유지 MarkerClusterer와 별 계열).
+   * 변경 후: id별 add / position·아이콘 update / 불필요 id remove 만 수행(CustomOverlay 유지).
+   * [INP 추가 변경] selectedStoreId 를 의존성에서 제거 — 선택 강조는 아래 별도 effect 가 1~2개 마커만 변경.
    * 측정: "[perf] map-markers-diff" 구간 ms, idle 루프당 Scripting 시간.
    */
+  const selectedStoreIdRef = useRef<string | null | undefined>(selectedStoreId);
+  selectedStoreIdRef.current = selectedStoreId;
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !window.kakao?.maps) return;
@@ -375,6 +415,7 @@ function MapViewInner({
     const kakao = window.kakao.maps;
     const desired = new Set(visibleForMarkers.map((s) => s.id));
     const cur = storeOverlayMapRef.current;
+    const selId = selectedStoreIdRef.current;
 
     for (const id of [...cur.keys()]) {
       if (!desired.has(id)) {
@@ -395,7 +436,7 @@ function MapViewInner({
       const lng = Number(store.lng);
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
 
-      const isSelected = selectedStoreId != null && store.id === selectedStoreId;
+      const isSelected = selId != null && store.id === selId;
       const entry = cur.get(store.id);
 
       if (!entry) {
@@ -418,7 +459,36 @@ function MapViewInner({
     }
 
     perfTimeEnd("[perf] map-markers-diff");
-  }, [visibleForMarkers, activeFilter, selectedStoreId]);
+  }, [visibleForMarkers, activeFilter]);
+
+  /**
+   * [INP] selectedStoreId 만 바뀌었을 때: 이전 선택과 현재 선택 마커 두 개만 src/zIndex 변경.
+   * 전체 visibleForMarkers 재정렬·diff 가 일어나지 않음 → 클릭 next-paint 비용 대폭 감소.
+   */
+  const prevSelectedRef = useRef<string | null>(null);
+  useEffect(() => {
+    const cur = storeOverlayMapRef.current;
+    const meta = FILTER_MARKER_MAP[activeFilter];
+    const prevId = prevSelectedRef.current;
+    const nextId = selectedStoreId ?? null;
+    if (prevId === nextId) return;
+
+    if (prevId) {
+      const prev = cur.get(prevId);
+      if (prev) {
+        prev.img.src = meta.src;
+        if (typeof prev.overlay.setZIndex === "function") prev.overlay.setZIndex(1);
+      }
+    }
+    if (nextId) {
+      const next = cur.get(nextId);
+      if (next) {
+        next.img.src = meta.selectedSrc;
+        if (typeof next.overlay.setZIndex === "function") next.overlay.setZIndex(100);
+      }
+    }
+    prevSelectedRef.current = nextId;
+  }, [selectedStoreId, activeFilter]);
 
   useEffect(() => {
     if (!mapRef.current || !window.kakao?.maps) return;

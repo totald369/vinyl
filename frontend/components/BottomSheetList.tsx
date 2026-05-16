@@ -253,11 +253,17 @@ function BottomSheetListInner({
   const [listSheetTouchLock, setListSheetTouchLock] = useState(false);
   const listScrollRef = useRef<HTMLDivElement | null>(null);
 
+  /**
+   * [INP/UX] measureElement 도입: 각 행 ref 를 측정해 실제 높이로 가상화 totalSize 보정.
+   * - 스크롤바 thumb 위치 / 무한 스크롤 sentinel 트리거 시점이 정확해짐.
+   * - 행이 등록될 때만 1회 측정 → 매 프레임 비용 없음.
+   */
   const rowVirtualizer = useVirtualizer({
     count: listLoading && stores.length === 0 ? 0 : stores.length,
     getScrollElement: () => listScrollRef.current,
     estimateSize: () => EST_ROW_PX,
-    overscan: 10
+    overscan: 10,
+    measureElement: (el) => el.getBoundingClientRect().height
   });
   const sectionRef = useRef<HTMLElement | null>(null);
 
@@ -754,11 +760,28 @@ function BottomSheetListInner({
           }`}
         >
           {listLoading && stores.length === 0 ? (
-            Array.from({ length: 3 }, (_, i) => (
-              <div key={`list-skel-${i}`} className="px-4 py-4" aria-hidden>
+            /**
+             * [CLS] 스켈레톤 행 높이를 실제 가상 행(EST_ROW_PX=124px)과 일치시켜
+             * 데이터 도착 순간 발생하던 큰 layout shift 를 제거.
+             * - 행 수도 3 → 6 으로 늘려 첫 페인트가 시트의 가시 영역을 충분히 채움.
+             * - 카드 내부 더미 블록 높이도 실제 카드(제목 16px + 주소 14px + chips 24px + gap)에 맞춤.
+             */
+            Array.from({ length: 6 }, (_, i) => (
+              <div
+                key={`list-skel-${i}`}
+                className="flex flex-col justify-center px-4"
+                style={{ height: EST_ROW_PX }}
+                aria-hidden
+              >
                 <div className="flex flex-col gap-3">
-                  <div className="h-4 w-[72%] animate-pulse rounded-[6px] bg-neutral-200" />
-                  <div className="h-[14px] w-[48%] animate-pulse rounded-[6px] bg-neutral-100" />
+                  <div className="flex flex-col gap-1.5">
+                    <div className="h-4 w-[72%] animate-pulse rounded-[6px] bg-neutral-200" />
+                    <div className="h-[14px] w-[48%] animate-pulse rounded-[6px] bg-neutral-100" />
+                  </div>
+                  <div className="flex gap-1">
+                    <div className="h-6 w-[60px] animate-pulse rounded-full bg-neutral-100" />
+                    <div className="h-6 w-[72px] animate-pulse rounded-full bg-neutral-100" />
+                  </div>
                 </div>
               </div>
             ))
@@ -778,6 +801,8 @@ function BottomSheetListInner({
                   return (
                     <div
                       key={vi.key}
+                      data-index={vi.index}
+                      ref={rowVirtualizer.measureElement}
                       className="absolute left-0 top-0 w-full"
                       style={{ transform: `translateY(${vi.start}px)` }}
                     >

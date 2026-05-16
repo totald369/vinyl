@@ -444,15 +444,22 @@ export default function HomeClient({
             onSelectStore={handleSearchSelectStore}
           />
 
-          {selectedStore && sheetView === "detail" ? (
-            <StoreDetailSheet
-              store={selectedStore}
-              onClose={handleCloseDetail}
-              userLocation={permission === "granted" && userLocation ? userLocation : null}
-              kakaoMapsReady={!isLoading && !error}
-              isAugmentingDetail={detailAugmenting}
-            />
-          ) : (
+          {/**
+           * [INP] 변경 전: `sheetView === "detail"` 토글마다 BottomSheetList unmount(60+ DOM 제거,
+           *   virtualizer/IntersectionObserver/PointerEvent listener cleanup) + StoreDetailSheet
+           *   mount(첫 render + useEffect 체인)가 클릭 next-paint 안에 동시에 들어가 INP 폭증.
+           * 변경 후: 둘 다 항상 mount 하고 visibility 만 토글.
+           *   - BottomSheetList: 항상 mount, detail 모드일 때 invisible + pointer-events-none.
+           *   - StoreDetailSheet: selectedStore 가 한 번이라도 set 되면 mount, sheetView !== "detail"
+           *     일 때 invisible + pointer-events-none.
+           *   - UI 동작/외형 동일 (사용자는 같은 시트가 같은 위치에 나타남).
+           *   - 첫 마커 클릭 INP 만 detail 마운트 비용을 1회 가지지만, 이후 마커/리스트 클릭은
+           *     prop 만 갱신 → INP 일관되게 짧음.
+           */}
+          <div
+            className={sheetView === "detail" ? "pointer-events-none invisible" : ""}
+            aria-hidden={sheetView === "detail"}
+          >
             <BottomSheetList
               /**
                * 변경 전: `loading ? [] : sortedStores` 로 백그라운드 갱신 중 리스트가 잠깐 비었다 다시 채워짐.
@@ -470,7 +477,22 @@ export default function HomeClient({
               listLoading={loading}
               onPrefetchStore={onPrefetchStore}
             />
-          )}
+          </div>
+
+          {selectedStore ? (
+            <div
+              className={sheetView !== "detail" ? "pointer-events-none invisible" : ""}
+              aria-hidden={sheetView !== "detail"}
+            >
+              <StoreDetailSheet
+                store={selectedStore}
+                onClose={handleCloseDetail}
+                userLocation={permission === "granted" && userLocation ? userLocation : null}
+                kakaoMapsReady={!isLoading && !error}
+                isAugmentingDetail={detailAugmenting}
+              />
+            </div>
+          ) : null}
         </div>
       </div>
     </main>

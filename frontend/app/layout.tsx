@@ -3,19 +3,56 @@ import localFont from "next/font/local";
 import type { Metadata } from "next";
 import Script from "next/script";
 
+/**
+ * [CLS] Pretendard 폰트 swap 시 fallback 시스템 폰트(한글)와의 폭 차이로 발생하는
+ *  대량 layout shift 를 줄이기 위한 설정.
+ *  - `adjustFontFallback: "Arial"` : 라틴 글리프 폭을 Arial 기준으로 매트릭 보정.
+ *  - `fallback`: 한글 fallback 우선순위를 명시(시스템 적용 시 폭 일관성↑).
+ *  - weight 400/600/700 woff2 를 모두 등록 → 시트 제목·필터·총 N건 등 굵은 텍스트도
+ *    fallback 폰트의 합성 굵게(synthetic bold) 대신 실제 weight 로 그려져
+ *    교체 시 추가 폭 변화 제거 → 미세 CLS -0.03~0.05.
+ *  - `display: "swap"` 유지(첫 페인트는 fallback, 다운로드 완료 후 교체).
+ *  - preload 는 가장 사용 빈도 높은 weight 400 만 (LCP 영향 최소화).
+ *    600/700 은 lazy 로딩 — 첫 페인트 뒤 필요 시 fetch 되어 폭 보정.
+ */
 const pretendard = localFont({
-  src: "../public/fonts/Pretendard-Regular.subset.woff2",
-  weight: "400",
-  style: "normal",
+  src: [
+    {
+      path: "../public/fonts/Pretendard-Regular.subset.woff2",
+      weight: "400",
+      style: "normal"
+    },
+    {
+      path: "../public/fonts/Pretendard-SemiBold.subset.woff2",
+      weight: "600",
+      style: "normal"
+    },
+    {
+      path: "../public/fonts/Pretendard-Bold.subset.woff2",
+      weight: "700",
+      style: "normal"
+    }
+  ],
   display: "swap",
   variable: "--font-pretendard",
-  preload: true
+  preload: true,
+  adjustFontFallback: "Arial",
+  fallback: [
+    "Apple SD Gothic Neo",
+    "Malgun Gothic",
+    "Noto Sans KR",
+    "Helvetica Neue",
+    "Arial",
+    "system-ui",
+    "sans-serif"
+  ]
 });
 import ChunkLoadRecovery from "@/components/ChunkLoadRecovery";
 import GlobalSeoNav from "@/components/GlobalSeoNav";
 import { GoogleAnalyticsScripts } from "@/components/GoogleAnalyticsScripts";
 import { GtagRouteTracker } from "@/components/GtagRouteTracker";
 import { MicrosoftClarityScripts } from "@/components/MicrosoftClarityScripts";
+import WebVitalsReporter from "@/components/WebVitalsReporter";
 import { CLARITY_PROJECT_ID } from "@/lib/clarity";
 import { GA_MEASUREMENT_ID, GA_ROUTE_TRACKER_ENABLED } from "@/lib/gtag";
 import { SITE_URL } from "@/lib/site";
@@ -135,6 +172,11 @@ export default function RootLayout({
       </head>
       <body className={pretendard.className}>
         <ChunkLoadRecovery />
+        {/**
+         * [Web Vitals] 모든 라우트에서 INP/CLS/LCP/FCP/TTFB 수집.
+         * dev: console.table, prod: GA4 `web_vitals` 이벤트.
+         */}
+        <WebVitalsReporter />
         {isProd && GA_MEASUREMENT_ID && GA_ROUTE_TRACKER_ENABLED ? <GtagRouteTracker /> : null}
         {children}
         <GlobalSeoNav />

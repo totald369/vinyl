@@ -163,19 +163,26 @@ export default function HomeSearchOverlay({
             </button>
           </div>
 
-          {query.trim() && !loading ? (
-            <p
-              className="shrink-0 px-4 text-[13px] font-medium leading-normal tracking-[0.1px] text-[#666666]"
-              role="status"
-              aria-live="polite"
-            >
-              총{" "}
-              <span className="font-semibold text-[#171717]">
-                {totalMatchCount.toLocaleString("ko-KR")}
-              </span>
-              건의 판매처
-            </p>
-          ) : null}
+          {/**
+           * [CLS] 결과 카운트 줄은 query/loading 토글마다 추가/제거되며 아래 ul 을 밀어냈음.
+           * 변경 후: 컨테이너 높이(min-h-[20px])를 항상 예약해 두고 텍스트만 조건부 렌더.
+           * UI: 동일 텍스트, 동일 위치 — 단지 영역이 미리 자리 잡혀 있음.
+           */}
+          <div
+            className="min-h-[20px] shrink-0 px-4"
+            role="status"
+            aria-live="polite"
+          >
+            {query.trim() && !loading ? (
+              <p className="text-[13px] font-medium leading-normal tracking-[0.1px] text-[#666666]">
+                총{" "}
+                <span className="font-semibold text-[#171717]">
+                  {totalMatchCount.toLocaleString("ko-KR")}
+                </span>
+                건의 판매처
+              </p>
+            ) : null}
+          </div>
 
           <ul
             ref={listRef}

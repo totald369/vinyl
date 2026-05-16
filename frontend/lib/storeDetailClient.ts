@@ -11,6 +11,7 @@
 import type { StoreData } from "@/lib/storeData";
 import type { LatLng } from "@/lib/types";
 import { perfTimeEnd, perfTimeStart } from "@/lib/perfMarks";
+import { prefetchPurchaseFeedbackStats } from "@/lib/purchaseFeedbackClient";
 import { getDistanceKm } from "@/lib/utils";
 
 type DetailResponse = { mode?: string; store?: StoreData };
@@ -67,9 +68,14 @@ export function getCachedStoreDetail(id: string, origin: LatLng): StoreData | un
   return hit ? withDistance(hit, origin) : undefined;
 }
 
-/** Warm cache from hover / touchstart without awaiting */
+/**
+ * Warm cache from hover / touchstart without awaiting.
+ * [UX] purchase feedback stats 도 동시에 prefetch — 시트 mount 시 placeholder 깜빡임 제거.
+ *      (자체 30s TTL + in-flight dedup 이라 트래픽 폭증 없음)
+ */
 export function prefetchStoreDetail(id: string, origin: LatLng): void {
   if (enqueuePrefetch({ id, origin })) void drainPrefetchQueue();
+  prefetchPurchaseFeedbackStats(id);
 }
 
 export async function fetchStoreDetail(
