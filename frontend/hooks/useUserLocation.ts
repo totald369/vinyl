@@ -40,7 +40,15 @@ export function useUserLocation() {
           setUserLocation({ lat: DEFAULT_REGION.lat, lng: DEFAULT_REGION.lng });
         }
       },
-      { timeout: 8000 }
+      {
+        timeout: 8000,
+        /**
+         * 모바일 첫 응답 단축: 캐시된 좌표 허용 → 사용자가 허용 직후 바로 이동하는 체감 개선.
+         * 고정확도 GPS는 불필요(반경 검색 2km)·TTFF 가 길어지기 쉬움.
+         */
+        maximumAge: 120_000,
+        enableHighAccuracy: false
+      }
     );
   }, []);
 

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BottomSheetList from "@/components/BottomSheetList";
 import HomeMapStage from "@/components/home/HomeMapStage";
+import LocationRequestingOverlay from "@/components/LocationRequestingOverlay";
 import type { StoreListFilter } from "@/hooks/useStores";
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
 import { sendGtagEvent } from "@/lib/gtag";
@@ -65,6 +66,10 @@ export default function HomeClient({
     setSearchQuery
   } = useSheetController();
   const [activeFilter, setActiveFilter] = useState<StoreListFilter>("payBag");
+  /**
+   * permission === "requesting" 일 때 즉시 칩을 띄우면 첫 응답이 매우 빠를 때 깜빡임 — 200ms 후 표시.
+   */
+  const [showGeoProgressUi, setShowGeoProgressUi] = useState(false);
   const {
     exploreAnchor,
     setExploreAnchor,
@@ -297,9 +302,9 @@ export default function HomeClient({
     setMapCenterOverride(null);
     if (userLocation) {
       setManualCenter(userLocation);
-      setCenterVersion((v) => v + 1);
     }
     requestLocation();
+    setCenterVersion((v) => v + 1);
   }, [
     requestLocation,
     setLocationModalOpen,
@@ -326,6 +331,15 @@ export default function HomeClient({
   const handleOpenSearch = useCallback(() => setSearchOpen(true), [setSearchOpen]);
   const handleCloseSearch = useCallback(() => setSearchOpen(false), [setSearchOpen]);
   const handleCloseLocationModal = useCallback(() => setLocationModalOpen(false), [setLocationModalOpen]);
+
+  useEffect(() => {
+    if (permission !== "requesting") {
+      setShowGeoProgressUi(false);
+      return;
+    }
+    const t = window.setTimeout(() => setShowGeoProgressUi(true), 200);
+    return () => window.clearTimeout(t);
+  }, [permission]);
 
   useEffect(() => {
     if (permission === "granted" && userLocation && !mapCenterOverride) {
@@ -358,6 +372,7 @@ export default function HomeClient({
 
   return (
     <main className="relative mx-auto h-[100dvh] max-w-md overflow-hidden bg-bg-canvas">
+      <LocationRequestingOverlay visible={showGeoProgressUi} />
       <LayoutShiftObserver />
       {deepLinkResolveError ? (
         <div className="pointer-events-auto absolute inset-x-0 top-[calc(8px+env(safe-area-inset-top,0px))] z-[45] px-[15px]">

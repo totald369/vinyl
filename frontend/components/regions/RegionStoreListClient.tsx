@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import HomeMapStage from "@/components/home/HomeMapStage";
+import LocationRequestingOverlay from "@/components/LocationRequestingOverlay";
 import { STORE_SHEET_VIRTUAL_ROW_EST_PX, StoreSheetVirtualRow } from "@/components/BottomSheetList";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
 import type { StoreListFilter } from "@/hooks/useStores";
@@ -147,6 +148,7 @@ export default function RegionStoreListClient({ leaf, slugSegments, initialPaylo
    * 내 위치 버튼: 허용 상태에서 탭 시 반드시 user 좌표로 맵 이동 — 좌표 도착 시 1회 center 반영.
    */
   const moveToUserAfterLocationRef = useRef(false);
+  const [showGeoProgressUi, setShowGeoProgressUi] = useState(false);
 
   const [sheetView, setSheetView] = useState<"list" | "detail">("list");
   const [selectedStore, setSelectedStore] = useState<StoreData | null>(null);
@@ -454,10 +456,10 @@ export default function RegionStoreListClient({ leaf, slugSegments, initialPaylo
     moveToUserAfterLocationRef.current = true;
     if (userLocation) {
       setManualCenter(userLocation);
-      setCenterVersion((v) => v + 1);
       moveToUserAfterLocationRef.current = false;
     }
     requestLocation();
+    setCenterVersion((v) => v + 1);
   }, [permission, userLocation, requestLocation]);
 
   useEffect(() => {
@@ -467,6 +469,15 @@ export default function RegionStoreListClient({ leaf, slugSegments, initialPaylo
     setCenterVersion((v) => v + 1);
     moveToUserAfterLocationRef.current = false;
   }, [permission, userLocation]);
+
+  useEffect(() => {
+    if (permission !== "requesting") {
+      setShowGeoProgressUi(false);
+      return;
+    }
+    const t = window.setTimeout(() => setShowGeoProgressUi(true), 200);
+    return () => window.clearTimeout(t);
+  }, [permission]);
 
   /**
    * 변경 전: 모달 grant 직후 requestLocation 만 호출 → mapCenterOverride 가 살아 있으면
@@ -482,9 +493,9 @@ export default function RegionStoreListClient({ leaf, slugSegments, initialPaylo
     setMapCenterOverride(null);
     if (userLocation) {
       setManualCenter(userLocation);
-      setCenterVersion((v) => v + 1);
     }
     requestLocation();
+    setCenterVersion((v) => v + 1);
   }, [requestLocation, userLocation]);
 
   const handleFilterChange = useCallback(
@@ -660,6 +671,7 @@ export default function RegionStoreListClient({ leaf, slugSegments, initialPaylo
 
   return (
     <main className="relative mx-auto h-[100dvh] max-w-md overflow-hidden bg-bg-canvas">
+      <LocationRequestingOverlay visible={showGeoProgressUi} zClassName="z-[62]" />
       <div className="fixed inset-y-0 left-0 right-0 z-0 flex h-[100dvh] justify-center">
         <div className="relative h-full min-h-0 w-full max-w-md">
           <div className="absolute inset-0 z-0">

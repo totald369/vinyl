@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { unstable_cache } from "next/cache";
 import HomeClient from "./HomeClient";
 import { getHomePageMetadata } from "@/lib/storePageMetadata";
 import { SITE_BRAND_KO } from "@/lib/seoBrand";
@@ -22,9 +23,11 @@ const INITIAL_MAX_STORES = 60;
  * 변경 전: HTML → JS hydration → 위치권한 → /api/stores fetch (waterfall) — 빈 화면이 길어짐.
  * 변경 후: 첫 페인트 시점에 강남 기준 반경 데이터가 이미 prop 으로 도착 → 위치 권한 응답 전에도
  *          기본 마커/리스트 렌더 가능. 사용자 위치가 생기면 useStores 가 그 시점에 갱신.
- * 측정: 홈 첫 렌더부터 마커/리스트 표시까지 ms, 빈 화면 지속 시간.
+ *
+ * 성능: getStoreSearchIndexes() 는 cold 시 수백 ms~1s+ — 매 요청마다 호출하면 모바일 첫 TTFB 폭증.
+ * unstable_cache 로 동일 빌드 내 1회만 인덱스 구축·슬라이스 재사용 (revalidate: 배포 단위로 갱신).
  */
-function buildInitialStores(): StoreData[] {
+function buildInitialStoresUncached(): StoreData[] {
   try {
     const idx = getStoreSearchIndexes();
     const candidates = collectStoresWithinRadius(
@@ -51,8 +54,14 @@ function buildInitialStores(): StoreData[] {
   }
 }
 
-export default function HomePage() {
-  const initialStores = buildInitialStores();
+const getInitialStoresCached = unstable_cache(
+  async () => buildInitialStoresUncached(),
+  ["home-initial-stores-v1"],
+  { revalidate: 3600 }
+);
+
+export default async function HomePage() {
+  const initialStores = await getInitialStoresCached();
   return (
     <>
       <p className="sr-only">
