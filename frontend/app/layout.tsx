@@ -6,7 +6,6 @@ import ChunkLoadRecovery from "@/components/ChunkLoadRecovery";
 import ConditionalKakaoMapSdk from "@/components/ConditionalKakaoMapSdk";
 import { DelayedAnalyticsScripts } from "@/components/DelayedAnalyticsScripts";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
-import { LazyAdSense } from "@/components/LazyAdSense";
 import GlobalSeoNav from "@/components/GlobalSeoNav";
 import { GtagRouteTracker } from "@/components/GtagRouteTracker";
 import { CLARITY_PROJECT_ID } from "@/lib/clarity";
@@ -112,7 +111,6 @@ export default function RootLayout({
         ) : null}
         {children}
         <GlobalSeoNav />
-        {isProd ? <LazyAdSense client="ca-pub-1201776814995453" /> : null}
         {isProd ? <ServiceWorkerRegister /> : null}
       </body>
     </html>

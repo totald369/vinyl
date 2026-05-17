@@ -34,7 +34,7 @@ const nextConfig = {
 
   /**
    * Permissions-Policy: unload=*
-   * - 우리 코드에는 unload/beforeunload 핸들러가 없으나, 서드파티 SDK(gtag, clarity, adsbygoogle)가
+   * - 우리 코드에는 unload/beforeunload 핸들러가 없으나, 서드파티 SDK(gtag, clarity)가
    *   내부적으로 unload 리스너를 등록하려 시도하면서 Chrome 이 "Permissions policy violation: unload
    *   is not allowed in this document" 위반 로그를 콘솔에 남깁니다(기능 영향 없음, 노이즈).
    * - unload=* 로 모든 컨텍스트에서 허용해 위반 로그를 제거합니다. 우리 코드는 unload 미사용이므로
