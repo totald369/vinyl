@@ -10,7 +10,11 @@ declare global {
         };
         Map: new (
           container: HTMLElement,
-          options: { center: { getLat: () => number; getLng: () => number }; level: number }
+          options: {
+            center: { getLat: () => number; getLng: () => number };
+            level: number;
+            tileAnimation?: boolean;
+          }
         ) => KakaoMap;
         Size: new (w: number, h: number) => { getWidth: () => number; getHeight: () => number };
         Point: new (x: number, y: number) => unknown;

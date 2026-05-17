@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import "@/lib/kakao";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
+import { createKakaoMap } from "@/lib/kakao/createKakaoMap";
 import { DEFAULT_REGION, LatLng } from "@/lib/types";
 
 const COORD_EPS = 1e-5;
@@ -45,7 +46,7 @@ export default function LocationPickerMap({
 
     let mounted = true;
     try {
-      const map = new window.kakao.maps.Map(el, {
+      const map = createKakaoMap(el, {
         center: new window.kakao.maps.LatLng(lat, lng),
         level: 4
       });

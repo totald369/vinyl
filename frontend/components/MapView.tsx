@@ -3,6 +3,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { StoreData, StoreListFilter } from "@/hooks/useStores";
 import type { KakaoCustomOverlay, KakaoMap, KakaoMapPoint, KakaoMarker } from "@/lib/kakao";
+import { createKakaoMap } from "@/lib/kakao/createKakaoMap";
 import {
   ensureKakaoMapsReady,
   KAKAO_MAPS_READY_EVENT,
@@ -375,7 +376,7 @@ function MapViewInner({
       const kakao = window.kakao.maps;
       perfTimeStart("[perf] map-init");
       perfTimeStart("[perf] map-first-idle");
-      mapRef.current = new kakao.Map(containerRef.current, {
+      mapRef.current = createKakaoMap(containerRef.current, {
         center: new kakao.LatLng(Number(center.lat), Number(center.lng)),
         level: 5
       });

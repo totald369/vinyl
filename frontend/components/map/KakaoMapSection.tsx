@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState } from "react";
 import "@/lib/kakao";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
+import { createKakaoMap } from "@/lib/kakao/createKakaoMap";
 import { DEFAULT_REGION, LatLng, StoreItem } from "@/lib/types";
 
 type MarkerClustererLike = {
@@ -54,7 +55,7 @@ export default function KakaoMapSection({ center, stores, onMapIdle }: Props) {
         center.lat ?? DEFAULT_REGION.lat,
         center.lng ?? DEFAULT_REGION.lng
       ); /* 초기 카메라만 사용 — 이후 center 이동은 별도 effect에서 setCenter */
-      const map = new window.kakao.maps.Map(containerRef.current, {
+      const map = createKakaoMap(containerRef.current, {
         center: kakaoCenter,
         level: 4
       });
