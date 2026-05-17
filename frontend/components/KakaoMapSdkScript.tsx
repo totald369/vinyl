@@ -1,21 +1,20 @@
 "use client";
 
 import Script from "next/script";
+import { buildKakaoMapSdkUrl } from "@/lib/kakaoMapSdk";
 
 type Props = {
   appKey: string;
 };
 
 /**
- * head 동기 <script> 대신 afterInteractive — 렌더링 차단 제거.
+ * layout head 의 sdk preload + afterInteractive 로드.
  * useKakaoMapLoader 가 data-kakao-map-sdk 로 동일 태그를 인식해 maps.load() 호출.
  */
 export default function KakaoMapSdkScript({ appKey }: Props) {
   if (!appKey.trim()) return null;
 
-  const src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(
-    appKey
-  )}&autoload=false`;
+  const src = buildKakaoMapSdkUrl(appKey);
 
   return (
     <Script
@@ -23,6 +22,9 @@ export default function KakaoMapSdkScript({ appKey }: Props) {
       src={src}
       strategy="afterInteractive"
       data-kakao-map-sdk="true"
+      onLoad={() => {
+        document.getElementById("kakao-map-sdk")?.setAttribute("data-loaded", "true");
+      }}
     />
   );
 }

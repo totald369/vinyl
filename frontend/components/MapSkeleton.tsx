@@ -1,10 +1,19 @@
+type Props = {
+  /** 지도 컨테이너 위 오버레이 — MapView 는 아래에서 동시에 마운트해 타일 요청을 앞당김 */
+  overlay?: boolean;
+};
+
 /**
  * 카카오 지도 SDK 로드 전에도 뷰포트와 동일한 높이를 유지해 CLS를 줄입니다.
  */
-export default function MapSkeleton() {
+export default function MapSkeleton({ overlay = false }: Props) {
   return (
     <div
-      className="absolute inset-0 flex h-full w-full flex-col items-center justify-center bg-[#e8ebef]"
+      className={
+        overlay
+          ? "pointer-events-none absolute inset-0 z-[1] flex h-full w-full flex-col items-center justify-center bg-[#e8ebef]/90"
+          : "absolute inset-0 flex h-full w-full flex-col items-center justify-center bg-[#e8ebef]"
+      }
       aria-busy="true"
       aria-label="지도 로딩 중"
     >

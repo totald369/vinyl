@@ -182,7 +182,7 @@ export default function KakaoMapSection({ center, stores, onMapIdle }: Props) {
           지도를 불러오는 중입니다...
         </div>
       ) : (
-        <div ref={containerRef} className="h-full w-full" />
+        <div ref={containerRef} className="kakao-map-root h-full w-full" />
       )}
     </section>
   );

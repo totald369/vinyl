@@ -18,6 +18,7 @@ import {
   SEO_META_TITLE_VARIANTS,
   defaultOpenGraphImage
 } from "@/lib/seoBrand";
+import { buildKakaoMapSdkUrl } from "@/lib/kakaoMapSdk";
 
 const DEFAULT_TITLE = SEO_META_TITLE_VARIANTS[0];
 const DEFAULT_DESCRIPTION = SEO_META_DESCRIPTION_BY_VARIANT[0];
@@ -83,6 +84,7 @@ export default function RootLayout({
 }) {
   const isProd = process.env.NODE_ENV === "production";
   const kakaoAppKey = process.env.NEXT_PUBLIC_KAKAO_MAP_APP_KEY ?? "";
+  const kakaoSdkSrc = kakaoAppKey.trim() ? buildKakaoMapSdkUrl(kakaoAppKey) : null;
 
   return (
     <html lang="ko">
@@ -94,8 +96,15 @@ export default function RootLayout({
           type="font/woff2"
           crossOrigin="anonymous"
         />
-        <link rel="preconnect" href="https://dapi.kakao.com" />
+        {kakaoSdkSrc ? (
+          <link rel="preload" href={kakaoSdkSrc} as="script" />
+        ) : null}
         <link rel="dns-prefetch" href="https://dapi.kakao.com" />
+        <link rel="preconnect" href="https://dapi.kakao.com" crossOrigin="" />
+        <link rel="dns-prefetch" href="https://t1.daumcdn.net" />
+        <link rel="preconnect" href="https://t1.daumcdn.net" crossOrigin="" />
+        <link rel="dns-prefetch" href="https://mts.daumcdn.net" />
+        <link rel="preconnect" href="https://mts.daumcdn.net" crossOrigin="" />
         {isProd && GA_MEASUREMENT_ID ? <GoogleAnalyticsScripts /> : null}
         {isProd && CLARITY_PROJECT_ID ? <MicrosoftClarityScripts /> : null}
       </head>

@@ -50,21 +50,8 @@ export default function HomeClient({
 }: HomeClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  /**
-   * [초기 로드] 리스트·필터 UI를 먼저 그린 뒤 Kakao SDK maps.load() — layout 의 sdk.js 는
-   * 이미 내려받았지만 maps.load + MapView 마운트는 메인 스레드 비용이 큼.
-   */
-  const [mapSdkEnabled, setMapSdkEnabled] = useState(false);
-  useEffect(() => {
-    const enable = () => setMapSdkEnabled(true);
-    if (typeof requestIdleCallback !== "undefined") {
-      const id = requestIdleCallback(enable, { timeout: 500 });
-      return () => cancelIdleCallback(id);
-    }
-    enable();
-  }, []);
-
-  const { isLoading, error } = useKakaoMapLoader({ enabled: mapSdkEnabled });
+  /** layout preload + maps.load 즉시 — 지도 타일이 LCP 이므로 idle 지연 제거 */
+  const { isLoading, error } = useKakaoMapLoader();
   const { userLocation, permission, geolocationBlocked, requestLocation, syncBrowserPermission } =
     useUserLocation();
   const {

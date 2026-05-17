@@ -131,9 +131,10 @@ export default function DistrictTrashbagClient({ config }: Props) {
     return [selectedStore, ...sortedStores];
   }, [selectedStore, sortedStores]);
 
+  /** LCP: 구역 기본 좌표로 먼저 타일 요청 → 위치 확보 후 pan (exploreAnchor·override 우선) */
   const center = useMemo(
-    () => mapCenterOverride ?? userLocation ?? manualCenter,
-    [mapCenterOverride, manualCenter, userLocation]
+    () => mapCenterOverride ?? exploreAnchor ?? manualCenter ?? userLocation,
+    [exploreAnchor, mapCenterOverride, manualCenter, userLocation]
   );
 
   const detailAugmenting = useStoreDetailAugment(
@@ -202,11 +203,17 @@ export default function DistrictTrashbagClient({ config }: Props) {
   };
 
   useEffect(() => {
-    if (permission === "granted" && userLocation && !mapCenterOverride) {
+    if (permission !== "granted" || !userLocation || mapCenterOverride || exploreAnchor) return;
+    const apply = () => {
       setManualCenter(userLocation);
       setCenterVersion((v) => v + 1);
+    };
+    if (typeof requestIdleCallback !== "undefined") {
+      const id = requestIdleCallback(apply, { timeout: 2500 });
+      return () => cancelIdleCallback(id);
     }
-  }, [permission, userLocation, mapCenterOverride]);
+    apply();
+  }, [exploreAnchor, mapCenterOverride, permission, userLocation]);
 
   useEffect(() => {
     if (!selectedStore) return;
@@ -236,10 +243,9 @@ export default function DistrictTrashbagClient({ config }: Props) {
         <div
           className={`absolute inset-0 z-0 ${sheetBlocksMapPointer ? "pointer-events-none" : ""}`}
         >
-          {isLoading ? (
-            <MapSkeleton />
-          ) : (
+          <div className="kakao-map-root relative h-full w-full">
             <MapView
+              mapsReady={!isLoading}
               center={center}
               centerVersion={centerVersion}
               preferredMapLevel={exploreAnchor != null ? 6 : 5}
@@ -249,7 +255,8 @@ export default function DistrictTrashbagClient({ config }: Props) {
               onSelectStore={handleMapMarkerSelect}
               userMarkerPosition={permission === "granted" && userLocation ? userLocation : null}
             />
-          )}
+            {isLoading ? <MapSkeleton overlay /> : null}
+          </div>
         </div>
         <section className="pointer-events-none absolute left-[15px] right-[15px] top-[calc(12px+env(safe-area-inset-top,0px))] z-sheet flex flex-col gap-2">
             <button

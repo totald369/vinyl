@@ -9,6 +9,7 @@
  * 측정: 크롬 Performance Main 스레드 시간, 번들 실행 시 문자열/format 비용(ms).
  */
 import { useEffect, useMemo, useState } from "react";
+import { buildKakaoMapSdkUrl } from "@/lib/kakaoMapSdk";
 import { perfTimeEnd, perfTimeStart } from "@/lib/perfMarks";
 
 type LoaderState = "idle" | "loading" | "ready" | "error";
@@ -41,12 +42,6 @@ function devError(...args: unknown[]) {
  * 변경 후: 미사용 라이브러리 제거 — 첫 지도 렌더 전 네트워크/메인 스레드 단축.
  * 측정: Network에서 sdk.js 응답 크기 / Performance Main thread "Compile script" 시간.
  */
-function sdkSrc(appKey: string): string {
-  return `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(
-    appKey
-  )}&autoload=false`;
-}
-
 function loadKakaoSdk(appKey: string): Promise<void> {
   if (typeof window === "undefined") {
     return Promise.resolve();
@@ -58,13 +53,20 @@ function loadKakaoSdk(appKey: string): Promise<void> {
     return Promise.reject(new Error("NEXT_PUBLIC_KAKAO_MAP_APP_KEY가 설정되지 않았습니다."));
   }
 
-  const srcUrl = sdkSrc(appKey);
+  const srcUrl = buildKakaoMapSdkUrl(appKey);
+
+  const runMapsLoad = (): Promise<void> =>
+    new Promise<void>((resolve, reject) => {
+      if (!window.kakao?.maps) {
+        reject(new Error("카카오맵 SDK 초기화 실패"));
+        return;
+      }
+      window.kakao.maps.load(() => resolve());
+    });
 
   if (window.kakao?.maps) {
     devLog("[KakaoMap] sdk already present on window");
-    return new Promise<void>((resolve) => {
-      window.kakao.maps.load(() => resolve());
-    });
+    return runMapsLoad();
   }
 
   if (sdkLoadPromise) {
@@ -77,17 +79,24 @@ function loadKakaoSdk(appKey: string): Promise<void> {
       "script[data-kakao-map-sdk='true']"
     ) as HTMLScriptElement | null;
 
-    if (existingScript && existingScript.src.includes("dapi.kakao.com")) {
-      existingScript.addEventListener("load", () => {
-        if (window.kakao?.maps) {
-          window.kakao.maps.load(() => resolve());
-        } else {
-          reject(new Error("카카오맵 SDK 초기화 실패"));
-        }
-      });
-      existingScript.addEventListener("error", () => {
-        reject(new Error("카카오맵 SDK 로드 실패"));
-      });
+    const attachScriptListeners = (script: HTMLScriptElement) => {
+      const onReady = () => {
+        void runMapsLoad().then(resolve).catch(reject);
+      };
+      if (script.getAttribute("data-loaded") === "true" || window.kakao?.maps) {
+        onReady();
+        return;
+      }
+      script.addEventListener("load", onReady, { once: true });
+      script.addEventListener(
+        "error",
+        () => reject(new Error("카카오맵 SDK 로드 실패")),
+        { once: true }
+      );
+    };
+
+    if (existingScript?.src.includes("dapi.kakao.com")) {
+      attachScriptListeners(existingScript);
       return;
     }
 
@@ -96,11 +105,8 @@ function loadKakaoSdk(appKey: string): Promise<void> {
     script.dataset.kakaoMapSdk = "true";
     script.src = srcUrl;
     script.onload = () => {
-      if (window.kakao?.maps) {
-        window.kakao.maps.load(() => resolve());
-      } else {
-        reject(new Error("카카오맵 SDK 초기화 실패"));
-      }
+      script.setAttribute("data-loaded", "true");
+      void runMapsLoad().then(resolve).catch(reject);
     };
     script.onerror = () => reject(new Error("카카오맵 SDK 로드 실패"));
     document.head.appendChild(script);

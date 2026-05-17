@@ -146,7 +146,10 @@ export default function LocationPickerMap({
         <>
           <div
             ref={containerRef}
-            className={mapClassName ?? "h-full w-full rounded-xl border border-border-subtle"}
+            className={
+              mapClassName ??
+              "kakao-map-root h-full w-full rounded-xl border border-border-subtle"
+            }
           />
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <div className="flex size-12 items-center justify-center rounded-full bg-[#171717]">

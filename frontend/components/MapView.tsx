@@ -16,6 +16,8 @@ type Props = {
   selectedStoreId?: string | null;
   onSelectStore: (store: StoreData) => void;
   userMarkerPosition?: LatLng | null;
+  /** false 이면 SDK 준비 전 — 컨테이너만 유지 */
+  mapsReady?: boolean;
 };
 
 const USER_MARKER_SRC = "/Img/Icon/User_marker.svg";
@@ -136,9 +138,11 @@ function MapViewInner({
   activeFilter,
   selectedStoreId,
   onSelectStore,
-  userMarkerPosition = null
+  userMarkerPosition = null,
+  mapsReady = true
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapSizeRef = useRef({ w: 360, h: 640 });
   const mapRef = useRef<KakaoMap | null>(null);
   const storeOverlayMapRef = useRef<
     Map<string, { overlay: KakaoCustomOverlay; img: HTMLImageElement }>
@@ -218,12 +222,32 @@ function MapViewInner({
   const mapInitMeasuredRef = useRef(false);
   const mapFirstIdleMeasuredRef = useRef(false);
 
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      if (!rect) return;
+      mapSizeRef.current = {
+        w: Math.max(1, Math.round(rect.width)),
+        h: Math.max(1, Math.round(rect.height))
+      };
+    });
+    ro.observe(el);
+    const rect = el.getBoundingClientRect();
+    mapSizeRef.current = {
+      w: Math.max(1, Math.round(rect.width)),
+      h: Math.max(1, Math.round(rect.height))
+    };
+    return () => ro.disconnect();
+  }, []);
+
   /**
    * 변경 전: effect 의존성에 center가 포함되어 이동마다 cleanup이 click 리스너를 제거·재부착.
-   * 변경 후: 지도·idle·click은 마운트 1회만 등록(초기 중심은 첫 페인트 값), center는 별도 effect.
-   * 측정: DevTools Performance 이벤트 리스너·스크립트 비용, 드래그 idle 루프 안정성.
+   * 변경 후: mapsReady 후 1회만 Map·리스너 생성(초기 center), center 이동은 별도 effect.
    */
   useEffect(() => {
+    if (!mapsReady) return;
     if (typeof window === "undefined" || !containerRef.current || !window.kakao?.maps) return;
 
     const kakao = window.kakao.maps;
@@ -318,8 +342,8 @@ function MapViewInner({
         const b = map.getBounds();
         const sw = b.getSouthWest();
         const ne = b.getNorthEast();
-        const mapWidthPx = containerRef.current?.clientWidth ?? 360;
-        const mapHeightPx = containerRef.current?.clientHeight ?? 640;
+        const mapWidthPx = mapSizeRef.current.w;
+        const mapHeightPx = mapSizeRef.current.h;
         const pxPerLat = mapHeightPx / Math.max(1e-6, ne.getLat() - sw.getLat());
         const pxPerLng = mapWidthPx / Math.max(1e-6, ne.getLng() - sw.getLng());
         latRadius = (STORE_PICK_MAX_DISTANCE_PX / pxPerLat) * 1.2;
@@ -362,8 +386,8 @@ function MapViewInner({
         pickListenerAttachedRef.current = false;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 의도: 첫 마운트에서만 Map·리스너 생성(초기 center만 사용)
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 의도: mapsReady 후 1회 Map·리스너 생성(초기 center만 사용)
+  }, [mapsReady]);
 
   useEffect(() => {
     return () => {
@@ -528,7 +552,7 @@ function MapViewInner({
     }
   }, [userMarkerPosition]);
 
-  return <div ref={containerRef} className="h-full min-h-0 w-full" />;
+  return <div ref={containerRef} className="kakao-map-root h-full min-h-0 w-full" />;
 }
 
 const MapView = memo(MapViewInner);
