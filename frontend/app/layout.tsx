@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import dynamic from "next/dynamic";
+import { pretendard } from "@/app/pretendard";
 import ChunkLoadRecovery from "@/components/ChunkLoadRecovery";
 import ConditionalKakaoMapSdk from "@/components/ConditionalKakaoMapSdk";
 import { DelayedAnalyticsScripts } from "@/components/DelayedAnalyticsScripts";
@@ -88,14 +89,20 @@ export default function RootLayout({
   const kakaoAppKey = process.env.NEXT_PUBLIC_KAKAO_MAP_APP_KEY ?? "";
 
   return (
-    <html lang="ko" suppressHydrationWarning>
+    <html lang="ko" className={pretendard.variable} suppressHydrationWarning>
       <head>
-        {/* preconnect 4개 이하 — 타일·SDK만 (crossOrigin 없음, CORS 미사용 리소스) */}
+        <link
+          rel="preload"
+          href="/static/map-placeholder.webp"
+          as="image"
+          type="image/webp"
+          fetchPriority="high"
+        />
         <link rel="preconnect" href="https://mts.daumcdn.net" />
         <link rel="preconnect" href="https://dapi.kakao.com" />
         <link rel="dns-prefetch" href="https://t1.daumcdn.net" />
       </head>
-      <body className="font-sans antialiased" suppressHydrationWarning>
+      <body className={`${pretendard.className} font-sans antialiased`} suppressHydrationWarning>
         <ChunkLoadRecovery />
         <WebVitalsReporter />
         {isProd && GA_MEASUREMENT_ID && GA_ROUTE_TRACKER_ENABLED ? <GtagRouteTracker /> : null}
