@@ -25,7 +25,7 @@ function devLog(...args: unknown[]) {
 }
 
 function devError(...args: unknown[]) {
-  if (!DEV || typeof console === "undefined") return;
+  if (typeof console === "undefined") return;
   console.error(...args);
 }
 

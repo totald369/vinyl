@@ -1,3 +1,7 @@
 "use client";
 
-export { ensureKakaoMapsReady, loadKakaoMapSdk } from "@/lib/kakaoMapSdk";
+import { ensureKakaoMapsReady } from "@/lib/kakaoMapSdk";
+
+export async function loadKakaoMaps(appKey: string): Promise<void> {
+  await ensureKakaoMapsReady(appKey);
+}

@@ -4,7 +4,6 @@ import Script from "next/script";
 import {
   buildKakaoMapSdkUrl,
   ensureKakaoMapsReady,
-  KAKAO_MAP_SDK_SCRIPT_ID,
   startKakaoMapsWarmup
 } from "@/lib/kakaoMapSdk";
 
@@ -13,13 +12,21 @@ type Props = {
 };
 
 /**
- * layout — hydration 전 SDK 다운로드·maps.load 시작 (지도 타일 LCP).
- * SW 등록은 ServiceWorkerRegister 가 전담.
+ * layout head preload + beforeInteractive — hydration 전 SDK 다운로드·maps.load 시작.
  */
 export default function KakaoMapSdkScript({ appKey }: Props) {
   if (!appKey.trim()) return null;
 
   if (typeof window !== "undefined") {
+    if (
+      process.env.NODE_ENV === "production" &&
+      "serviceWorker" in navigator
+    ) {
+      void navigator.serviceWorker.register("/sw.js", {
+        scope: "/",
+        updateViaCache: "none"
+      });
+    }
     startKakaoMapsWarmup(appKey);
   }
 
@@ -27,12 +34,12 @@ export default function KakaoMapSdkScript({ appKey }: Props) {
 
   return (
     <Script
-      id={KAKAO_MAP_SDK_SCRIPT_ID}
+      id="kakao-map-sdk"
       src={src}
       strategy="beforeInteractive"
       data-kakao-map-sdk="true"
       onLoad={() => {
-        document.getElementById(KAKAO_MAP_SDK_SCRIPT_ID)?.setAttribute("data-loaded", "true");
+        document.getElementById("kakao-map-sdk")?.setAttribute("data-loaded", "true");
         void ensureKakaoMapsReady(appKey);
       }}
     />

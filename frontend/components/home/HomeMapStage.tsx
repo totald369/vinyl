@@ -1,10 +1,8 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { memo } from "react";
 import ClientMountedMapShell from "@/components/map/ClientMountedMapShell";
-
-const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
+import MapView from "@/components/MapView";
 import type { StoreData, StoreListFilter } from "@/hooks/useStores";
 import type { LatLng } from "@/lib/types";
 

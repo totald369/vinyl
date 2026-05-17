@@ -28,15 +28,6 @@ export function notifyKakaoMapReady(): void {
 
 let hdDisabled = false;
 
-/** 모바일·고DPR에서 HD 타일(LCP 병목) 완화 — 데스크톱 1x 는 HD 유지 */
-export function shouldDisableKakaoMapHD(): boolean {
-  if (typeof window === "undefined") return false;
-  return (
-    window.devicePixelRatio >= 2 ||
-    window.matchMedia("(max-width: 768px)").matches
-  );
-}
-
 /**
  * 카카오 공식 HD 비활성화 — Map 생성 전 1회 호출.
  * @see https://apis.map.kakao.com/web/documentation/
@@ -45,7 +36,6 @@ export function disableKakaoMapHD(): void {
   if (hdDisabled || typeof window === "undefined" || !window.kakao?.maps) {
     return;
   }
-  if (!shouldDisableKakaoMapHD()) return;
   const { disableHD } = window.kakao.maps;
   if (typeof disableHD === "function") {
     disableHD();

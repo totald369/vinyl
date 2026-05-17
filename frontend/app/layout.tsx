@@ -97,9 +97,9 @@ export default function RootLayout({
           type="image/webp"
           fetchPriority="high"
         />
-        <link rel="preconnect" href="https://dapi.kakao.com" />
-        <link rel="preconnect" href="https://t1.daumcdn.net" />
         <link rel="preconnect" href="https://mts.daumcdn.net" />
+        <link rel="preconnect" href="https://dapi.kakao.com" />
+        <link rel="dns-prefetch" href="https://t1.daumcdn.net" />
       </head>
       <body className={`${pretendard.className} font-sans antialiased`} suppressHydrationWarning>
         <ChunkLoadRecovery />

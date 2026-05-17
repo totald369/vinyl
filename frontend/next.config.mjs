@@ -8,12 +8,7 @@ const nextConfig = {
      */
     optimizeCss: true,
     /** 트리쉐이킹 최적화: 큰 순수 패키지의 import 깊이 감소 — 번들 parse/전송 시간 절감 */
-    optimizePackageImports: [
-      "es-hangul",
-      "lottie-react",
-      "@supabase/supabase-js",
-      "@tanstack/react-virtual"
-    ],
+    optimizePackageImports: ["es-hangul", "lottie-react", "@supabase/supabase-js"],
     /**
      * [Web Vitals] CLS/LCP/INP attribution 활성화.
      * - useReportWebVitals 콜백의 `attribution` 필드에 LargestShiftSource/LargestShiftTarget(CLS),
@@ -49,7 +44,14 @@ const nextConfig = {
     return [
       {
         source: "/:path*",
-        headers: [{ key: "Permissions-Policy", value: "unload=*" }]
+        headers: [
+          { key: "Permissions-Policy", value: "unload=*" },
+          {
+            key: "Link",
+            value:
+              "<https://mts.daumcdn.net>; rel=preconnect, <https://dapi.kakao.com>; rel=preconnect"
+          }
+        ]
       },
       {
         source: "/sw.js",
