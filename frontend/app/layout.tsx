@@ -96,15 +96,16 @@ export default function RootLayout({
           type="font/woff2"
           crossOrigin="anonymous"
         />
-        {kakaoSdkSrc ? (
-          <link rel="preload" href={kakaoSdkSrc} as="script" />
-        ) : null}
-        <link rel="dns-prefetch" href="https://dapi.kakao.com" />
-        <link rel="preconnect" href="https://dapi.kakao.com" crossOrigin="" />
         <link rel="dns-prefetch" href="https://t1.daumcdn.net" />
         <link rel="preconnect" href="https://t1.daumcdn.net" crossOrigin="" />
         <link rel="dns-prefetch" href="https://mts.daumcdn.net" />
         <link rel="preconnect" href="https://mts.daumcdn.net" crossOrigin="" />
+        <link rel="dns-prefetch" href="https://rg1.daumcdn.net" />
+        <link rel="dns-prefetch" href="https://dapi.kakao.com" />
+        <link rel="preconnect" href="https://dapi.kakao.com" crossOrigin="" />
+        {kakaoSdkSrc ? (
+          <link rel="preload" href={kakaoSdkSrc} as="script" />
+        ) : null}
         {isProd && GA_MEASUREMENT_ID ? <GoogleAnalyticsScripts /> : null}
         {isProd && CLARITY_PROJECT_ID ? <MicrosoftClarityScripts /> : null}
       </head>

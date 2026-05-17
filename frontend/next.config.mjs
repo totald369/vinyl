@@ -44,7 +44,14 @@ const nextConfig = {
     return [
       {
         source: "/:path*",
-        headers: [{ key: "Permissions-Policy", value: "unload=*" }]
+        headers: [
+          { key: "Permissions-Policy", value: "unload=*" },
+          {
+            key: "Link",
+            value:
+              "<https://t1.daumcdn.net>; rel=preconnect, <https://mts.daumcdn.net>; rel=preconnect, <https://dapi.kakao.com>; rel=preconnect"
+          }
+        ]
       },
       {
         source: "/fonts/:path*",

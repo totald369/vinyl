@@ -120,10 +120,9 @@ export default function HomeClient({
     return [selectedStore, ...sortedStores];
   }, [selectedStore, sortedStores, sortedStoreIdSet]);
 
-  const centerLat =
-    mapCenterOverride?.lat ?? userLocation?.lat ?? manualCenter.lat;
-  const centerLng =
-    mapCenterOverride?.lng ?? userLocation?.lng ?? manualCenter.lng;
+  /** LCP: SSR/defaultCenter 로 먼저 타일 → 캐시된 GPS 는 idle 이후 pan */
+  const centerLat = mapCenterOverride?.lat ?? manualCenter.lat ?? userLocation?.lat;
+  const centerLng = mapCenterOverride?.lng ?? manualCenter.lng ?? userLocation?.lng;
   const center = useMemo(
     () => ({ lat: centerLat, lng: centerLng }),
     [centerLat, centerLng]
@@ -347,10 +346,16 @@ export default function HomeClient({
   }, [permission]);
 
   useEffect(() => {
-    if (permission === "granted" && userLocation && !mapCenterOverride) {
+    if (permission !== "granted" || !userLocation || mapCenterOverride) return;
+    const apply = () => {
       setManualCenter(userLocation);
       setCenterVersion((v) => v + 1);
+    };
+    if (typeof requestIdleCallback !== "undefined") {
+      const id = requestIdleCallback(apply, { timeout: 3000 });
+      return () => cancelIdleCallback(id);
     }
+    apply();
   }, [permission, userLocation, mapCenterOverride]);
 
   useEffect(() => {

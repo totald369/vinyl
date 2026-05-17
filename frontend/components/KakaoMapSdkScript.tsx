@@ -1,7 +1,7 @@
 "use client";
 
 import Script from "next/script";
-import { buildKakaoMapSdkUrl } from "@/lib/kakaoMapSdk";
+import { buildKakaoMapSdkUrl, ensureKakaoMapsReady } from "@/lib/kakaoMapSdk";
 
 type Props = {
   appKey: string;
@@ -24,6 +24,7 @@ export default function KakaoMapSdkScript({ appKey }: Props) {
       data-kakao-map-sdk="true"
       onLoad={() => {
         document.getElementById("kakao-map-sdk")?.setAttribute("data-loaded", "true");
+        void ensureKakaoMapsReady(appKey);
       }}
     />
   );

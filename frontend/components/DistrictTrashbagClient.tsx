@@ -243,7 +243,7 @@ export default function DistrictTrashbagClient({ config }: Props) {
         <div
           className={`absolute inset-0 z-0 ${sheetBlocksMapPointer ? "pointer-events-none" : ""}`}
         >
-          <div className="kakao-map-root relative h-full w-full">
+          <div id="kakao-map" className="kakao-map-root relative h-full w-full">
             <MapView
               mapsReady={!isLoading}
               center={center}
