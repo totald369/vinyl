@@ -2,6 +2,11 @@
 const nextConfig = {
   experimental: {
     typedRoutes: true,
+    /**
+     * critters: critical CSS 를 HTML 에 인라인, 나머지 CSS 는 media=print onload 로 비동기화
+     * → 동일 출처 CSS 청크(73441959… 0.9KiB 등) 렌더링 차단 완화.
+     */
+    optimizeCss: true,
     /** 트리쉐이킹 최적화: 큰 순수 패키지의 import 깊이 감소 — 번들 parse/전송 시간 절감 */
     optimizePackageImports: ["es-hangul", "lottie-react", "@supabase/supabase-js"],
     /**

@@ -1,5 +1,4 @@
 import "./globals.css";
-import localFont from "next/font/local";
 import type { Metadata } from "next";
 import ChunkLoadRecovery from "@/components/ChunkLoadRecovery";
 import KakaoMapSdkScript from "@/components/KakaoMapSdkScript";
@@ -19,49 +18,6 @@ import {
   SEO_META_TITLE_VARIANTS,
   defaultOpenGraphImage
 } from "@/lib/seoBrand";
-
-/**
- * Self-host Pretendard (next/font) — jsDelivr @import CSS(렌더 차단 ~900ms) 제거.
- * preload 는 동일 출처 `/_next/static/media/` 로 주입, display:swap 으로 FOUT 최소화.
- */
-const pretendard = localFont({
-  src: [
-    {
-      path: "../public/fonts/Pretendard-Regular.subset.woff2",
-      weight: "400",
-      style: "normal"
-    },
-    {
-      path: "../public/fonts/Pretendard-Medium.subset.woff2",
-      weight: "500",
-      style: "normal"
-    },
-    {
-      path: "../public/fonts/Pretendard-SemiBold.subset.woff2",
-      weight: "600",
-      style: "normal"
-    },
-    {
-      path: "../public/fonts/Pretendard-Bold.subset.woff2",
-      weight: "700",
-      style: "normal"
-    }
-  ],
-  display: "swap",
-  variable: "--font-pretendard",
-  preload: true,
-  adjustFontFallback: "Arial",
-  fallback: [
-    "Apple SD Gothic Neo",
-    "Malgun Gothic",
-    "Noto Sans KR",
-    "system-ui",
-    "-apple-system",
-    "Segoe UI",
-    "Roboto",
-    "sans-serif"
-  ]
-});
 
 const DEFAULT_TITLE = SEO_META_TITLE_VARIANTS[0];
 const DEFAULT_DESCRIPTION = SEO_META_DESCRIPTION_BY_VARIANT[0];
@@ -129,14 +85,21 @@ export default function RootLayout({
   const kakaoAppKey = process.env.NEXT_PUBLIC_KAKAO_MAP_APP_KEY ?? "";
 
   return (
-    <html lang="ko" className={pretendard.variable}>
+    <html lang="ko">
       <head>
+        <link
+          rel="preload"
+          href="/fonts/Pretendard-Regular.subset.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
         <link rel="preconnect" href="https://dapi.kakao.com" />
         <link rel="dns-prefetch" href="https://dapi.kakao.com" />
         {isProd && GA_MEASUREMENT_ID ? <GoogleAnalyticsScripts /> : null}
         {isProd && CLARITY_PROJECT_ID ? <MicrosoftClarityScripts /> : null}
       </head>
-      <body className={`${pretendard.className} antialiased`}>
+      <body className="font-sans antialiased">
         <ChunkLoadRecovery />
         <WebVitalsReporter />
         {isProd && GA_MEASUREMENT_ID && GA_ROUTE_TRACKER_ENABLED ? <GtagRouteTracker /> : null}
