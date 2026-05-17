@@ -1,3 +1,5 @@
+import { runKakaoMapsLoad } from "@/lib/kakao/createKakaoMap";
+
 /** 카카오 지도 JS SDK URL (layout preload · Script · useKakaoMapLoader 공통) */
 export function buildKakaoMapSdkUrl(appKey: string): string {
   return `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(
@@ -16,7 +18,7 @@ function runMapsLoad(): Promise<void> {
       reject(new Error("카카오맵 SDK 초기화 실패"));
       return;
     }
-    window.kakao.maps.load(() => {
+    runKakaoMapsLoad(() => {
       window.dispatchEvent(new Event(KAKAO_MAPS_READY_EVENT));
       resolve();
     });

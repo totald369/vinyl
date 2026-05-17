@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import ChunkLoadRecovery from "@/components/ChunkLoadRecovery";
 import KakaoMapSdkScript from "@/components/KakaoMapSdkScript";
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import { LazyAdSense } from "@/components/LazyAdSense";
 import GlobalSeoNav from "@/components/GlobalSeoNav";
 import { GoogleAnalyticsScripts } from "@/components/GoogleAnalyticsScripts";
@@ -118,6 +119,7 @@ export default function RootLayout({
         {children}
         <GlobalSeoNav />
         {isProd ? <LazyAdSense client="ca-pub-1201776814995453" /> : null}
+        {isProd ? <ServiceWorkerRegister /> : null}
       </body>
     </html>
   );

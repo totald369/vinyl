@@ -19,24 +19,31 @@ export function withSdrDevicePixelRatio<T>(run: () => T): T {
     return run();
   }
 
-  try {
-    Object.defineProperty(window, "devicePixelRatio", {
-      value: 1,
-      configurable: true,
-      writable: true
-    });
-    return run();
-  } finally {
+  const setDpr = (value: number) => {
     try {
       Object.defineProperty(window, "devicePixelRatio", {
-        value: original,
+        value,
         configurable: true,
         writable: true
       });
     } catch {
-      /* 일부 WebView 에서 복원 실패 시 무시 */
+      (window as Window & { devicePixelRatio: number }).devicePixelRatio = value;
     }
+  };
+
+  setDpr(1);
+  try {
+    return run();
+  } finally {
+    setDpr(original);
   }
+}
+
+/** maps.load() 시점에도 DPR=1 — `2x/bg_tile.png` 등 HD 리소스 경로 선택 방지 */
+export function runKakaoMapsLoad(callback: () => void): void {
+  withSdrDevicePixelRatio(() => {
+    window.kakao.maps.load(callback);
+  });
 }
 
 export function createKakaoMap(
