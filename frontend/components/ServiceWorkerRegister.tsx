@@ -11,9 +11,12 @@ export default function ServiceWorkerRegister() {
     if (!("serviceWorker" in navigator)) return;
 
     const register = () => {
-      void navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {
-        /* 등록 실패 시 무시 — 오프라인/사설 브라우징 등 */
-      });
+      void navigator.serviceWorker
+        .register("/sw.js", { scope: "/", updateViaCache: "none" })
+        .then((reg) => reg.update())
+        .catch(() => {
+          /* 등록 실패 시 무시 */
+        });
     };
 
     if (document.readyState === "complete") {
