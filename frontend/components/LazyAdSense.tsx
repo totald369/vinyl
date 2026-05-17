@@ -3,21 +3,44 @@
 import Script from "next/script";
 import { useEffect, useState } from "react";
 
-/** 첫 스크롤·터치 이후 AdSense 로드 — 초기 TBT·네트워크 경합 완화 */
+const AUTO_LOAD_MS = 10_000;
+const INTERACTION_EVENTS = ["scroll", "click", "touchstart"] as const;
+
+/**
+ * AdSense — LCP·critical path 이후 로드 (10초 또는 첫 상호작용).
+ */
 export function LazyAdSense({ client }: { client: string }) {
-  const [load, setLoad] = useState(false);
+  const [shouldLoad, setShouldLoad] = useState(false);
 
   useEffect(() => {
-    const onInteraction = () => setLoad(true);
-    window.addEventListener("scroll", onInteraction, { once: true, passive: true });
-    window.addEventListener("pointerdown", onInteraction, { once: true });
-    return () => {
-      window.removeEventListener("scroll", onInteraction);
-      window.removeEventListener("pointerdown", onInteraction);
-    };
-  }, []);
+    if (shouldLoad) return;
 
-  if (!load) return null;
+    const enable = () => setShouldLoad(true);
+
+    const timer = window.setTimeout(enable, AUTO_LOAD_MS);
+
+    const onInteraction = () => {
+      enable();
+      cleanupListeners();
+    };
+
+    const cleanupListeners = () => {
+      for (const event of INTERACTION_EVENTS) {
+        document.removeEventListener(event, onInteraction);
+      }
+    };
+
+    for (const event of INTERACTION_EVENTS) {
+      document.addEventListener(event, onInteraction, { once: true, passive: true });
+    }
+
+    return () => {
+      window.clearTimeout(timer);
+      cleanupListeners();
+    };
+  }, [shouldLoad]);
+
+  if (!shouldLoad) return null;
 
   return (
     <Script

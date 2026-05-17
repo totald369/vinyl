@@ -9,9 +9,11 @@ frontend/node_modules/
 .next/
 frontend/.next/
 
-# Pretendard dynamic-subset (빌드·postinstall 시 생성)
+# Pretendard dynamic-subset (legacy)
 frontend/public/fonts/pretendard-variable/
 frontend/public/fonts/pretendard-variable.css
+frontend/scripts/.font-build/
+frontend/public/fonts/PretendardVariable.source.woff2
 
 # Local env (secrets)
 .env.local

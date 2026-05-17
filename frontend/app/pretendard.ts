@@ -1,12 +1,13 @@
 import localFont from "next/font/local";
 
 /**
- * Pretendard Variable 단일 파일 — dynamic-subset CSS(다수 woff2·critical path 누적) 대신 1 RTT.
+ * Pretendard Variable (~400 KiB) — wght 400–700 + Adobe-KR 글리프 서브셋.
+ * 재생성: PretendardVariable.source.woff2 넣고 `node scripts/subset-pretendard-font.mjs`
  */
 export const pretendard = localFont({
   src: "../public/fonts/PretendardVariable.woff2",
   display: "swap",
-  weight: "45 920",
+  weight: "400 700",
   variable: "--font-pretendard",
   preload: true,
   fallback: [
