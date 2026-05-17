@@ -5,8 +5,26 @@ export type KakaoMapInitOptions = {
   level: number;
 };
 
-/** 첫 타일 페인트 완료 — 마커·GPS pan 등 후속 작업 트리거 */
+/** Map 인스턴스 생성 직후 — 마커 프리뷰 등 (tilesloaded 보다 빠름) */
+export const KAKAO_MAP_READY_EVENT = "kakao-map-ready";
+
+/** 첫 idle(중심·줌 확정) — GPS pan 등 (tilesloaded 보다 빠르고 안정적) */
+export const KAKAO_MAP_FIRST_IDLE_EVENT = "kakao-map-first-idle";
+
+/** 첫 타일 페인트 완료 — perf 측정 등 */
 export const KAKAO_MAP_TILES_LOADED_EVENT = "kakao-map-tiles-loaded";
+
+let mapReadyNotified = false;
+
+export function wasKakaoMapReadyNotified(): boolean {
+  return mapReadyNotified;
+}
+
+export function notifyKakaoMapReady(): void {
+  if (typeof window === "undefined") return;
+  mapReadyNotified = true;
+  window.dispatchEvent(new Event(KAKAO_MAP_READY_EVENT));
+}
 
 let hdDisabled = false;
 
@@ -49,7 +67,39 @@ export function createKakaoMap(
   return map;
 }
 
-/** tilesloaded 1회 — LCP 이후 마커·데이터 작업용 */
+/** 컨테이너 크기 변경(hydration shell 등) 후 타일·좌표 재계산 */
+export function relayoutKakaoMap(map: KakaoMap): void {
+  if (typeof map.relayout === "function") {
+    map.relayout();
+  }
+}
+
+/** idle 1회 — GPS pan 등 */
+export function onKakaoMapFirstIdleOnce(
+  map: KakaoMap,
+  handler: () => void
+): () => void {
+  if (typeof window === "undefined" || !window.kakao?.maps) {
+    return () => undefined;
+  }
+
+  let fired = false;
+  const listener = () => {
+    if (fired) return;
+    fired = true;
+    handler();
+    window.dispatchEvent(new Event(KAKAO_MAP_FIRST_IDLE_EVENT));
+  };
+
+  window.kakao.maps.event.addListener(map, "idle", listener);
+  return () => {
+    if (!fired && window.kakao?.maps) {
+      window.kakao.maps.event.removeListener(map, "idle", listener);
+    }
+  };
+}
+
+/** tilesloaded 1회 — perf 측정용 */
 export function onKakaoMapTilesLoadedOnce(
   map: KakaoMap,
   handler: () => void

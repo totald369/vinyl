@@ -4,7 +4,7 @@ import { runKakaoMapsLoad } from "@/lib/kakao/createKakaoMap";
 export function buildKakaoMapSdkUrl(appKey: string): string {
   return `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(
     appKey
-  )}&autoload=false`;
+  )}&autoload=false&libraries=clusterer`;
 }
 
 export const KAKAO_MAPS_READY_EVENT = "kakao-maps-ready";

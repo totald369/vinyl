@@ -2,23 +2,18 @@
 
 /**
  * 카카오 지도 베이스 + 단순 마커 레이어(홈 과거 패턴 호환용).
- *
- * 변경 전: center가 바뀔 때마다 지도 재생성, stores 바뀔 때마다 전 마커 setMap(null) 후 전량 재생성.
- * 변경 후: 지도 단일 초기화 + center는 setCenter로만 동기화, 마커는 Map<id, Marker>로 diff,
- *          마커 ≥50 시 MarkerClusterer로 드래그 시 메인 스레드·컴포지팅 부하 감소.
- * 측정: idle 이벤트당 실행 시간(ms), 레이아웃 thrash 빈도(Performance 프로파일), 메모리 피크.
  */
 import { useEffect, useRef, useState } from "react";
 import "@/lib/kakao";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
-import { createKakaoMap } from "@/lib/kakao/createKakaoMap";
+import { createKakaoMap, relayoutKakaoMap } from "@/lib/kakao/createKakaoMap";
+import {
+  CLUSTER_MIN_MARKERS,
+  syncMarkersWithClusterer,
+  type MarkerClustererLike
+} from "@/lib/kakao/markerCluster";
 import { DEFAULT_REGION, LatLng, StoreItem } from "@/lib/types";
-
-type MarkerClustererLike = {
-  clear: () => void;
-  addMarkers: (markers: unknown[]) => void;
-  setMap: (map: import("@/lib/kakao").KakaoMap | null) => void;
-};
+import type { KakaoMarker } from "@/lib/kakao";
 
 type Props = {
   center: LatLng;
@@ -29,12 +24,10 @@ type Props = {
   }) => void;
 };
 
-const CLUSTER_MIN = 50;
-
 export default function KakaoMapSection({ center, stores, onMapIdle }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<import("@/lib/kakao").KakaoMap | null>(null);
-  const markersByIdRef = useRef<Map<string, import("@/lib/kakao").KakaoMarker>>(new Map());
+  const markersByIdRef = useRef<Map<string, KakaoMarker>>(new Map());
   const clustererRef = useRef<MarkerClustererLike | null>(null);
   const onMapIdleRef = useRef(onMapIdle);
   onMapIdleRef.current = onMapIdle;
@@ -46,7 +39,6 @@ export default function KakaoMapSection({ center, stores, onMapIdle }: Props) {
     if (!containerRef.current || !isReady || !window.kakao?.maps) return;
     if (mapRef.current) return;
 
-    /* cleanup에서 ref.current 대신 이 Map 인스턴스를 캡처해 exhaustive-deps 경고 제거 */
     const markersForUnmount = markersByIdRef.current;
 
     let idleListenerCb: ((...args: unknown[]) => void) | null = null;
@@ -54,12 +46,13 @@ export default function KakaoMapSection({ center, stores, onMapIdle }: Props) {
       const kakaoCenter = new window.kakao.maps.LatLng(
         center.lat ?? DEFAULT_REGION.lat,
         center.lng ?? DEFAULT_REGION.lng
-      ); /* 초기 카메라만 사용 — 이후 center 이동은 별도 effect에서 setCenter */
+      );
       const map = createKakaoMap(containerRef.current, {
         center: kakaoCenter,
         level: 4
       });
       mapRef.current = map;
+      requestAnimationFrame(() => relayoutKakaoMap(map));
 
       idleListenerCb = () => {
         const mapCenter = map.getCenter();
@@ -99,7 +92,7 @@ export default function KakaoMapSection({ center, stores, onMapIdle }: Props) {
       markersForUnmount.clear();
       mapRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 지도 인스턴스는 isReady 후 1회만 생성(LocationPickerMap과 동일 패턴)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 지도 인스턴스는 isReady 후 1회만 생성
   }, [isReady]);
 
   useEffect(() => {
@@ -125,51 +118,21 @@ export default function KakaoMapSection({ center, stores, onMapIdle }: Props) {
       }
     }
 
+    const markerList: KakaoMarker[] = [];
     for (const store of stores) {
       let marker = markersByIdRef.current.get(store.id);
       const pos = new window.kakao.maps.LatLng(store.lat, store.lng);
       if (!marker) {
-        marker = new window.kakao.maps.Marker({ position: pos, map });
+        marker = new window.kakao.maps.Marker({ position: pos, clickable: true });
         markersByIdRef.current.set(store.id, marker);
       } else {
         marker.setPosition(pos);
       }
+      markerList.push(marker);
     }
 
-    if (stores.length >= CLUSTER_MIN) {
-      const ClustererCtor = (
-        window.kakao.maps as typeof window.kakao.maps & {
-          MarkerClusterer?: new (opts: Record<string, unknown>) => MarkerClustererLike;
-        }
-      ).MarkerClusterer;
-
-      if (ClustererCtor) {
-        if (!clustererRef.current) {
-          clustererRef.current = new ClustererCtor({
-            map,
-            averageCenter: true,
-            minLevel: 10,
-            markers: []
-          }) as MarkerClustererLike;
-        }
-        markersByIdRef.current.forEach((m) => m.setMap(null));
-        clustererRef.current.clear?.();
-        clustererRef.current.addMarkers?.([...markersByIdRef.current.values()]);
-        clustererRef.current.setMap?.(map);
-      } else {
-        clustererRef.current?.clear?.();
-        clustererRef.current?.setMap?.(null);
-        clustererRef.current = null;
-        markersByIdRef.current.forEach((marker) => marker.setMap(map));
-      }
-    } else {
-      clustererRef.current?.clear?.();
-      clustererRef.current?.setMap?.(null);
-      clustererRef.current = null;
-      markersByIdRef.current.forEach((marker) => {
-        marker.setMap(stores.length ? map : null);
-      });
-    }
+    const useCluster = stores.length >= CLUSTER_MIN_MARKERS;
+    syncMarkersWithClusterer(map, clustererRef, markerList, useCluster, { minLevel: 10 });
   }, [stores]);
 
   return (

@@ -27,10 +27,12 @@ declare global {
         ) => unknown;
         Marker: new (options: {
           position: { getLat: () => number; getLng: () => number };
-          map: KakaoMap;
+          map?: KakaoMap;
           image?: unknown;
           zIndex?: number;
+          clickable?: boolean;
         }) => KakaoMarker;
+        MarkerClusterer?: new (options: Record<string, unknown>) => KakaoMarkerClusterer;
         CustomOverlay: new (options: {
           map?: KakaoMap;
           position: { getLat: () => number; getLng: () => number };
@@ -76,6 +78,7 @@ export type KakaoMap = {
     getNorthEast: () => { getLat: () => number; getLng: () => number };
   };
   panTo: (latLng: { getLat: () => number; getLng: () => number }) => void;
+  relayout: () => void;
 };
 
 export type KakaoMarker = {
@@ -90,6 +93,12 @@ export type KakaoCustomOverlay = {
   setMap: (map: KakaoMap | null) => void;
   setZIndex: (z: number) => void;
   setPosition: (latlng: { getLat: () => number; getLng: () => number }) => void;
+};
+
+export type KakaoMarkerClusterer = {
+  clear: () => void;
+  addMarkers: (markers: KakaoMarker[], nodraw?: boolean) => void;
+  setMap: (map: KakaoMap | null) => void;
 };
 
 export {};

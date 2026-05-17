@@ -20,7 +20,7 @@ import { StoreData, useStores } from "@/hooks/useStores";
 import { useDeferMapMarkersAfterList } from "@/hooks/useDeferMapMarkersAfterList";
 import { useUserLocation } from "@/hooks/useUserLocation";
 import { prefetchStoreDetail } from "@/lib/storeDetailClient";
-import { KAKAO_MAP_TILES_LOADED_EVENT } from "@/lib/kakao/createKakaoMap";
+import { KAKAO_MAP_FIRST_IDLE_EVENT } from "@/lib/kakao/createKakaoMap";
 import { perfTimeEnd, perfTimeStart } from "@/lib/perfMarks";
 import { DEFAULT_REGION, type LatLng } from "@/lib/types";
 
@@ -121,7 +121,7 @@ export default function HomeClient({
     return [selectedStore, ...sortedStores];
   }, [selectedStore, sortedStores, sortedStoreIdSet]);
 
-  /** LCP: SSR/defaultCenter 로 먼저 타일 → 캐시된 GPS 는 tilesloaded 이후 pan */
+  /** LCP: SSR/defaultCenter 로 먼저 타일 → 캐시된 GPS 는 첫 idle 이후 pan */
   const centerLat = mapCenterOverride?.lat ?? manualCenter.lat ?? userLocation?.lat;
   const centerLng = mapCenterOverride?.lng ?? manualCenter.lng ?? userLocation?.lng;
   const center = useMemo(
@@ -354,12 +354,12 @@ export default function HomeClient({
       setCenterVersion((v) => v + 1);
     };
 
-    const onTilesLoaded = () => apply();
-    window.addEventListener(KAKAO_MAP_TILES_LOADED_EVENT, onTilesLoaded, { once: true });
-    const fallback = window.setTimeout(apply, 5000);
+    const onFirstIdle = () => apply();
+    window.addEventListener(KAKAO_MAP_FIRST_IDLE_EVENT, onFirstIdle, { once: true });
+    const fallback = window.setTimeout(apply, 2000);
 
     return () => {
-      window.removeEventListener(KAKAO_MAP_TILES_LOADED_EVENT, onTilesLoaded);
+      window.removeEventListener(KAKAO_MAP_FIRST_IDLE_EVENT, onFirstIdle);
       window.clearTimeout(fallback);
     };
   }, [permission, userLocation, mapCenterOverride]);
