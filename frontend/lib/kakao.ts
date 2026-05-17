@@ -2,6 +2,8 @@ declare global {
   interface Window {
     kakao: {
       maps: {
+        /** HD 타일 비활성화 — Map 생성 전 호출 */
+        disableHD?: () => void;
         load: (callback: () => void) => void;
         LatLng: new (lat: number, lng: number) => {
           getLat: () => number;

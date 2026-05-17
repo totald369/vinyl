@@ -20,7 +20,9 @@ import { StoreData, useStores } from "@/hooks/useStores";
 import { useDeferMapMarkersAfterList } from "@/hooks/useDeferMapMarkersAfterList";
 import { useUserLocation } from "@/hooks/useUserLocation";
 import { prefetchStoreDetail } from "@/lib/storeDetailClient";
+import { KAKAO_MAP_TILES_LOADED_EVENT } from "@/lib/kakao/createKakaoMap";
 import { perfTimeEnd, perfTimeStart } from "@/lib/perfMarks";
+import { DEFAULT_REGION, type LatLng } from "@/lib/types";
 
 /*
  * [항목 8·성능] 상태: useSheetController / useMapCenterController / useDeepLinkResolver 분리,
@@ -90,7 +92,6 @@ export default function HomeClient({
     setSelectedStore,
     sortedStores,
     stores,
-    defaultCenter,
     loading,
     searchTotal,
     searchHasMore,
@@ -110,7 +111,7 @@ export default function HomeClient({
 
   const storesById = useMemo(() => new Map(stores.map((s) => [s.id, s])), [stores]);
 
-  const [manualCenter, setManualCenter] = useState(defaultCenter);
+  const [manualCenter, setManualCenter] = useState<LatLng>(DEFAULT_REGION);
   const [centerVersion, setCenterVersion] = useState(0);
   const sortedStoreIdSet = useMemo(() => new Set(sortedStores.map((s) => s.id)), [sortedStores]);
   const mapStores = useMemo(() => {
@@ -120,7 +121,7 @@ export default function HomeClient({
     return [selectedStore, ...sortedStores];
   }, [selectedStore, sortedStores, sortedStoreIdSet]);
 
-  /** LCP: SSR/defaultCenter 로 먼저 타일 → 캐시된 GPS 는 idle 이후 pan */
+  /** LCP: SSR/defaultCenter 로 먼저 타일 → 캐시된 GPS 는 tilesloaded 이후 pan */
   const centerLat = mapCenterOverride?.lat ?? manualCenter.lat ?? userLocation?.lat;
   const centerLng = mapCenterOverride?.lng ?? manualCenter.lng ?? userLocation?.lng;
   const center = useMemo(
@@ -347,15 +348,20 @@ export default function HomeClient({
 
   useEffect(() => {
     if (permission !== "granted" || !userLocation || mapCenterOverride) return;
+
     const apply = () => {
       setManualCenter(userLocation);
       setCenterVersion((v) => v + 1);
     };
-    if (typeof requestIdleCallback !== "undefined") {
-      const id = requestIdleCallback(apply, { timeout: 3000 });
-      return () => cancelIdleCallback(id);
-    }
-    apply();
+
+    const onTilesLoaded = () => apply();
+    window.addEventListener(KAKAO_MAP_TILES_LOADED_EVENT, onTilesLoaded, { once: true });
+    const fallback = window.setTimeout(apply, 5000);
+
+    return () => {
+      window.removeEventListener(KAKAO_MAP_TILES_LOADED_EVENT, onTilesLoaded);
+      window.clearTimeout(fallback);
+    };
   }, [permission, userLocation, mapCenterOverride]);
 
   useEffect(() => {

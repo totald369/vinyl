@@ -5,8 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import BottomSheetList from "@/components/BottomSheetList";
 import HomeSearchOverlay from "@/components/HomeSearchOverlay";
 import LocationPermissionModal from "@/components/LocationPermissionModal";
-import MapSkeleton from "@/components/MapSkeleton";
-import MapLcpPlaceholder from "@/components/MapLcpPlaceholder";
+import ClientMountedMapShell from "@/components/map/ClientMountedMapShell";
 import MapView from "@/components/MapView";
 import StoreDetailSheet from "@/components/StoreDetailSheet";
 import type { DistrictTrashbagConfig } from "@/lib/districtTrashbagSeo";
@@ -244,8 +243,7 @@ export default function DistrictTrashbagClient({ config }: Props) {
         <div
           className={`absolute inset-0 z-0 ${sheetBlocksMapPointer ? "pointer-events-none" : ""}`}
         >
-          <div id="kakao-map" className="kakao-map-root relative h-full w-full">
-            <MapLcpPlaceholder />
+          <ClientMountedMapShell kakaoLoading={isLoading}>
             <MapView
               center={center}
               centerVersion={centerVersion}
@@ -256,8 +254,7 @@ export default function DistrictTrashbagClient({ config }: Props) {
               onSelectStore={handleMapMarkerSelect}
               userMarkerPosition={permission === "granted" && userLocation ? userLocation : null}
             />
-            {isLoading ? <MapSkeleton overlay /> : null}
-          </div>
+          </ClientMountedMapShell>
         </div>
         <section className="pointer-events-none absolute left-[15px] right-[15px] top-[calc(12px+env(safe-area-inset-top,0px))] z-sheet flex flex-col gap-2">
             <button

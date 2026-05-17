@@ -14,7 +14,7 @@ import { DEFAULT_REGION, LatLng } from "@/lib/types";
 type PermissionState = "unknown" | "granted" | "denied" | "requesting";
 
 export function useUserLocation() {
-  const [userLocation, setUserLocation] = useState<LatLng | null>(() => readLastKnownGeo());
+  const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [permission, setPermission] = useState<PermissionState>("unknown");
   /** Permissions API 또는 PERMISSION_DENIED — 브라우저 설정에서만 해제 가능 */
   const [geolocationBlocked, setGeolocationBlocked] = useState(false);
@@ -94,6 +94,12 @@ export function useUserLocation() {
       requestLocation();
     }
   }, [requestLocation]);
+
+  /** localStorage 캐시는 hydration 이후 적용 (SSR 과 초기 HTML 일치) */
+  useEffect(() => {
+    const cached = readLastKnownGeo();
+    if (cached) setUserLocation(cached);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

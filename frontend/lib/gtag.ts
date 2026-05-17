@@ -12,12 +12,6 @@ export function getGaMeasurementId(): string | null {
     typeof process !== "undefined" ? process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID : undefined;
 
   if (raw === undefined) {
-    /* 프로덕션 빌드(SSG)에서는 로그 스팸 방지 — 로컬 dev에서만 안내 */
-    if (typeof console !== "undefined" && process.env.NODE_ENV !== "production") {
-      console.warn(
-        `[GA] NEXT_PUBLIC_GA_MEASUREMENT_ID is undefined; using built-in default ${GA_DEFAULT_ID}.`
-      );
-    }
     return GA_DEFAULT_ID;
   }
 

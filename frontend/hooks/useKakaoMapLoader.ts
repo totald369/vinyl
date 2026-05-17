@@ -32,9 +32,8 @@ function devError(...args: unknown[]) {
 export function useKakaoMapLoader(options?: { enabled?: boolean }): UseKakaoMapLoaderResult {
   const enabled = options?.enabled !== false;
   const appKey = useMemo(() => process.env.NEXT_PUBLIC_KAKAO_MAP_APP_KEY ?? "", []);
-  const [state, setState] = useState<LoaderState>(() =>
-    typeof window !== "undefined" && window.kakao?.maps ? "ready" : "idle"
-  );
+  /** SSR·첫 클라이언트 페인트 동일 — SDK 준비는 effect 에서만 반영 */
+  const [state, setState] = useState<LoaderState>("idle");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

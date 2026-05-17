@@ -3,7 +3,11 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { StoreData, StoreListFilter } from "@/hooks/useStores";
 import type { KakaoCustomOverlay, KakaoMap, KakaoMapPoint, KakaoMarker } from "@/lib/kakao";
-import { createKakaoMap } from "@/lib/kakao/createKakaoMap";
+import {
+  createKakaoMap,
+  onKakaoMapTilesLoadedOnce,
+  runKakaoMapsLoad
+} from "@/lib/kakao/createKakaoMap";
 import {
   ensureKakaoMapsReady,
   KAKAO_MAPS_READY_EVENT,
@@ -145,9 +149,6 @@ function MapViewInner({
   userMarkerPosition = null
 }: Props) {
   const kakaoAppKey = process.env.NEXT_PUBLIC_KAKAO_MAP_APP_KEY ?? "";
-  if (typeof window !== "undefined" && kakaoAppKey) {
-    startKakaoMapsWarmup(kakaoAppKey);
-  }
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapSizeRef = useRef({ w: 360, h: 640 });
@@ -250,6 +251,10 @@ function MapViewInner({
     return () => ro.disconnect();
   }, []);
 
+  useEffect(() => {
+    if (kakaoAppKey) startKakaoMapsWarmup(kakaoAppKey);
+  }, [kakaoAppKey]);
+
   /**
    * SDK 훅(isLoading)과 무관하게 마운트 직후 지도 생성 — 타일 fetch LCP 앞당김.
    * geolocation·매장 데이터는 center/stores prop 으로만 반영(생성 전 대기 없음).
@@ -265,10 +270,6 @@ function MapViewInner({
       idleAttachedRef.current = true;
 
       const onIdle = () => {
-        if (!mapFirstIdleMeasuredRef.current) {
-          perfTimeEnd("[perf] map-first-idle");
-          mapFirstIdleMeasuredRef.current = true;
-        }
         if (idleBoundTimerRef.current) clearTimeout(idleBoundTimerRef.current);
         idleBoundTimerRef.current = setTimeout(() => {
           try {
@@ -309,6 +310,12 @@ function MapViewInner({
       idleHandlerRef.current = onIdle;
       kakao.event.addListener(map, "idle", onIdle);
       onIdle();
+
+      onKakaoMapTilesLoadedOnce(map, () => {
+        if (mapFirstIdleMeasuredRef.current) return;
+        mapFirstIdleMeasuredRef.current = true;
+        perfTimeEnd("[perf] map-first-idle");
+      });
 
       const onMapClick = (...args: unknown[]) => {
         const mouseEvent = args[0] as { latLng: { getLat: () => number; getLng: () => number } };
@@ -388,7 +395,7 @@ function MapViewInner({
 
     const bootMap = () => {
       if (cancelled || !window.kakao?.maps) return;
-      window.kakao.maps.load(() => createMap());
+      runKakaoMapsLoad(() => createMap());
     };
 
     if (window.kakao?.maps) {

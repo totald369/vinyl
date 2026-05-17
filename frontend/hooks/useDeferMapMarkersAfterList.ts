@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { KAKAO_MAP_TILES_LOADED_EVENT } from "@/lib/kakao/createKakaoMap";
 
 type Options = {
   /** 리스트 데이터 준비(로딩 종료 + 1건 이상) */
@@ -9,8 +10,10 @@ type Options = {
   resetKey: string;
 };
 
+const TILES_FALLBACK_MS = 4000;
+
 /**
- * 리스트 페인트 후 idle 에 마커 표시 — CustomOverlay 대량 생성이 타일 LCP·메인 스레드와 경합하지 않게.
+ * 리스트 준비 + 지도 첫 tilesloaded 이후 마커 표시 (타일 LCP·메인 스레드 경합 완화).
  */
 export function useDeferMapMarkersAfterList({ listReady, resetKey }: Options): boolean {
   const [showMapMarkers, setShowMapMarkers] = useState(false);
@@ -26,20 +29,15 @@ export function useDeferMapMarkersAfterList({ listReady, resetKey }: Options): b
       if (!cancelled) setShowMapMarkers(true);
     };
 
-    let idleId: number | undefined;
-    if (typeof requestIdleCallback !== "undefined") {
-      idleId = requestIdleCallback(enable, { timeout: 2500 });
-    } else {
-      idleId = window.setTimeout(enable, 300) as unknown as number;
-    }
+    const onTilesLoaded = () => enable();
+    window.addEventListener(KAKAO_MAP_TILES_LOADED_EVENT, onTilesLoaded, { once: true });
+
+    const fallback = window.setTimeout(enable, TILES_FALLBACK_MS);
 
     return () => {
       cancelled = true;
-      if (typeof requestIdleCallback !== "undefined" && idleId != null) {
-        cancelIdleCallback(idleId);
-      } else if (idleId != null) {
-        window.clearTimeout(idleId);
-      }
+      window.removeEventListener(KAKAO_MAP_TILES_LOADED_EVENT, onTilesLoaded);
+      window.clearTimeout(fallback);
     };
   }, [listReady, resetKey]);
 

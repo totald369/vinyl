@@ -1,7 +1,6 @@
 "use client";
 
 import Script from "next/script";
-import { installAllKakaoSdrPatches } from "@/lib/kakao/installKakaoSdrPatches";
 import {
   buildKakaoMapSdkUrl,
   ensureKakaoMapsReady,
@@ -19,7 +18,6 @@ export default function KakaoMapSdkScript({ appKey }: Props) {
   if (!appKey.trim()) return null;
 
   if (typeof window !== "undefined") {
-    installAllKakaoSdrPatches();
     if (
       process.env.NODE_ENV === "production" &&
       "serviceWorker" in navigator
