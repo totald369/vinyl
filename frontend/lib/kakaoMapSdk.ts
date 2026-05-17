@@ -8,6 +8,7 @@ export function buildKakaoMapSdkUrl(appKey: string): string {
 export const KAKAO_MAPS_READY_EVENT = "kakao-maps-ready";
 
 let sdkLoadPromise: Promise<void> | null = null;
+let warmupStarted = false;
 
 function runMapsLoad(): Promise<void> {
   return new Promise<void>((resolve, reject) => {
@@ -87,4 +88,12 @@ export function ensureKakaoMapsReady(appKey: string): Promise<void> {
   });
 
   return sdkLoadPromise;
+}
+
+/** React effect 이전(렌더 단계)에 maps.load 파이프라인 시작 */
+export function startKakaoMapsWarmup(appKey: string): void {
+  if (warmupStarted || typeof window === "undefined") return;
+  if (!appKey.trim()) return;
+  warmupStarted = true;
+  void ensureKakaoMapsReady(appKey);
 }

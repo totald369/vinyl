@@ -36,7 +36,6 @@ function HomeMapStageInner({
   return (
     <div id="kakao-map" className="kakao-map-root relative h-full w-full">
       <MapView
-        mapsReady={!kakaoLoading}
         center={center}
         centerVersion={centerVersion}
         preferredMapLevel={preferredMapLevel}

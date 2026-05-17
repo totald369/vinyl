@@ -89,13 +89,7 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <head>
-        <link
-          rel="preload"
-          href="/fonts/Pretendard-Regular.subset.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
+        {/* LCP(지도 타일) — 폰트보다 먼저 연결 */}
         <link rel="dns-prefetch" href="https://t1.daumcdn.net" />
         <link rel="preconnect" href="https://t1.daumcdn.net" crossOrigin="" />
         <link rel="dns-prefetch" href="https://mts.daumcdn.net" />
@@ -106,6 +100,13 @@ export default function RootLayout({
         {kakaoSdkSrc ? (
           <link rel="preload" href={kakaoSdkSrc} as="script" />
         ) : null}
+        <link
+          rel="preload"
+          href="/fonts/Pretendard-Regular.subset.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
         {isProd && GA_MEASUREMENT_ID ? <GoogleAnalyticsScripts /> : null}
         {isProd && CLARITY_PROJECT_ID ? <MicrosoftClarityScripts /> : null}
       </head>

@@ -245,7 +245,6 @@ export default function DistrictTrashbagClient({ config }: Props) {
         >
           <div id="kakao-map" className="kakao-map-root relative h-full w-full">
             <MapView
-              mapsReady={!isLoading}
               center={center}
               centerVersion={centerVersion}
               preferredMapLevel={exploreAnchor != null ? 6 : 5}

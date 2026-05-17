@@ -1,18 +1,25 @@
 "use client";
 
 import Script from "next/script";
-import { buildKakaoMapSdkUrl, ensureKakaoMapsReady } from "@/lib/kakaoMapSdk";
+import {
+  buildKakaoMapSdkUrl,
+  ensureKakaoMapsReady,
+  startKakaoMapsWarmup
+} from "@/lib/kakaoMapSdk";
 
 type Props = {
   appKey: string;
 };
 
 /**
- * layout head 의 sdk preload + afterInteractive 로드.
- * useKakaoMapLoader 가 data-kakao-map-sdk 로 동일 태그를 인식해 maps.load() 호출.
+ * layout head preload + beforeInteractive — hydration 전 SDK 다운로드·maps.load 시작.
  */
 export default function KakaoMapSdkScript({ appKey }: Props) {
   if (!appKey.trim()) return null;
+
+  if (typeof window !== "undefined") {
+    startKakaoMapsWarmup(appKey);
+  }
 
   const src = buildKakaoMapSdkUrl(appKey);
 
@@ -20,7 +27,7 @@ export default function KakaoMapSdkScript({ appKey }: Props) {
     <Script
       id="kakao-map-sdk"
       src={src}
-      strategy="afterInteractive"
+      strategy="beforeInteractive"
       data-kakao-map-sdk="true"
       onLoad={() => {
         document.getElementById("kakao-map-sdk")?.setAttribute("data-loaded", "true");

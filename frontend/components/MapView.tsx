@@ -3,6 +3,11 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { StoreData, StoreListFilter } from "@/hooks/useStores";
 import type { KakaoCustomOverlay, KakaoMap, KakaoMapPoint, KakaoMarker } from "@/lib/kakao";
+import {
+  ensureKakaoMapsReady,
+  KAKAO_MAPS_READY_EVENT,
+  startKakaoMapsWarmup
+} from "@/lib/kakaoMapSdk";
 import { perfTimeEnd, perfTimeStart } from "@/lib/perfMarks";
 import { LatLng } from "@/lib/types";
 import { getDistanceKm } from "@/lib/utils";
@@ -16,8 +21,6 @@ type Props = {
   selectedStoreId?: string | null;
   onSelectStore: (store: StoreData) => void;
   userMarkerPosition?: LatLng | null;
-  /** false 이면 SDK 준비 전 — 컨테이너만 유지 */
-  mapsReady?: boolean;
 };
 
 const USER_MARKER_SRC = "/Img/Icon/User_marker.svg";
@@ -138,9 +141,13 @@ function MapViewInner({
   activeFilter,
   selectedStoreId,
   onSelectStore,
-  userMarkerPosition = null,
-  mapsReady = true
+  userMarkerPosition = null
 }: Props) {
+  const kakaoAppKey = process.env.NEXT_PUBLIC_KAKAO_MAP_APP_KEY ?? "";
+  if (typeof window !== "undefined" && kakaoAppKey) {
+    startKakaoMapsWarmup(kakaoAppKey);
+  }
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapSizeRef = useRef({ w: 360, h: 640 });
   const mapRef = useRef<KakaoMap | null>(null);
@@ -243,16 +250,129 @@ function MapViewInner({
   }, []);
 
   /**
-   * 변경 전: effect 의존성에 center가 포함되어 이동마다 cleanup이 click 리스너를 제거·재부착.
-   * 변경 후: mapsReady 후 1회만 Map·리스너 생성(초기 center), center 이동은 별도 effect.
+   * SDK 훅(isLoading)과 무관하게 마운트 직후 지도 생성 — 타일 fetch LCP 앞당김.
+   * geolocation·매장 데이터는 center/stores prop 으로만 반영(생성 전 대기 없음).
    */
   useEffect(() => {
-    if (!mapsReady) return;
-    if (typeof window === "undefined" || !containerRef.current || !window.kakao?.maps) return;
+    if (typeof window === "undefined" || !containerRef.current) return;
 
-    const kakao = window.kakao.maps;
+    let cancelled = false;
 
-    if (!mapRef.current) {
+    const attachMapListeners = (map: KakaoMap) => {
+      if (idleAttachedRef.current || !window.kakao?.maps) return;
+      const kakao = window.kakao.maps;
+      idleAttachedRef.current = true;
+
+      const onIdle = () => {
+        if (!mapFirstIdleMeasuredRef.current) {
+          perfTimeEnd("[perf] map-first-idle");
+          mapFirstIdleMeasuredRef.current = true;
+        }
+        if (idleBoundTimerRef.current) clearTimeout(idleBoundTimerRef.current);
+        idleBoundTimerRef.current = setTimeout(() => {
+          try {
+            const b = map.getBounds();
+            const sw = b.getSouthWest();
+            const ne = b.getNorthEast();
+            const swLat = sw.getLat();
+            const swLng = sw.getLng();
+            const neLat = ne.getLat();
+            const neLng = ne.getLng();
+            const pad = 0.11;
+            const dLat = (neLat - swLat) * pad;
+            const dLng = (neLng - swLng) * pad;
+            const round = (v: number) => Math.round(v * 1e5) / 1e5;
+            const next: MapBoundsBox = {
+              swLat: round(swLat - dLat),
+              swLng: round(swLng - dLng),
+              neLat: round(neLat + dLat),
+              neLng: round(neLng + dLng)
+            };
+            setMapBounds((prev) => {
+              if (
+                prev &&
+                prev.swLat === next.swLat &&
+                prev.swLng === next.swLng &&
+                prev.neLat === next.neLat &&
+                prev.neLng === next.neLng
+              ) {
+                return prev;
+              }
+              return next;
+            });
+          } catch {
+            /* bounds not ready */
+          }
+        }, 90);
+      };
+      idleHandlerRef.current = onIdle;
+      kakao.event.addListener(map, "idle", onIdle);
+      onIdle();
+
+      const onMapClick = (...args: unknown[]) => {
+        const mouseEvent = args[0] as { latLng: { getLat: () => number; getLng: () => number } };
+        if (!mouseEvent?.latLng) return;
+
+        const list = storesPickRef.current;
+        if (!list.length) return;
+
+        const proj = map.getProjection();
+        if (!proj?.pointFromCoords) return;
+
+        const clickLat = mouseEvent.latLng.getLat();
+        const clickLng = mouseEvent.latLng.getLng();
+        const clickXY = mapPointToXY(proj.pointFromCoords(mouseEvent.latLng));
+
+        let latRadius = 0.005;
+        let lngRadius = 0.005;
+        try {
+          const b = map.getBounds();
+          const sw = b.getSouthWest();
+          const ne = b.getNorthEast();
+          const mapWidthPx = mapSizeRef.current.w;
+          const mapHeightPx = mapSizeRef.current.h;
+          const pxPerLat = mapHeightPx / Math.max(1e-6, ne.getLat() - sw.getLat());
+          const pxPerLng = mapWidthPx / Math.max(1e-6, ne.getLng() - sw.getLng());
+          latRadius = (STORE_PICK_MAX_DISTANCE_PX / pxPerLat) * 1.2;
+          lngRadius = (STORE_PICK_MAX_DISTANCE_PX / pxPerLng) * 1.2;
+        } catch {
+          /* bounds not ready */
+        }
+
+        let best: StoreData | null = null;
+        let bestDist = Infinity;
+
+        for (const store of list) {
+          const lat = Number(store.lat);
+          const lng = Number(store.lng);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+          if (Math.abs(lat - clickLat) > latRadius) continue;
+          if (Math.abs(lng - clickLng) > lngRadius) continue;
+
+          const mXY = mapPointToXY(proj.pointFromCoords(new kakao.LatLng(lat, lng)));
+          const d = Math.hypot(mXY.x - clickXY.x, mXY.y - clickXY.y);
+          if (d <= STORE_PICK_MAX_DISTANCE_PX && d < bestDist) {
+            bestDist = d;
+            best = store;
+          }
+        }
+
+        if (best) {
+          onSelectStoreRef.current(best);
+        }
+      };
+
+      if (!pickListenerAttachedRef.current) {
+        pickListenerAttachedRef.current = true;
+        kakao.event.addListener(map, "click", onMapClick);
+      }
+    };
+
+    const createMap = () => {
+      if (cancelled || mapRef.current || !containerRef.current || !window.kakao?.maps) {
+        return;
+      }
+      const kakao = window.kakao.maps;
       perfTimeStart("[perf] map-init");
       perfTimeStart("[perf] map-first-idle");
       mapRef.current = new kakao.Map(containerRef.current, {
@@ -262,132 +382,36 @@ function MapViewInner({
       perfTimeEnd("[perf] map-init");
       mapInitMeasuredRef.current = true;
       prevCenterRef.current = { lat: Number(center.lat), lng: Number(center.lng) };
-    }
-
-    const map = mapRef.current;
-
-    if (!idleAttachedRef.current) {
-      idleAttachedRef.current = true;
-      const onIdle = () => {
-      if (!mapFirstIdleMeasuredRef.current) {
-        perfTimeEnd("[perf] map-first-idle");
-        mapFirstIdleMeasuredRef.current = true;
-      }
-      if (idleBoundTimerRef.current) clearTimeout(idleBoundTimerRef.current);
-      idleBoundTimerRef.current = setTimeout(() => {
-        try {
-          const b = map.getBounds();
-          const sw = b.getSouthWest();
-          const ne = b.getNorthEast();
-          const swLat = sw.getLat();
-          const swLng = sw.getLng();
-          const neLat = ne.getLat();
-          const neLng = ne.getLng();
-          const pad = 0.11;
-          const dLat = (neLat - swLat) * pad;
-          const dLng = (neLng - swLng) * pad;
-          const round = (v: number) => Math.round(v * 1e5) / 1e5;
-          const next: MapBoundsBox = {
-            swLat: round(swLat - dLat),
-            swLng: round(swLng - dLng),
-            neLat: round(neLat + dLat),
-            neLng: round(neLng + dLng)
-          };
-          setMapBounds((prev) => {
-            if (
-              prev &&
-              prev.swLat === next.swLat &&
-              prev.swLng === next.swLng &&
-              prev.neLat === next.neLat &&
-              prev.neLng === next.neLng
-            ) {
-              return prev;
-            }
-            return next;
-          });
-        } catch {
-          /* bounds not ready */
-        }
-      }, 90);
-      };
-      idleHandlerRef.current = onIdle;
-      kakao.event.addListener(map, "idle", onIdle);
-      onIdle();
-    }
-
-    /**
-     * [INP] 변경 전: visible 마커 N개 모두 new kakao.LatLng() + proj.pointFromCoords() 호출 (N=240 시 20~40ms).
-     * 변경 후: 1) 클릭 좌표 주변 작은 위·경도 박스로 1차 필터 (제곱근 없이 좌표 차이만) → 보통 ~3~10개.
-     *        2) 후보만 픽셀 거리 검사.
-     *   결과: 평균 N→ ~10개로 줄어 click → next-paint 비용 1/10 수준.
-     */
-    const onMapClick = (...args: unknown[]) => {
-      const mouseEvent = args[0] as { latLng: { getLat: () => number; getLng: () => number } };
-      if (!mouseEvent?.latLng) return;
-
-      const list = storesPickRef.current;
-      if (!list.length) return;
-
-      const proj = map.getProjection();
-      if (!proj?.pointFromCoords) return;
-
-      const clickLat = mouseEvent.latLng.getLat();
-      const clickLng = mouseEvent.latLng.getLng();
-      const clickXY = mapPointToXY(proj.pointFromCoords(mouseEvent.latLng));
-
-      /** 픽 반경(58px) → 대략적인 좌표 반경. 위·경도 차이가 이 이상이면 후보 제외. */
-      let latRadius = 0.005;
-      let lngRadius = 0.005;
-      try {
-        const b = map.getBounds();
-        const sw = b.getSouthWest();
-        const ne = b.getNorthEast();
-        const mapWidthPx = mapSizeRef.current.w;
-        const mapHeightPx = mapSizeRef.current.h;
-        const pxPerLat = mapHeightPx / Math.max(1e-6, ne.getLat() - sw.getLat());
-        const pxPerLng = mapWidthPx / Math.max(1e-6, ne.getLng() - sw.getLng());
-        latRadius = (STORE_PICK_MAX_DISTANCE_PX / pxPerLat) * 1.2;
-        lngRadius = (STORE_PICK_MAX_DISTANCE_PX / pxPerLng) * 1.2;
-      } catch {
-        /* bounds not ready — fallback radius 그대로 */
-      }
-
-      let best: StoreData | null = null;
-      let bestDist = Infinity;
-
-      for (const store of list) {
-        const lat = Number(store.lat);
-        const lng = Number(store.lng);
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-        if (Math.abs(lat - clickLat) > latRadius) continue;
-        if (Math.abs(lng - clickLng) > lngRadius) continue;
-
-        const mXY = mapPointToXY(proj.pointFromCoords(new kakao.LatLng(lat, lng)));
-        const d = Math.hypot(mXY.x - clickXY.x, mXY.y - clickXY.y);
-        if (d <= STORE_PICK_MAX_DISTANCE_PX && d < bestDist) {
-          bestDist = d;
-          best = store;
-        }
-      }
-
-      if (best) {
-        onSelectStoreRef.current(best);
-      }
+      attachMapListeners(mapRef.current);
     };
 
-    if (!pickListenerAttachedRef.current) {
-      pickListenerAttachedRef.current = true;
-      kakao.event.addListener(map, "click", onMapClick);
+    const bootMap = () => {
+      if (cancelled || !window.kakao?.maps) return;
+      window.kakao.maps.load(() => createMap());
+    };
+
+    if (window.kakao?.maps) {
+      bootMap();
+    } else if (kakaoAppKey) {
+      void ensureKakaoMapsReady(kakaoAppKey).then(() => bootMap());
     }
+
+    const onSdkReady = () => bootMap();
+    window.addEventListener(KAKAO_MAPS_READY_EVENT, onSdkReady);
+    const pollId = window.setInterval(() => {
+      if (window.kakao?.maps) {
+        window.clearInterval(pollId);
+        bootMap();
+      }
+    }, 50);
 
     return () => {
-      if (pickListenerAttachedRef.current) {
-        kakao.event.removeListener(map, "click", onMapClick);
-        pickListenerAttachedRef.current = false;
-      }
+      cancelled = true;
+      window.removeEventListener(KAKAO_MAPS_READY_EVENT, onSdkReady);
+      window.clearInterval(pollId);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 의도: mapsReady 후 1회 Map·리스너 생성(초기 center만 사용)
-  }, [mapsReady]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 1회 지도·리스너 생성(초기 center만)
+  }, []);
 
   useEffect(() => {
     return () => {
