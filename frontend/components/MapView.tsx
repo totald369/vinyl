@@ -11,7 +11,6 @@ import {
   relayoutKakaoMap,
   runKakaoMapsLoad
 } from "@/lib/kakao/createKakaoMap";
-import { syncMarkersWithClusterer, type MarkerClustererLike } from "@/lib/kakao/markerCluster";
 import {
   getStoreMarkerImages,
   isKakaoMapsConstructorsReady
@@ -120,7 +119,6 @@ function MapViewInner({
   const mapSizeRef = useRef({ w: 360, h: 640 });
   const mapRef = useRef<KakaoMap | null>(null);
   const storeMarkersRef = useRef<Map<string, KakaoMarker>>(new Map());
-  const clustererRef = useRef<MarkerClustererLike | null>(null);
   const markerClickBoundRef = useRef<Set<string>>(new Set());
   const userMarkerRef = useRef<KakaoMarker | null>(null);
   const prevCenterRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -166,29 +164,44 @@ function MapViewInner({
   const storesPickRef = useRef<StoreData[]>(visibleForMarkers);
   storesPickRef.current = visibleForMarkers;
 
-  const pickListenerAttachedRef = useRef(false);
+  const mapClickHandlerRef = useRef<((...args: unknown[]) => void) | null>(null);
   const mapFirstIdleMeasuredRef = useRef(false);
+  const lastLayoutSizeRef = useRef({ w: 0, h: 0 });
+  const relayoutRafRef = useRef(0);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
+
+    const applySize = (w: number, h: number, relayout: boolean) => {
+      const nw = Math.max(1, Math.round(w));
+      const nh = Math.max(1, Math.round(h));
+      mapSizeRef.current = { w: nw, h: nh };
+      if (!relayout) return;
+      const map = mapRef.current;
+      if (!map) return;
+      if (lastLayoutSizeRef.current.w === nw && lastLayoutSizeRef.current.h === nh) {
+        return;
+      }
+      lastLayoutSizeRef.current = { w: nw, h: nh };
+      cancelAnimationFrame(relayoutRafRef.current);
+      relayoutRafRef.current = requestAnimationFrame(() => {
+        if (mapRef.current) relayoutKakaoMap(mapRef.current);
+      });
+    };
+
     const ro = new ResizeObserver((entries) => {
       const rect = entries[0]?.contentRect;
       if (!rect) return;
-      mapSizeRef.current = {
-        w: Math.max(1, Math.round(rect.width)),
-        h: Math.max(1, Math.round(rect.height))
-      };
-      const map = mapRef.current;
-      if (map) relayoutKakaoMap(map);
+      applySize(rect.width, rect.height, true);
     });
     ro.observe(el);
-    const rect = el.getBoundingClientRect();
-    mapSizeRef.current = {
-      w: Math.max(1, Math.round(rect.width)),
-      h: Math.max(1, Math.round(rect.height))
+    applySize(el.clientWidth, el.clientHeight, false);
+
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(relayoutRafRef.current);
     };
-    return () => ro.disconnect();
   }, []);
 
   useEffect(() => {
@@ -320,8 +333,8 @@ function MapViewInner({
         }
       };
 
-      if (!pickListenerAttachedRef.current) {
-        pickListenerAttachedRef.current = true;
+      if (!mapClickHandlerRef.current) {
+        mapClickHandlerRef.current = onMapClick;
         kakao.event.addListener(map, "click", onMapClick);
       }
     };
@@ -353,25 +366,16 @@ function MapViewInner({
       runKakaoMapsLoad(() => createMap());
     };
 
-    if (window.kakao?.maps) {
-      bootMap();
-    } else if (kakaoAppKey) {
-      void ensureKakaoMapsReady(kakaoAppKey).then(() => bootMap());
-    }
-
     const onSdkReady = () => bootMap();
     window.addEventListener(KAKAO_MAPS_READY_EVENT, onSdkReady);
-    const pollId = window.setInterval(() => {
-      if (window.kakao?.maps) {
-        window.clearInterval(pollId);
-        bootMap();
-      }
-    }, 50);
+
+    if (kakaoAppKey) {
+      void ensureKakaoMapsReady(kakaoAppKey).then(() => bootMap());
+    }
 
     return () => {
       cancelled = true;
       window.removeEventListener(KAKAO_MAPS_READY_EVENT, onSdkReady);
-      window.clearInterval(pollId);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 1회 지도·리스너 생성(초기 center만)
   }, []);
@@ -388,9 +392,11 @@ function MapViewInner({
       }
       idleAttachedRef.current = false;
       idleHandlerRef.current = null;
-      clustererRef.current?.clear?.();
-      clustererRef.current?.setMap?.(null);
-      clustererRef.current = null;
+      const mapClick = mapClickHandlerRef.current;
+      if (map && mapClick && window.kakao?.maps) {
+        window.kakao.maps.event.removeListener(map, "click", mapClick);
+      }
+      mapClickHandlerRef.current = null;
       storeMarkersRef.current.forEach((m) => m.setMap(null));
       storeMarkersRef.current.clear();
       markerClickBoundRef.current.clear();
@@ -480,7 +486,9 @@ function MapViewInner({
       markerList.push(marker);
     }
 
-    syncMarkersWithClusterer(map, clustererRef, markerList, false);
+    for (const marker of markerList) {
+      marker.setMap(map);
+    }
 
     perfTimeEnd("[perf] map-markers-diff");
   }, [visibleForMarkers, activeFilter, mapInstanceReady, markerSdkReady, stores.length]);

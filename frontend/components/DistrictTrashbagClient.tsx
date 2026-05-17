@@ -1,13 +1,15 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import BottomSheetList from "@/components/BottomSheetList";
 import HomeSearchOverlay from "@/components/HomeSearchOverlay";
 import LocationPermissionModal from "@/components/LocationPermissionModal";
 import ClientMountedMapShell from "@/components/map/ClientMountedMapShell";
-import MapView from "@/components/MapView";
 import StoreDetailSheet from "@/components/StoreDetailSheet";
+
+const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 import type { DistrictTrashbagConfig } from "@/lib/districtTrashbagSeo";
 import type { StoreListFilter } from "@/hooks/useStores";
 import type { BottomSheetSnap } from "@/lib/bottomSheetSnap";
