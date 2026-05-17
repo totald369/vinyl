@@ -6,6 +6,7 @@ import BottomSheetList from "@/components/BottomSheetList";
 import HomeSearchOverlay from "@/components/HomeSearchOverlay";
 import LocationPermissionModal from "@/components/LocationPermissionModal";
 import MapSkeleton from "@/components/MapSkeleton";
+import MapLcpPlaceholder from "@/components/MapLcpPlaceholder";
 import MapView from "@/components/MapView";
 import StoreDetailSheet from "@/components/StoreDetailSheet";
 import type { DistrictTrashbagConfig } from "@/lib/districtTrashbagSeo";
@@ -244,6 +245,7 @@ export default function DistrictTrashbagClient({ config }: Props) {
           className={`absolute inset-0 z-0 ${sheetBlocksMapPointer ? "pointer-events-none" : ""}`}
         >
           <div id="kakao-map" className="kakao-map-root relative h-full w-full">
+            <MapLcpPlaceholder />
             <MapView
               center={center}
               centerVersion={centerVersion}

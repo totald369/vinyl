@@ -5,6 +5,7 @@
  * SDK 준비 전에도 컨테이너·MapView 마운트, mapsReady 시 즉시 타일 요청.
  */
 import { memo } from "react";
+import MapLcpPlaceholder from "@/components/MapLcpPlaceholder";
 import MapSkeleton from "@/components/MapSkeleton";
 import MapView from "@/components/MapView";
 import type { StoreData, StoreListFilter } from "@/hooks/useStores";
@@ -35,6 +36,7 @@ function HomeMapStageInner({
 }: Props) {
   return (
     <div id="kakao-map" className="kakao-map-root relative h-full w-full">
+      <MapLcpPlaceholder />
       <MapView
         center={center}
         centerVersion={centerVersion}

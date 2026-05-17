@@ -1,35 +1,5 @@
-/**
- * Pretendard self-host (/public/fonts) — next/font 별도 CSS 청크(렌더 차단·늦은 발견) 제거.
- * LCP용 400만 layout 에서 preload, 나머지 weight 는 사용 시 로드 (font-display: swap).
- */
-@font-face {
-  font-family: "Pretendard";
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-  src: url("/fonts/Pretendard-Regular.subset.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Pretendard";
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-  src: url("/fonts/Pretendard-Medium.subset.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Pretendard";
-  font-weight: 600;
-  font-style: normal;
-  font-display: swap;
-  src: url("/fonts/Pretendard-SemiBold.subset.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Pretendard";
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-  src: url("/fonts/Pretendard-Bold.subset.woff2") format("woff2");
-}
+/** Pretendard variable dynamic-subset — 빌드 시 scripts/copy-pretendard-fonts.ts 생성 */
+@import url("/fonts/pretendard-variable.css");
 
 @tailwind base;
 @tailwind components;

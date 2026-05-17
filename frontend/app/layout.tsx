@@ -1,15 +1,18 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import dynamic from "next/dynamic";
 import ChunkLoadRecovery from "@/components/ChunkLoadRecovery";
-import KakaoMapSdkScript from "@/components/KakaoMapSdkScript";
+import ConditionalKakaoMapSdk from "@/components/ConditionalKakaoMapSdk";
+import { DelayedAnalyticsScripts } from "@/components/DelayedAnalyticsScripts";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import { LazyAdSense } from "@/components/LazyAdSense";
 import GlobalSeoNav from "@/components/GlobalSeoNav";
-import { GoogleAnalyticsScripts } from "@/components/GoogleAnalyticsScripts";
 import { GtagRouteTracker } from "@/components/GtagRouteTracker";
-import { MicrosoftClarityScripts } from "@/components/MicrosoftClarityScripts";
-import WebVitalsReporter from "@/components/WebVitalsReporter";
 import { CLARITY_PROJECT_ID } from "@/lib/clarity";
+
+const WebVitalsReporter = dynamic(() => import("@/components/WebVitalsReporter"), {
+  ssr: false
+});
 import { GA_MEASUREMENT_ID, GA_ROUTE_TRACKER_ENABLED } from "@/lib/gtag";
 import { SITE_URL } from "@/lib/site";
 import {
@@ -19,8 +22,6 @@ import {
   SEO_META_TITLE_VARIANTS,
   defaultOpenGraphImage
 } from "@/lib/seoBrand";
-import { buildKakaoMapSdkUrl } from "@/lib/kakaoMapSdk";
-
 const DEFAULT_TITLE = SEO_META_TITLE_VARIANTS[0];
 const DEFAULT_DESCRIPTION = SEO_META_DESCRIPTION_BY_VARIANT[0];
 
@@ -85,37 +86,23 @@ export default function RootLayout({
 }) {
   const isProd = process.env.NODE_ENV === "production";
   const kakaoAppKey = process.env.NEXT_PUBLIC_KAKAO_MAP_APP_KEY ?? "";
-  const kakaoSdkSrc = kakaoAppKey.trim() ? buildKakaoMapSdkUrl(kakaoAppKey) : null;
 
   return (
     <html lang="ko">
       <head>
-        {/* LCP(지도 타일) — 폰트보다 먼저 연결 */}
+        {/* preconnect 4개 이하 — 타일·SDK만 (crossOrigin 없음, CORS 미사용 리소스) */}
+        <link rel="preconnect" href="https://mts.daumcdn.net" />
+        <link rel="preconnect" href="https://dapi.kakao.com" />
         <link rel="dns-prefetch" href="https://t1.daumcdn.net" />
-        <link rel="preconnect" href="https://t1.daumcdn.net" crossOrigin="" />
-        <link rel="dns-prefetch" href="https://mts.daumcdn.net" />
-        <link rel="preconnect" href="https://mts.daumcdn.net" crossOrigin="" />
-        <link rel="dns-prefetch" href="https://rg1.daumcdn.net" />
-        <link rel="dns-prefetch" href="https://dapi.kakao.com" />
-        <link rel="preconnect" href="https://dapi.kakao.com" crossOrigin="" />
-        {kakaoSdkSrc ? (
-          <link rel="preload" href={kakaoSdkSrc} as="script" />
-        ) : null}
-        <link
-          rel="preload"
-          href="/fonts/Pretendard-Regular.subset.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
-        {isProd && GA_MEASUREMENT_ID ? <GoogleAnalyticsScripts /> : null}
-        {isProd && CLARITY_PROJECT_ID ? <MicrosoftClarityScripts /> : null}
       </head>
       <body className="font-sans antialiased">
         <ChunkLoadRecovery />
         <WebVitalsReporter />
         {isProd && GA_MEASUREMENT_ID && GA_ROUTE_TRACKER_ENABLED ? <GtagRouteTracker /> : null}
-        <KakaoMapSdkScript appKey={kakaoAppKey} />
+        <ConditionalKakaoMapSdk appKey={kakaoAppKey} />
+        {isProd && (GA_MEASUREMENT_ID || CLARITY_PROJECT_ID) ? (
+          <DelayedAnalyticsScripts />
+        ) : null}
         {children}
         <GlobalSeoNav />
         {isProd ? <LazyAdSense client="ca-pub-1201776814995453" /> : null}

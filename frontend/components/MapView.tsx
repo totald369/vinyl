@@ -577,7 +577,9 @@ function MapViewInner({
     }
   }, [userMarkerPosition]);
 
-  return <div ref={containerRef} className="kakao-map-root h-full min-h-0 w-full" />;
+  return (
+    <div ref={containerRef} className="kakao-map-root relative z-[1] h-full min-h-0 w-full" />
+  );
 }
 
 const MapView = memo(MapViewInner);

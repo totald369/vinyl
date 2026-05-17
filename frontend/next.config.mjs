@@ -49,7 +49,7 @@ const nextConfig = {
           {
             key: "Link",
             value:
-              "<https://t1.daumcdn.net>; rel=preconnect, <https://mts.daumcdn.net>; rel=preconnect, <https://dapi.kakao.com>; rel=preconnect"
+              "<https://mts.daumcdn.net>; rel=preconnect, <https://dapi.kakao.com>; rel=preconnect"
           }
         ]
       },
