@@ -1,9 +1,4 @@
-/**
- * Pretendard dynamic subset — unicode-range 별 woff2 분할.
- * 변경 전: local 400/600/700 각 ~267KB (합 ~780KB) 선로드.
- * 변경 후: 필요한 구간만 fetch (초기 한글·라틴 위주 ~100–200KB 수준).
- */
-@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css");
+/* Pretendard: next/font/local (layout.tsx) — 렌더 차단 @import 없음 */
 
 @tailwind base;
 @tailwind components;

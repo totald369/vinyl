@@ -65,7 +65,8 @@ export default function HomeClient({
   }, []);
 
   const { isLoading, error } = useKakaoMapLoader({ enabled: mapSdkEnabled });
-  const { userLocation, permission, requestLocation } = useUserLocation();
+  const { userLocation, permission, geolocationBlocked, requestLocation, syncBrowserPermission } =
+    useUserLocation();
   const {
     locationModalOpen,
     setLocationModalOpen,
@@ -281,28 +282,36 @@ export default function HomeClient({
     return () => cancel(handle);
   }, []);
 
-  const handleMoveToLocation = useCallback(() => {
-    keepSelectedOutsideListRef.current = false;
-    sendGtagEvent("click_my_location");
-    if (permission !== "granted") {
-      setLocationModalOpen(true);
-      return;
-    }
+  const panMapToUserLocation = useCallback(() => {
     setSelectedStore(null);
     setSheetView("list");
     setExploreAnchor(null);
     setMapCenterOverride(null);
-    /** 최신 GPS 로 갱신 — 좌표는 useEffect(permission, userLocation, mapCenterOverride) 가 반영 */
-    requestLocation();
+    if (userLocation) {
+      setManualCenter(userLocation);
+    }
     setCenterVersion((v) => v + 1);
   }, [
-    permission,
-    requestLocation,
+    userLocation,
     setSelectedStore,
-    setLocationModalOpen,
     setSheetView,
     setExploreAnchor,
     setMapCenterOverride
+  ]);
+
+  const handleMoveToLocation = useCallback(() => {
+    keepSelectedOutsideListRef.current = false;
+    sendGtagEvent("click_my_location");
+    panMapToUserLocation();
+    requestLocation();
+    if (permission !== "granted") {
+      setLocationModalOpen(true);
+    }
+  }, [
+    permission,
+    panMapToUserLocation,
+    requestLocation,
+    setLocationModalOpen
   ]);
 
   /**
@@ -319,24 +328,10 @@ export default function HomeClient({
   const handleLocationPermissionAllow = useCallback(() => {
     setLocationModalOpen(false);
     keepSelectedOutsideListRef.current = false;
-    setSelectedStore(null);
-    setSheetView("list");
-    setExploreAnchor(null);
-    setMapCenterOverride(null);
-    if (userLocation) {
-      setManualCenter(userLocation);
-    }
+    panMapToUserLocation();
+    void syncBrowserPermission();
     requestLocation();
-    setCenterVersion((v) => v + 1);
-  }, [
-    requestLocation,
-    setLocationModalOpen,
-    setSelectedStore,
-    setSheetView,
-    setExploreAnchor,
-    setMapCenterOverride,
-    userLocation
-  ]);
+  }, [panMapToUserLocation, requestLocation, setLocationModalOpen, syncBrowserPermission]);
 
   const handleCloseDetail = useCallback(() => {
     keepSelectedOutsideListRef.current = false;
@@ -493,6 +488,7 @@ export default function HomeClient({
 
           <LocationPermissionModal
             open={locationModalOpen}
+            blocked={geolocationBlocked}
             onClose={handleCloseLocationModal}
             onAllow={handleLocationPermissionAllow}
           />

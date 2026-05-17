@@ -31,7 +31,8 @@ type Props = {
 
 export default function DistrictTrashbagClient({ config }: Props) {
   const { isLoading, error } = useKakaoMapLoader();
-  const { userLocation, permission, requestLocation } = useUserLocation();
+  const { userLocation, permission, geolocationBlocked, requestLocation, syncBrowserPermission } =
+    useUserLocation();
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<StoreListFilter>("payBag");
   const [bottomSheetSnap, setBottomSheetSnap] = useState<BottomSheetSnap>("collapsed");
@@ -184,10 +185,6 @@ export default function DistrictTrashbagClient({ config }: Props) {
 
   const handleMoveToLocation = () => {
     sendGtagEvent("click_my_location", { page: config.slug });
-    if (permission !== "granted") {
-      setLocationModalOpen(true);
-      return;
-    }
     setSelectedStore(null);
     setSheetView("list");
     setExploreAnchor(null);
@@ -198,6 +195,10 @@ export default function DistrictTrashbagClient({ config }: Props) {
       setManualCenter(config.mapCenter);
     }
     setCenterVersion((v) => v + 1);
+    requestLocation();
+    if (permission !== "granted") {
+      setLocationModalOpen(true);
+    }
   };
 
   useEffect(() => {
@@ -292,9 +293,11 @@ export default function DistrictTrashbagClient({ config }: Props) {
 
           <LocationPermissionModal
             open={locationModalOpen}
+            blocked={geolocationBlocked}
             onClose={() => setLocationModalOpen(false)}
             onAllow={() => {
               setLocationModalOpen(false);
+              void syncBrowserPermission();
               requestLocation();
             }}
           />

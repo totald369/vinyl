@@ -107,7 +107,8 @@ export default function RegionStoreListClient({ leaf, slugSegments, initialPaylo
   const searchParams = useSearchParams();
   const { isLoading, error } = useKakaoMapLoader();
 
-  const { permission, userLocation, requestLocation } = useUserLocation();
+  const { permission, userLocation, geolocationBlocked, requestLocation, syncBrowserPermission } =
+    useUserLocation();
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -449,23 +450,25 @@ export default function RegionStoreListClient({ leaf, slugSegments, initialPaylo
     [storesById, trackClickRegionStore]
   );
 
-  const handleMoveToLocation = useCallback(() => {
-    sendGtagEvent("click_my_location", { page: "region" });
-    if (permission !== "granted") {
-      setLocationModalOpen(true);
-      return;
-    }
+  const panMapToUserLocation = useCallback(() => {
     setSelectedStore(null);
     setSheetView("list");
     setMapCenterOverride(null);
-    moveToUserAfterLocationRef.current = true;
     if (userLocation) {
       setManualCenter(userLocation);
-      moveToUserAfterLocationRef.current = false;
+      setCenterVersion((v) => v + 1);
     }
+  }, [userLocation]);
+
+  const handleMoveToLocation = useCallback(() => {
+    sendGtagEvent("click_my_location", { page: "region" });
+    panMapToUserLocation();
+    moveToUserAfterLocationRef.current = permission !== "granted";
     requestLocation();
-    setCenterVersion((v) => v + 1);
-  }, [permission, userLocation, requestLocation]);
+    if (permission !== "granted") {
+      setLocationModalOpen(true);
+    }
+  }, [permission, panMapToUserLocation, requestLocation]);
 
   useEffect(() => {
     if (!moveToUserAfterLocationRef.current) return;
@@ -493,15 +496,11 @@ export default function RegionStoreListClient({ leaf, slugSegments, initialPaylo
    */
   const handleLocationPermissionAllow = useCallback(() => {
     setLocationModalOpen(false);
-    setSelectedStore(null);
-    setSheetView("list");
-    setMapCenterOverride(null);
-    if (userLocation) {
-      setManualCenter(userLocation);
-    }
+    panMapToUserLocation();
+    moveToUserAfterLocationRef.current = true;
+    void syncBrowserPermission();
     requestLocation();
-    setCenterVersion((v) => v + 1);
-  }, [requestLocation, userLocation]);
+  }, [panMapToUserLocation, requestLocation, syncBrowserPermission]);
 
   const handleFilterChange = useCallback(
     (f: StoreListFilter) => {
@@ -862,6 +861,7 @@ export default function RegionStoreListClient({ leaf, slugSegments, initialPaylo
 
           <LocationPermissionModal
             open={locationModalOpen}
+            blocked={geolocationBlocked}
             onClose={() => setLocationModalOpen(false)}
             onAllow={handleLocationPermissionAllow}
           />
