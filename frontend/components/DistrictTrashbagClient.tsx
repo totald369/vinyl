@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BottomSheetList from "@/components/BottomSheetList";
 import HomeSearchOverlay from "@/components/HomeSearchOverlay";
 import LocationPermissionModal from "@/components/LocationPermissionModal";
@@ -132,11 +132,12 @@ export default function DistrictTrashbagClient({ config }: Props) {
     return [selectedStore, ...sortedStores];
   }, [selectedStore, sortedStores]);
 
-  /** LCP: 구역 기본 좌표로 먼저 타일 요청 → 위치 확보 후 pan (exploreAnchor·override 우선) */
-  const center = useMemo(
-    () => mapCenterOverride ?? exploreAnchor ?? manualCenter ?? userLocation,
-    [exploreAnchor, mapCenterOverride, manualCenter, userLocation]
-  );
+  const center = useMemo(() => {
+    if (mapCenterOverride) return mapCenterOverride;
+    if (exploreAnchor) return exploreAnchor;
+    if (permission === "granted" && userLocation) return userLocation;
+    return manualCenter;
+  }, [exploreAnchor, manualCenter, mapCenterOverride, permission, userLocation]);
 
   const detailAugmenting = useStoreDetailAugment(
     sheetView,
@@ -185,6 +186,8 @@ export default function DistrictTrashbagClient({ config }: Props) {
     setSearchOpen(false);
   };
 
+  const autoCenteredOnGrantRef = useRef(false);
+
   const handleMoveToLocation = () => {
     sendGtagEvent("click_my_location", { page: config.slug });
     setSelectedStore(null);
@@ -197,23 +200,27 @@ export default function DistrictTrashbagClient({ config }: Props) {
       setManualCenter(config.mapCenter);
     }
     setCenterVersion((v) => v + 1);
-    requestLocation();
-    if (permission !== "granted") {
-      setLocationModalOpen(true);
+    if (permission === "granted") {
+      requestLocation({ silent: !!userLocation });
+      return;
     }
+    requestLocation();
+    setLocationModalOpen(true);
   };
 
   useEffect(() => {
-    if (permission !== "granted" || !userLocation || mapCenterOverride || exploreAnchor) return;
-    const apply = () => {
-      setManualCenter(userLocation);
-      setCenterVersion((v) => v + 1);
-    };
-    if (typeof requestIdleCallback !== "undefined") {
-      const id = requestIdleCallback(apply, { timeout: 2500 });
-      return () => cancelIdleCallback(id);
+    if (
+      permission !== "granted" ||
+      !userLocation ||
+      mapCenterOverride ||
+      exploreAnchor ||
+      autoCenteredOnGrantRef.current
+    ) {
+      return;
     }
-    apply();
+    autoCenteredOnGrantRef.current = true;
+    setManualCenter(userLocation);
+    setCenterVersion((v) => v + 1);
   }, [exploreAnchor, mapCenterOverride, permission, userLocation]);
 
   useEffect(() => {

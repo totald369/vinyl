@@ -19,7 +19,6 @@ import { StoreData, useStores } from "@/hooks/useStores";
 import { useDeferMapMarkersAfterList } from "@/hooks/useDeferMapMarkersAfterList";
 import { useUserLocation } from "@/hooks/useUserLocation";
 import { prefetchStoreDetail } from "@/lib/storeDetailClient";
-import { KAKAO_MAP_FIRST_IDLE_EVENT } from "@/lib/kakao/createKakaoMap";
 import { perfTimeEnd, perfTimeStart } from "@/lib/perfMarks";
 import { DEFAULT_REGION, type LatLng } from "@/lib/types";
 
@@ -86,6 +85,8 @@ export default function HomeClient({
   } = useMapCenterController();
   const detailOpenInFlightRef = useRef(false);
   const keepSelectedOutsideListRef = useRef(false);
+  /** granted 자동 센터링은 최초 1회만 — 이후 GPS 갱신·수동 이동을 덮어쓰지 않음 */
+  const autoCenteredOnGrantRef = useRef(false);
   const handleSelectStoreWithPanRef = useRef<(store: StoreData, fromShort?: boolean) => void>(
     () => undefined
   );
@@ -124,13 +125,13 @@ export default function HomeClient({
     return [selectedStore, ...sortedStores];
   }, [selectedStore, sortedStores, sortedStoreIdSet]);
 
-  /** LCP: SSR/defaultCenter 로 먼저 타일 → 캐시된 GPS 는 첫 idle 이후 pan */
-  const centerLat = mapCenterOverride?.lat ?? manualCenter.lat ?? userLocation?.lat;
-  const centerLng = mapCenterOverride?.lng ?? manualCenter.lng ?? userLocation?.lng;
-  const center = useMemo(
-    () => ({ lat: centerLat, lng: centerLng }),
-    [centerLat, centerLng]
-  );
+  const center = useMemo(() => {
+    if (mapCenterOverride) return mapCenterOverride;
+    if (permission === "granted" && userLocation) return userLocation;
+    return manualCenter;
+  }, [manualCenter, mapCenterOverride, permission, userLocation]);
+  const centerLat = center.lat;
+  const centerLng = center.lng;
 
   const listReady = !loading && sortedStores.length > 0;
   const mapMarkerResetKey = `${centerLat.toFixed(4)},${centerLng.toFixed(4)}:${activeFilter}:${sortedStores.length}`;
@@ -293,15 +294,18 @@ export default function HomeClient({
     keepSelectedOutsideListRef.current = false;
     sendGtagEvent("click_my_location");
     panMapToUserLocation();
-    requestLocation();
-    if (permission !== "granted") {
-      setLocationModalOpen(true);
+    if (permission === "granted") {
+      requestLocation({ silent: !!userLocation });
+      return;
     }
+    requestLocation();
+    setLocationModalOpen(true);
   }, [
     permission,
     panMapToUserLocation,
     requestLocation,
-    setLocationModalOpen
+    setLocationModalOpen,
+    userLocation
   ]);
 
   /**
@@ -350,21 +354,12 @@ export default function HomeClient({
   }, [permission]);
 
   useEffect(() => {
-    if (permission !== "granted" || !userLocation || mapCenterOverride) return;
-
-    const apply = () => {
-      setManualCenter(userLocation);
-      setCenterVersion((v) => v + 1);
-    };
-
-    const onFirstIdle = () => apply();
-    window.addEventListener(KAKAO_MAP_FIRST_IDLE_EVENT, onFirstIdle, { once: true });
-    const fallback = window.setTimeout(apply, 2000);
-
-    return () => {
-      window.removeEventListener(KAKAO_MAP_FIRST_IDLE_EVENT, onFirstIdle);
-      window.clearTimeout(fallback);
-    };
+    if (permission !== "granted" || !userLocation || mapCenterOverride || autoCenteredOnGrantRef.current) {
+      return;
+    }
+    autoCenteredOnGrantRef.current = true;
+    setManualCenter(userLocation);
+    setCenterVersion((v) => v + 1);
   }, [permission, userLocation, mapCenterOverride]);
 
   useEffect(() => {
