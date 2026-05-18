@@ -5,7 +5,7 @@ import Script from "next/script";
 import { CLARITY_PROJECT_ID } from "@/lib/clarity";
 import { GA_MEASUREMENT_ID } from "@/lib/gtag";
 
-const INTERACTION_EVENTS = ["scroll", "click", "touchstart", "keydown"] as const;
+const INTERACTION_EVENTS = ["scroll", "click", "touchstart", "mousemove", "keydown"] as const;
 const AUTO_LOAD_MS = 5000;
 
 /**

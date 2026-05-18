@@ -48,8 +48,7 @@ const getInitialStoresCached = unstable_cache(
   { revalidate: 3600 }
 );
 
-export default async function HomePage() {
-  const initialStores = await getInitialStoresCached();
+export default function HomePage() {
   return (
     <>
       <HomeMapLcpImage />
@@ -59,8 +58,13 @@ export default async function HomePage() {
         수 있습니다.
       </p>
       <Suspense fallback={<HomePageSkeleton />}>
-        <HomeClient initialStores={initialStores} />
+        <HomeStoresClient />
       </Suspense>
     </>
   );
+}
+
+async function HomeStoresClient() {
+  const initialStores = await getInitialStoresCached();
+  return <HomeClient initialStores={initialStores} />;
 }

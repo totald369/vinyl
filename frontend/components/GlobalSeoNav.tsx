@@ -34,11 +34,19 @@ export default function GlobalSeoNav() {
           </span>
         ))}
         <span aria-hidden>·</span>
-        <Link href="/report" className="underline-offset-[3px] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+        <Link
+          href="/report"
+          prefetch={false}
+          className="underline-offset-[3px] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+        >
           판매처 제보
         </Link>
         <span aria-hidden>·</span>
-        <Link href="/edit-request" className="underline-offset-[3px] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+        <Link
+          href="/edit-request"
+          prefetch={false}
+          className="underline-offset-[3px] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+        >
           정보 수정 요청
         </Link>
       </span>
