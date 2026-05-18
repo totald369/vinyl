@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import StoreShareFallback from "@/components/StoreShareFallback";
 import type { StoreData } from "@/hooks/useStores";
 import { SHOW_STORE_EDIT_REQUEST_BUTTON } from "@/lib/featureFlags";
-import { isValidShortCode } from "@/lib/shortLinkCore";
+import { isValidShortCode } from "@/lib/shortLink";
 import type { StoreShareFallbackPayload } from "@/lib/storeShareClient";
 import { getShareButtonHint, shareStoreWithTracking } from "@/lib/storeShareClient";
 

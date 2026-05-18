@@ -8,7 +8,6 @@
     "dev:clean": "rm -rf .next && node scripts/next-dev.js",
     "dev:poll": "rm -rf .next && NEXT_DEV_POLL=1 node scripts/next-dev.js",
     "build": "tsx scripts/build-merged-cache.ts && node scripts/generate-map-placeholder.mjs && next build",
-    "analyze": "ANALYZE=true npm run build",
     "data:build-cache": "tsx scripts/build-merged-cache.ts",
     "start": "next start",
     "lint": "next lint",
@@ -39,7 +38,6 @@
     "not ie 11"
   ],
   "devDependencies": {
-    "@next/bundle-analyzer": "^16.2.6",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.17",
     "@types/react-dom": "^18.3.5",

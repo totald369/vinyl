@@ -1,5 +1,5 @@
 import type { StoreData } from "@/hooks/useStores";
-import { isValidShortCode } from "@/lib/shortLinkCore";
+import { isValidShortCode } from "@/lib/shortLink";
 
 export const DEEPLINK_LOG_PREFIX = "[deeplink]";
 
