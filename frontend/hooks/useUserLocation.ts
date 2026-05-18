@@ -3,10 +3,8 @@
 /**
  * Geolocation + 마지막 성공 좌표 localStorage 캐시.
  *
- * - 페이지 로드 시 getCurrentPosition 호출 안 함 (Lighthouse 신뢰·안전).
- * - Permissions API로 이미 허용(granted)된 경우만 자동 위치 갱신.
- * - 미정/거부는 "내 위치로" 버튼·모달 허용 시에만 requestLocation.
- * - Chrome 등에서 사이트 위치가 "차단"이면 geolocationBlocked + 모달 안내.
+ * - Chrome 등에서 사이트 위치가 "차단"이면 브라우저가 프롬프트를 다시 띄우지 않음 →
+ *   geolocationBlocked + 모달 안내. 저장된 좌표가 있으면 그곳으로는 즉시 이동 가능.
  * - 설정에서 허용 후 탭 복귀 시 visibilitychange 로 권한 재조회.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -15,11 +13,6 @@ import { DEFAULT_REGION, LatLng } from "@/lib/types";
 
 type PermissionState = "unknown" | "granted" | "denied" | "requesting";
 
-export type RequestLocationOptions = {
-  /** 이미 허용된 경우 UI·permission 상태를 requesting 으로 바꾸지 않고 백그라운드 갱신 */
-  silent?: boolean;
-};
-
 export function useUserLocation() {
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [permission, setPermission] = useState<PermissionState>("unknown");
@@ -27,11 +20,9 @@ export function useUserLocation() {
   const [geolocationBlocked, setGeolocationBlocked] = useState(false);
   const userLocationRef = useRef<LatLng | null>(null);
   userLocationRef.current = userLocation;
-  const permissionRef = useRef<PermissionState>("unknown");
-  permissionRef.current = permission;
   const requestGenRef = useRef(0);
 
-  const requestLocation = useCallback((options?: RequestLocationOptions) => {
+  const requestLocation = useCallback(() => {
     if (typeof window === "undefined" || !navigator.geolocation) {
       setPermission("denied");
       setGeolocationBlocked(true);
@@ -42,10 +33,7 @@ export function useUserLocation() {
     }
 
     const gen = ++requestGenRef.current;
-    const silent = options?.silent === true && permissionRef.current === "granted";
-    if (!silent) {
-      setPermission("requesting");
-    }
+    setPermission("requesting");
     navigator.geolocation.getCurrentPosition(
       (position) => {
         if (gen !== requestGenRef.current) return;
@@ -83,6 +71,7 @@ export function useUserLocation() {
   const syncBrowserPermission = useCallback(async () => {
     if (typeof window === "undefined") return;
     if (!navigator.permissions?.query) {
+      requestLocation();
       return;
     }
     try {
@@ -91,8 +80,7 @@ export function useUserLocation() {
       });
       if (status.state === "granted") {
         setGeolocationBlocked(false);
-        setPermission("granted");
-        requestLocation({ silent: !!userLocationRef.current });
+        requestLocation();
         return;
       }
       if (status.state === "denied") {
@@ -103,7 +91,7 @@ export function useUserLocation() {
       setGeolocationBlocked(false);
       setPermission("unknown");
     } catch {
-      /* Permissions API 실패 시 자동 geolocation 호출 안 함 */
+      requestLocation();
     }
   }, [requestLocation]);
 
@@ -119,10 +107,7 @@ export function useUserLocation() {
 
     (async () => {
       if (!navigator.permissions?.query) {
-        if (!cancelled) {
-          setGeolocationBlocked(false);
-          setPermission("unknown");
-        }
+        if (!cancelled) requestLocation();
         return;
       }
       try {
@@ -134,8 +119,7 @@ export function useUserLocation() {
         const onChange = () => {
           if (status.state === "granted") {
             setGeolocationBlocked(false);
-            setPermission("granted");
-            requestLocation({ silent: !!userLocationRef.current });
+            requestLocation();
           } else if (status.state === "denied") {
             setGeolocationBlocked(true);
             setPermission("denied");
@@ -145,24 +129,17 @@ export function useUserLocation() {
           }
         };
 
-        if (status.state === "granted") {
-          setGeolocationBlocked(false);
-          setPermission("granted");
-          if (!cancelled) {
-            requestLocation({ silent: !!readLastKnownGeo() });
-          }
-        } else if (status.state === "denied") {
+        if (status.state === "denied") {
           setGeolocationBlocked(true);
           setPermission("denied");
         } else {
-          setGeolocationBlocked(false);
-          setPermission("unknown");
+          if (!cancelled) requestLocation();
         }
 
         status.addEventListener("change", onChange);
         detachPerm = () => status.removeEventListener("change", onChange);
       } catch {
-        if (!cancelled) setPermission("unknown");
+        if (!cancelled) requestLocation();
       }
     })();
 

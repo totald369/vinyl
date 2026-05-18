@@ -463,15 +463,12 @@ export default function RegionStoreListClient({ leaf, slugSegments, initialPaylo
   const handleMoveToLocation = useCallback(() => {
     sendGtagEvent("click_my_location", { page: "region" });
     panMapToUserLocation();
-    if (permission === "granted") {
-      moveToUserAfterLocationRef.current = !userLocation;
-      requestLocation({ silent: !!userLocation });
-      return;
-    }
-    moveToUserAfterLocationRef.current = true;
+    moveToUserAfterLocationRef.current = permission !== "granted";
     requestLocation();
-    setLocationModalOpen(true);
-  }, [permission, panMapToUserLocation, requestLocation, userLocation]);
+    if (permission !== "granted") {
+      setLocationModalOpen(true);
+    }
+  }, [permission, panMapToUserLocation, requestLocation]);
 
   useEffect(() => {
     if (!moveToUserAfterLocationRef.current) return;
