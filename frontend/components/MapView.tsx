@@ -4,6 +4,7 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { StoreData, StoreListFilter } from "@/hooks/useStores";
 import type { KakaoMap, KakaoMapPoint, KakaoMarker } from "@/lib/kakao";
 import {
+  clampKakaoMapLevel,
   createKakaoMap,
   notifyKakaoMapReady,
   onKakaoMapFirstIdleOnce,
@@ -413,7 +414,7 @@ function MapViewInner({
     prevCenterVersionRef.current = centerVersion;
     mapRef.current.setCenter(new window.kakao.maps.LatLng(lat, lng));
     if (preferredMapLevel != null && Number.isFinite(preferredMapLevel)) {
-      mapRef.current.setLevel(Math.max(1, Math.min(14, Math.round(preferredMapLevel))));
+      mapRef.current.setLevel(clampKakaoMapLevel(preferredMapLevel));
     }
   }, [center.lat, center.lng, centerVersion, preferredMapLevel]);
 

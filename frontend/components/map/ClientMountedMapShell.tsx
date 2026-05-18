@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import MapLcpPlaceholder from "@/components/MapLcpPlaceholder";
 import MapSkeleton from "@/components/MapSkeleton";
 
 type Props = {
@@ -28,7 +27,6 @@ export default function ClientMountedMapShell({
 
   return (
     <div id={id} className={className}>
-      <MapLcpPlaceholder />
       {mounted ? (
         <>
           {children}
