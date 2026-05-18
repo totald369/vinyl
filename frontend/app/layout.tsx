@@ -7,16 +7,13 @@ import ConditionalKakaoMapSdk from "@/components/ConditionalKakaoMapSdk";
 import { DelayedAnalyticsScripts } from "@/components/DelayedAnalyticsScripts";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import GlobalSeoNav from "@/components/GlobalSeoNav";
+import { GtagRouteTracker } from "@/components/GtagRouteTracker";
 import { CLARITY_PROJECT_ID } from "@/lib/clarity";
-import { GA_MEASUREMENT_ID, GA_ROUTE_TRACKER_ENABLED } from "@/lib/gtag";
 
-const GtagRouteTracker = dynamic(
-  () => import("@/components/GtagRouteTracker").then((m) => ({ default: m.GtagRouteTracker })),
-  { ssr: false }
-);
 const WebVitalsReporter = dynamic(() => import("@/components/WebVitalsReporter"), {
   ssr: false
 });
+import { GA_MEASUREMENT_ID, GA_ROUTE_TRACKER_ENABLED } from "@/lib/gtag";
 import { SITE_URL } from "@/lib/site";
 import {
   DEFAULT_OG_IMAGE_ALT,

@@ -9,7 +9,7 @@ import LocationRequestingOverlay from "@/components/LocationRequestingOverlay";
 import type { StoreListFilter } from "@/hooks/useStores";
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
 import { sendGtagEvent } from "@/lib/gtag";
-import { DEEPLINK_SHORT_STORAGE_KEY, isValidShortCode } from "@/lib/shortLinkCore";
+import { DEEPLINK_SHORT_STORAGE_KEY, isValidShortCode } from "@/lib/shortLink";
 import { useDeepLinkResolver } from "@/hooks/useDeepLinkResolver";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
 import { useMapCenterController } from "@/hooks/useMapCenterController";
@@ -479,7 +479,6 @@ export default function HomeClient({
           {SHOW_HOME_REPORT_BUTTON && bottomSheetSnap === "collapsed" && sheetView === "list" ? (
             <Link
               href="/report"
-              prefetch={false}
               onClick={() => sendGtagEvent("click_report")}
               className="absolute bottom-[43vh] right-[15px] z-[35] flex items-center gap-0.5 rounded-full bg-[#d4fe1c] px-4 py-3 text-[16px] font-bold leading-normal tracking-[0.1px] text-[#171717] shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)] pointer-events-auto"
             >
