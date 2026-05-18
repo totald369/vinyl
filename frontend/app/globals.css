@@ -16,7 +16,8 @@ body {
   width: 100%;
   height: 100%;
   min-height: 0;
-  contain: layout size paint;
+  contain: layout style paint size;
+  content-visibility: auto;
   background-color: #e8ebef;
 }
 

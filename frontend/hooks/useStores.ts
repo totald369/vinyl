@@ -12,7 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { expandProvinceAliasesForSearch } from "@/lib/koreaProvinceAliases";
-import { parseSearchTokens, precomputeHangulTokens, textMatchesAllTokens } from "@/lib/searchTokens";
+import { parseSearchTokens, textMatchesAllTokens } from "@/lib/searchTokens";
 import type { StoreData } from "@/lib/storeData";
 import { perfTimeEnd, perfTimeStart } from "@/lib/perfMarks";
 import { DEFAULT_REGION, LatLng } from "@/lib/types";
@@ -138,12 +138,31 @@ export function useStores(
   const [searchLoadingMore, setSearchLoadingMore] = useState(false);
   const searchFetchGen = useRef(0);
   const mainAbortRef = useRef<AbortController | null>(null);
+  const hangulTokensModuleRef = useRef<typeof import("@/lib/searchTokensHangul") | null>(null);
+  const [hangulTokensEpoch, setHangulTokensEpoch] = useState(0);
 
   const searchQuery = options?.searchQuery ?? "";
   const debouncedSearch = useDebounced(searchQuery.trim(), 320);
 
   const districtSlug = options?.districtSlug;
   const districtScope = options?.districtScope;
+
+  /** 지역 주소 필터에만 es-hangul 필요 — 홈 진입 번들에서 분리 */
+  useEffect(() => {
+    if (!districtScope?.addressContains?.trim()) {
+      hangulTokensModuleRef.current = null;
+      return;
+    }
+    let cancelled = false;
+    void import("@/lib/searchTokensHangul").then((mod) => {
+      if (cancelled) return;
+      hangulTokensModuleRef.current = mod;
+      setHangulTokensEpoch((n) => n + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [districtScope?.addressContains]);
 
   const listRef = options?.listReference ?? null;
 
@@ -416,7 +435,10 @@ export function useStores(
     const filter = options?.activeFilter ?? "payBag";
     const ds = options?.districtScope;
     const addrTokens = ds ? parseSearchTokens(ds.addressContains) : [];
-    const addrHangulTokens = addrTokens.length ? precomputeHangulTokens(addrTokens) : undefined;
+    const addrHangulTokens =
+      addrTokens.length && hangulTokensModuleRef.current
+        ? hangulTokensModuleRef.current.precomputeHangulTokens(addrTokens)
+        : undefined;
     const maxRadiusKm =
       ds != null
         ? ds.listRadiusKm == null
@@ -460,7 +482,8 @@ export function useStores(
     stores,
     userLocation,
     fetchCenter.lat,
-    fetchCenter.lng
+    fetchCenter.lng,
+    hangulTokensEpoch
   ]);
 
   const defaultCenter = useMemo(

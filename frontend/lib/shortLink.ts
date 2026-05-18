@@ -1,31 +1,24 @@
 import { SITE_URL } from "@/lib/site";
+import { isValidShortCode, type WithOptionalShortCode } from "@/lib/shortLinkCore";
 
-/** 6 chars: A–Z a–z 0–9 (URL-safe, unreserved) */
-export const SHORT_CODE_REGEX = /^[a-zA-Z0-9]{6}$/;
-
-/** Set before navigating home so `?s=` can be restored if the query is dropped (some desktop clients). */
-export const DEEPLINK_SHORT_STORAGE_KEY = "trashbagmap_deeplink_s";
+export {
+  DEEPLINK_SHORT_STORAGE_KEY,
+  isValidShortCode,
+  SHORT_CODE_REGEX,
+  type WithOptionalShortCode
+} from "@/lib/shortLinkCore";
 
 const SHORT_CODE_LENGTH = 6;
 const CHARSET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
-export type WithOptionalShortCode = { shortCode?: string };
-
-export function isValidShortCode(value: string | undefined | null): value is string {
-  return typeof value === "string" && SHORT_CODE_REGEX.test(value);
-}
-
-/** Unpredictable short code using crypto RNG */
+/** Unpredictable short code using Web Crypto (browser + modern Node). */
 export function generateShortCode(): string {
   const bytes = new Uint8Array(SHORT_CODE_LENGTH);
-  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
-    crypto.getRandomValues(bytes);
-  } else {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const nodeCrypto = require("crypto") as typeof import("crypto");
-    const buf = nodeCrypto.randomBytes(SHORT_CODE_LENGTH);
-    for (let i = 0; i < SHORT_CODE_LENGTH; i++) bytes[i] = buf[i]!;
+  const cryptoObj = globalThis.crypto;
+  if (!cryptoObj?.getRandomValues) {
+    throw new Error("generateShortCode requires Web Crypto getRandomValues");
   }
+  cryptoObj.getRandomValues(bytes);
   let out = "";
   for (let i = 0; i < SHORT_CODE_LENGTH; i++) {
     out += CHARSET[bytes[i]! % CHARSET.length]!;
@@ -55,9 +48,7 @@ export function stableShortCodeFromSeed(seed: string): string {
  * Runtime must not generate new shortCode.
  * Missing/invalid/duplicate codes should be fixed by `npm run shortcodes:assign`.
  */
-export function ensureShortCodesOnStores<T extends WithOptionalShortCode>(
-  stores: T[]
-): T[] {
+export function ensureShortCodesOnStores<T extends WithOptionalShortCode>(stores: T[]): T[] {
   const counts = new Map<string, number>();
   let missingOrInvalid = 0;
   for (const s of stores) {

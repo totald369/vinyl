@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import BottomSheetList from "@/components/BottomSheetList";
 import HomeMapStage from "@/components/home/HomeMapStage";
 import LocationRequestingOverlay from "@/components/LocationRequestingOverlay";
 import type { StoreListFilter } from "@/hooks/useStores";
@@ -29,6 +28,10 @@ import { DEFAULT_REGION, type LatLng } from "@/lib/types";
  * 지도 영역: memo된 HomeMapStage — 부모 리렌더와 지도 커밋 경계 분리.
  * [LCP] 조건부 UI는 dynamic import로 초기 번들에서 분리.
  */
+const BottomSheetList = dynamic(() => import("@/components/BottomSheetList"), {
+  ssr: false,
+  loading: () => null
+});
 const HomeSearchOverlay = dynamic(() => import("@/components/HomeSearchOverlay"), { ssr: false });
 const StoreDetailSheet = dynamic(() => import("@/components/StoreDetailSheet"), { ssr: false });
 const LocationPermissionModal = dynamic(() => import("@/components/LocationPermissionModal"), { ssr: false });

@@ -1,7 +1,8 @@
 import type { StoreData } from "@/lib/storeData";
 import type { StoreListFilter } from "@/hooks/useStores";
 import { expandProvinceAliasesForSearch } from "@/lib/koreaProvinceAliases";
-import { parseSearchTokens, precomputeHangulTokens, textMatchesAllTokens } from "@/lib/searchTokens";
+import { parseSearchTokens, textMatchesAllTokens } from "@/lib/searchTokens";
+import { precomputeHangulTokens } from "@/lib/searchTokensHangul";
 import type { LatLng } from "@/lib/types";
 import { getDistanceKm } from "@/lib/utils";
 

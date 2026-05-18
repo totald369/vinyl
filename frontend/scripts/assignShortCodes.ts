@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
-import { generateShortCode, isValidShortCode } from "@/lib/shortLink";
+import { isValidShortCode } from "@/lib/shortLinkCore";
+import { generateShortCode } from "@/lib/shortLink.server";
 
 type StoreRow = Record<string, unknown> & { shortCode?: string };
 

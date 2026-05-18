@@ -12,7 +12,7 @@ import { SHOW_STORE_EDIT_REQUEST_BUTTON } from "@/lib/featureFlags";
 import type { LatLng } from "@/lib/types";
 import { normalizeProvinceAbbrevForDisplay } from "@/lib/koreaProvinceAliases";
 import { resolveKakaoDirectionsUrl } from "@/lib/kakaoDirectionsUrl";
-import { isValidShortCode } from "@/lib/shortLink";
+import { isValidShortCode } from "@/lib/shortLinkCore";
 import type { StoreShareFallbackPayload } from "@/lib/storeShareClient";
 import {
   getCachedPurchaseFeedbackStats,

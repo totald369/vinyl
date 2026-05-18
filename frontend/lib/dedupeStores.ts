@@ -1,5 +1,5 @@
 /** useStores.StoreData 와 호환되는 행(중복 제거·병합용). */
-import { isValidShortCode } from "@/lib/shortLink";
+import { isValidShortCode } from "@/lib/shortLinkCore";
 
 export type MergeableStore = {
   id: string;

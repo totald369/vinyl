@@ -12,9 +12,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getDistrictTrashbagConfig } from "@/lib/districtTrashbagSeo";
 import {
   parseSearchTokens,
-  precomputeHangulTokens,
   textMatchesAllTokens
 } from "@/lib/searchTokens";
+import { precomputeHangulTokens } from "@/lib/searchTokensHangul";
 import {
   collectGridBucketStores,
   collectStoresWithinRadius,

@@ -16,7 +16,7 @@ import {
   DEEPLINK_LOG_PREFIX,
   fetchStoreByShortCodeOnly
 } from "@/lib/deepLinkShortResolve";
-import { DEEPLINK_SHORT_STORAGE_KEY, isValidShortCode } from "@/lib/shortLink";
+import { DEEPLINK_SHORT_STORAGE_KEY, isValidShortCode } from "@/lib/shortLinkCore";
 
 type Options = {
   router: Pick<AppRouterInstance, "replace">;
