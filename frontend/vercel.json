@@ -1,5 +1,4 @@
 {
-  "regions": ["icn1"],
   "redirects": [
     {
       "source": "/:path*",
