@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useLayoutEffect, useState, type ReactNode } from "react";
 import MapLcpPlaceholder from "@/components/MapLcpPlaceholder";
 import MapSkeleton from "@/components/MapSkeleton";
 
@@ -22,7 +22,8 @@ export default function ClientMountedMapShell({
 }: Props) {
   const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
+  /** useLayoutEffect — paint 전 지도 마운트로 첫 진입 마커 지연 완화 */
+  useLayoutEffect(() => {
     setMounted(true);
   }, []);
 

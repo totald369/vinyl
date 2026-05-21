@@ -130,6 +130,8 @@ export function useStores(
   );
   const hasInitialServerStoresRef = useRef(initialFromServer.length > 0);
   const [stores, setStores] = useState<StoreData[]>(initialFromServer);
+  /** 백그라운드 refetch 시 loading=true 로 마커·리스트를 비우지 않기 위함 */
+  const storesCountRef = useRef(initialFromServer.length);
   const [selectedStore, setSelectedStore] = useState<StoreData | null>(null);
   const [loading, setLoading] = useState(initialFromServer.length === 0);
   const [error, setError] = useState<string | null>(null);
@@ -243,6 +245,7 @@ export function useStores(
     const applyPayload = (payload: CachedPayload, g: number) => {
       if (g !== searchFetchGen.current) return;
       const rows = payload.stores;
+      storesCountRef.current = rows.length;
       if (debouncedSearch) {
         setStores(rows);
         setSearchTotal(typeof payload.total === "number" ? payload.total : rows.length);
@@ -303,7 +306,8 @@ export function useStores(
       return () => ac.abort();
     }
 
-    if (!useServerInitialThisRun) {
+    /** 화면에 이미 매장이 있으면 SWR — loading 으로 마커·리스트 숨기지 않음 */
+    if (!useServerInitialThisRun && storesCountRef.current === 0) {
       setLoading(true);
     }
 

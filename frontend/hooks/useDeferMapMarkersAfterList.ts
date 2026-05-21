@@ -1,50 +1,53 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   KAKAO_MAP_READY_EVENT,
   wasKakaoMapReadyNotified
 } from "@/lib/kakao/createKakaoMap";
 
 type Options = {
-  /** 리스트 데이터 준비(로딩 종료 + 1건 이상) */
+  /** 매장 1건 이상(로딩 중이어도 기존 데이터 있으면 true) */
   listReady: boolean;
-  /** @deprecated 마커 표시 여부에는 사용하지 않음(리셋 시 enable 취소 버그 방지) */
+  /** @deprecated 마커 표시 여부에는 사용하지 않음 */
   resetKey: string;
 };
 
-const READY_FALLBACK_MS = 800;
+const READY_FALLBACK_MS = 400;
 
 /**
- * 리스트 준비 + 지도 Map 인스턴스 생성 후 마커 표시.
+ * 매장 데이터 + 지도 Map 인스턴스 준비 후 마커 표시.
+ * 한 번 표시된 뒤 listReady 가 잠깐 false(백그라운드 refetch)여도 마커를 끄지 않음.
  */
 export function useDeferMapMarkersAfterList({ listReady }: Options): boolean {
   const [showMapMarkers, setShowMapMarkers] = useState(false);
+  const latchedRef = useRef(false);
 
   useEffect(() => {
     if (!listReady) {
-      setShowMapMarkers(false);
+      if (!latchedRef.current) setShowMapMarkers(false);
       return;
     }
 
     let cancelled = false;
 
     const enable = () => {
-      if (!cancelled) setShowMapMarkers(true);
+      if (cancelled) return;
+      latchedRef.current = true;
+      setShowMapMarkers(true);
     };
 
     if (wasKakaoMapReadyNotified()) {
       enable();
+      return;
     }
 
-    const onMapReady = () => enable();
-    window.addEventListener(KAKAO_MAP_READY_EVENT, onMapReady, { once: true });
-
+    window.addEventListener(KAKAO_MAP_READY_EVENT, enable, { once: true });
     const fallback = window.setTimeout(enable, READY_FALLBACK_MS);
 
     return () => {
       cancelled = true;
-      window.removeEventListener(KAKAO_MAP_READY_EVENT, onMapReady);
+      window.removeEventListener(KAKAO_MAP_READY_EVENT, enable);
       window.clearTimeout(fallback);
     };
   }, [listReady]);

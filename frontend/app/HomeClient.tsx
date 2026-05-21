@@ -129,7 +129,8 @@ export default function HomeClient({
     [centerLat, centerLng]
   );
 
-  const listReady = !loading && sortedStores.length > 0;
+  /** 데이터가 있으면 백그라운드 refetch(loading) 중에도 마커·리스트 유지 */
+  const listReady = sortedStores.length > 0;
   const mapMarkerResetKey = `${centerLat.toFixed(4)},${centerLng.toFixed(4)}:${activeFilter}:${sortedStores.length}`;
   const showMapMarkers = useDeferMapMarkersAfterList({
     listReady,
@@ -290,15 +291,18 @@ export default function HomeClient({
     keepSelectedOutsideListRef.current = false;
     sendGtagEvent("click_my_location");
     panMapToUserLocation();
-    requestLocation();
-    if (permission !== "granted") {
-      setLocationModalOpen(true);
+    if (permission === "granted") {
+      requestLocation({ silent: !!userLocation });
+      return;
     }
+    requestLocation();
+    setLocationModalOpen(true);
   }, [
     permission,
     panMapToUserLocation,
     requestLocation,
-    setLocationModalOpen
+    setLocationModalOpen,
+    userLocation
   ]);
 
   /**
