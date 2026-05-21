@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { StoreData, StoreListFilter } from "@/hooks/useStores";
-import type { KakaoMap, KakaoMapPoint, KakaoMarker } from "@/lib/kakao";
+import type { KakaoMap, KakaoMarker } from "@/lib/kakao";
 import {
   createKakaoMap,
   notifyKakaoMapReady,
@@ -11,6 +11,7 @@ import {
   relayoutKakaoMap,
   runKakaoMapsLoad
 } from "@/lib/kakao/createKakaoMap";
+import { pickStoreAtMapClick } from "@/lib/kakao/pickStoreAtMapClick";
 import { syncMarkersWithClusterer, type MarkerClustererLike } from "@/lib/kakao/markerCluster";
 import {
   getStoreMarkerImages,
@@ -39,22 +40,12 @@ type Props = {
 const USER_MARKER_SRC = "/Img/Icon/User_marker.svg";
 const USER_MARKER_SIZE = 64;
 
-const STORE_PICK_MAX_DISTANCE_PX = 58;
-
 /** Before first bounds, cap markers so tiles + LCP stay ahead */
 const PRIORITIZE_BEFORE_BOUNDS = 40;
 /** Hard cap on markers per rebuild */
 const MAX_MAP_MARKERS = 240;
 
 type MapBoundsBox = { swLat: number; swLng: number; neLat: number; neLng: number };
-
-function mapPointToXY(pt: KakaoMapPoint | { x: number; y: number }): { x: number; y: number } {
-  if ("getX" in pt && typeof pt.getX === "function" && typeof pt.getY === "function") {
-    return { x: pt.getX(), y: pt.getY() };
-  }
-  const p = pt as { x: number; y: number };
-  return { x: p.x, y: p.y };
-}
 
 function pickStoresForMapMarkers(
   stores: StoreData[],
@@ -120,8 +111,10 @@ function MapViewInner({
   const mapSizeRef = useRef({ w: 360, h: 640 });
   const mapRef = useRef<KakaoMap | null>(null);
   const storeMarkersRef = useRef<Map<string, KakaoMarker>>(new Map());
+  /** 생성 순서 — 낮을수록 아래 레이어(겹침 시 탭 우선) */
+  const markerStackOrderRef = useRef<Map<string, number>>(new Map());
+  const nextMarkerStackOrderRef = useRef(0);
   const clustererRef = useRef<MarkerClustererLike | null>(null);
-  const markerClickBoundRef = useRef<Set<string>>(new Set());
   const userMarkerRef = useRef<KakaoMarker | null>(null);
   const prevCenterRef = useRef<{ lat: number; lng: number } | null>(null);
   const prevCenterVersionRef = useRef(0);
@@ -271,53 +264,14 @@ function MapViewInner({
         const mouseEvent = args[0] as { latLng: { getLat: () => number; getLng: () => number } };
         if (!mouseEvent?.latLng) return;
 
-        const list = storesPickRef.current;
-        if (!list.length) return;
-
-        const proj = map.getProjection();
-        if (!proj?.pointFromCoords) return;
-
-        const clickLat = mouseEvent.latLng.getLat();
-        const clickLng = mouseEvent.latLng.getLng();
-        const clickXY = mapPointToXY(proj.pointFromCoords(mouseEvent.latLng));
-
-        let latRadius = 0.005;
-        let lngRadius = 0.005;
-        try {
-          const b = map.getBounds();
-          const sw = b.getSouthWest();
-          const ne = b.getNorthEast();
-          const mapWidthPx = mapSizeRef.current.w;
-          const mapHeightPx = mapSizeRef.current.h;
-          const pxPerLat = mapHeightPx / Math.max(1e-6, ne.getLat() - sw.getLat());
-          const pxPerLng = mapWidthPx / Math.max(1e-6, ne.getLng() - sw.getLng());
-          latRadius = (STORE_PICK_MAX_DISTANCE_PX / pxPerLat) * 1.2;
-          lngRadius = (STORE_PICK_MAX_DISTANCE_PX / pxPerLng) * 1.2;
-        } catch {
-          /* bounds not ready */
-        }
-
-        let best: StoreData | null = null;
-        let bestDist = Infinity;
-
-        for (const store of list) {
-          const lat = Number(store.lat);
-          const lng = Number(store.lng);
-          if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-          if (Math.abs(lat - clickLat) > latRadius) continue;
-          if (Math.abs(lng - clickLng) > lngRadius) continue;
-
-          const mXY = mapPointToXY(proj.pointFromCoords(new kakao.LatLng(lat, lng)));
-          const d = Math.hypot(mXY.x - clickXY.x, mXY.y - clickXY.y);
-          if (d <= STORE_PICK_MAX_DISTANCE_PX && d < bestDist) {
-            bestDist = d;
-            best = store;
-          }
-        }
-
-        if (best) {
-          onSelectStoreRef.current(best);
-        }
+        const best = pickStoreAtMapClick(
+          map,
+          mouseEvent.latLng,
+          storesPickRef.current,
+          markerStackOrderRef.current,
+          mapSizeRef.current
+        );
+        if (best) onSelectStoreRef.current(best);
       };
 
       if (!pickListenerAttachedRef.current) {
@@ -393,7 +347,8 @@ function MapViewInner({
       clustererRef.current = null;
       storeMarkersRef.current.forEach((m) => m.setMap(null));
       storeMarkersRef.current.clear();
-      markerClickBoundRef.current.clear();
+      markerStackOrderRef.current.clear();
+      nextMarkerStackOrderRef.current = 0;
     };
   }, []);
 
@@ -438,7 +393,7 @@ function MapViewInner({
       if (!desired.has(id)) {
         cur.get(id)!.setMap(null);
         cur.delete(id);
-        markerClickBoundRef.current.delete(id);
+        markerStackOrderRef.current.delete(id);
       }
     }
 
@@ -453,24 +408,19 @@ function MapViewInner({
       const image = isSelected ? images.selected : images.normal;
       let marker = cur.get(store.id);
 
+      if (!markerStackOrderRef.current.has(store.id)) {
+        markerStackOrderRef.current.set(store.id, nextMarkerStackOrderRef.current++);
+      }
+
       if (!marker) {
         marker = new kakao.Marker({
           map,
           position: new kakao.LatLng(lat, lng),
           image,
-          clickable: true,
+          /** 지도 click 으로만 선택 — z-index 상단 마커가 클릭을 가로채지 않음 */
+          clickable: false,
           zIndex: isSelected ? 100 : 1
         });
-        if (!markerClickBoundRef.current.has(store.id)) {
-          markerClickBoundRef.current.add(store.id);
-          const storeId = store.id;
-          kakao.event.addListener(marker, "click", () => {
-            const hit =
-              storesPickRef.current.find((s) => s.id === storeId) ??
-              stores.find((s) => s.id === storeId);
-            if (hit) onSelectStoreRef.current(hit);
-          });
-        }
         cur.set(store.id, marker);
       } else {
         marker.setPosition(new kakao.LatLng(lat, lng));
