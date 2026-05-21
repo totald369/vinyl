@@ -32,11 +32,7 @@ import {
   type RegionSeoCategory
 } from "@/lib/regionPageMetadata";
 import type { StoreData } from "@/lib/storeData";
-/**
- * server-only 모듈에서 타입만 가져온다 — `import type` 으로 표기해 webpack 모듈 그래프에
- * 실제 구현(getStoreSearchIndexes 등) 이 끌려오지 않도록 보장.
- */
-import type { RegionInitialPayload } from "@/lib/server/regionPayload";
+import { REGION_LIST_PAGE_SIZE } from "@/lib/regionListConfig";
 import { DEFAULT_REGION, type LatLng } from "@/lib/types";
 import { getDistanceKm } from "@/lib/utils";
 
@@ -94,15 +90,9 @@ function centroidFromStores(list: StoreData[]): LatLng | null {
 type Props = {
   leaf: ResolvedRegionLeaf;
   slugSegments: string[];
-  /**
-   * server component(`app/regions/[...slug]/page.tsx`) 가 ISR(600s) 로 빌드한 첫 페이지 데이터.
-   * 마운트 즉시 사용 → CSR fetch round-trip 1회 + spinner 노출 시간 제거.
-   * URL 의 ?filter 가 기본값(payBag) 일 때만 사용, 그 외 카테고리는 클라이언트가 fetch.
-   */
-  initialPayload?: RegionInitialPayload;
 };
 
-export default function RegionStoreListClient({ leaf, slugSegments, initialPayload }: Props) {
+export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isLoading, error } = useKakaoMapLoader();
@@ -125,23 +115,12 @@ export default function RegionStoreListClient({ leaf, slugSegments, initialPaylo
     parseRegionCategoryParam(searchParams.get("filter") ?? undefined)
   );
 
-  /**
-   * SSR 초기 페이로드는 category === initialPayload.category 일 때만 채택.
-   * URL ?filter 가 비-기본일 경우 클라이언트가 fetch 로 보강 → 두 경로 모두 안전.
-   */
-  const useInitialPayload = !!initialPayload && initialPayload.category === category;
-
-  const [stores, setStores] = useState<StoreData[]>(() =>
-    useInitialPayload ? (initialPayload!.stores as StoreData[]) : []
-  );
-  const [total, setTotal] = useState(useInitialPayload ? initialPayload!.total : 0);
-  const [offset, setOffset] = useState(useInitialPayload ? initialPayload!.stores.length : 0);
-  const [hasMore, setHasMore] = useState(useInitialPayload ? initialPayload!.hasMore : false);
-  const [loading, setLoading] = useState(!useInitialPayload);
+  const [stores, setStores] = useState<StoreData[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-
-  /** 첫 useEffect[runReload] 실행을 한 번 skip 하기 위한 latch. SSR 데이터가 있을 때만 켜진다. */
-  const initialFetchSkipRef = useRef(useInitialPayload);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const trackedOpenRef = useRef(false);
@@ -314,7 +293,7 @@ export default function RegionStoreListClient({ leaf, slugSegments, initialPaylo
           regionPath,
           category,
           offset: startOffset,
-          limit: 40
+          limit: REGION_LIST_PAGE_SIZE
         });
         setTotal(data.total ?? 0);
         setHasMore(data.hasMore === true);
@@ -348,14 +327,6 @@ export default function RegionStoreListClient({ leaf, slugSegments, initialPaylo
   }, [loading, loadingMore, offset, runReload]);
 
   useEffect(() => {
-    /**
-     * SSR initialPayload 로 이미 첫 페이지 데이터가 채워져 있으면 첫 fetch 1회 skip.
-     * 이후 category 변경(runReload 재생성) 부터는 정상 수행.
-     */
-    if (initialFetchSkipRef.current) {
-      initialFetchSkipRef.current = false;
-      return;
-    }
     void runReload(0, false);
   }, [runReload]);
 
@@ -615,14 +586,17 @@ export default function RegionStoreListClient({ leaf, slugSegments, initialPaylo
   const listStatsSlot = (
     <div className="shrink-0 pb-2 pt-4">
       <div className="min-h-[20px]">
-        {!loading ? (
+        {loading ? (
+          <div
+            className="ml-2 h-[14px] w-[72px] animate-pulse rounded-[6px] bg-neutral-200"
+            aria-hidden
+          />
+        ) : (
           <p className="pl-2 text-[14px] tracking-[0.1px] text-black">
             <span className="font-normal">총 </span>
             <span className="font-bold tabular-nums">{total}</span>
             <span className="font-normal">건</span>
           </p>
-        ) : (
-          <p className="pl-2 text-[14px] font-normal text-[#999]">불러오는 중…</p>
         )}
       </div>
       <div className="min-h-[18px] pt-2">

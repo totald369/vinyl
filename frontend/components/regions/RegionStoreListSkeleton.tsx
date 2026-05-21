@@ -63,9 +63,10 @@ export default function RegionStoreListSkeleton() {
 
             <div className="mt-2 min-h-0 flex-1 overflow-hidden px-0">
               <div className="shrink-0 pb-2 pt-4">
-                <p className="pl-2 text-[14px] font-normal text-[#999999]" role="status">
-                  불러오는 중…
-                </p>
+                <div
+                  className="ml-2 h-[14px] w-[72px] animate-pulse rounded-[6px] bg-neutral-200"
+                  aria-hidden
+                />
               </div>
               <RegionStoreListRowSkeletons />
             </div>

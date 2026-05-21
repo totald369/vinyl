@@ -10,6 +10,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { getDistrictTrashbagConfig } from "@/lib/districtTrashbagSeo";
+import { REGION_LIST_PAGE_SIZE } from "@/lib/regionListConfig";
 import {
   parseSearchTokens,
   precomputeHangulTokens,
@@ -91,7 +92,7 @@ const SEARCH_PAGE_DEFAULT = 30;
 const SEARCH_PAGE_MAX = 200;
 
 /** 지역 목록 무한 스크롤 페이지 크기 */
-const REGION_PAGE_DEFAULT = 40;
+const REGION_PAGE_DEFAULT = REGION_LIST_PAGE_SIZE;
 const REGION_PAGE_MAX = 120;
 
 function parseRegionOffsetLimit(searchParams: URLSearchParams): { offset: number; limit: number } {

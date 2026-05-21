@@ -7,7 +7,6 @@ import RegionStoreListSkeleton from "@/components/regions/RegionStoreListSkeleto
 import { resolveRegionLeafFromSlugPath } from "@/lib/koreaRegions";
 import { buildRegionStoreMetadata } from "@/lib/regionPageMetadata";
 import { SITE_BRAND_KO } from "@/lib/seoBrand";
-import { buildRegionInitialPayload } from "@/lib/server/regionPayload";
 
 type PageProps = {
   params: { slug: string[] };
@@ -43,22 +42,10 @@ export default function RegionsLeafPage({ params }: PageProps) {
   const leaf = resolveRegionLeafFromSlugPath(segs);
   if (!leaf) notFound();
 
-  /**
-   * SSR 초기 페이로드는 기본 카테고리(payBag) 로만 빌드한다.
-   * URL ?filter=nonBurnable 등 비-기본 카테고리는 클라이언트에서 fetch 로 보강.
-   * - 대부분의 사용자가 기본값으로 진입 → SSR/ISR 캐시 효율 최대.
-   * - searchParams 를 page 가 사용하면 dynamic mode 가 되어 ISR 캐시가 풀린다.
-   */
-  const initialPayload = buildRegionInitialPayload(leaf, "payBag");
-
   return (
     <>
       <Suspense fallback={<RegionStoreListSkeleton />}>
-        <RegionStoreListClient
-          leaf={leaf}
-          slugSegments={segs}
-          initialPayload={initialPayload}
-        />
+        <RegionStoreListClient leaf={leaf} slugSegments={segs} />
       </Suspense>
       <RegionSeoFooter leaf={leaf} />
     </>

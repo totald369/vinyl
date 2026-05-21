@@ -21,8 +21,10 @@ import {
   type ProductFilter
 } from "@/lib/server/storesApiShape";
 
-/** 클라이언트에 inject 할 첫 페이지 크기. route.ts 의 REGION_PAGE_DEFAULT 와 동일. */
-export const REGION_INITIAL_PAGE_LIMIT = 40;
+import { REGION_LIST_PAGE_SIZE } from "@/lib/regionListConfig";
+
+/** SSR inject 시 첫 페이지 크기 (현재 region page 는 클라이언트 fetch 만 사용). */
+export const REGION_INITIAL_PAGE_LIMIT = REGION_LIST_PAGE_SIZE;
 
 export type RegionInitialPayload = {
   mode: "region";
