@@ -16,7 +16,11 @@ import { useStoreDetailAugment } from "@/hooks/useStoreDetailAugment";
 import { useUserLocation } from "@/hooks/useUserLocation";
 import { trackRegionEvent } from "@/lib/analytics";
 import type { ResolvedRegionLeaf } from "@/lib/koreaRegions";
-import { leafToRegionPath } from "@/lib/koreaRegions";
+import {
+  LAST_REGION_PATH_STORAGE_KEY,
+  leafToRegionPath,
+  regionPickerHref
+} from "@/lib/koreaRegions";
 import {
   sampleSeoLandingsExclusiveOf,
   seoKeywordLandingPublicPath,
@@ -105,7 +109,15 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
   const [searchVisibleCount, setSearchVisibleCount] = useState(REGION_SEARCH_BATCH);
 
   const regionPath = useMemo(() => leafToRegionPath(leaf), [leaf]);
-  const pickerInitial = encodeURIComponent(regionPath);
+  const pickerHref = useMemo(() => regionPickerHref(regionPath) as Route, [regionPath]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(LAST_REGION_PATH_STORAGE_KEY, regionPath);
+    } catch {
+      /* private mode */
+    }
+  }, [regionPath]);
   const inlineSeoLandings = useMemo(() => {
     const mine = seoLandingsSharingRegion(leaf);
     return mine.length ? mine.slice(0, 4) : sampleSeoLandingsExclusiveOf(undefined).slice(0, 4);
@@ -498,7 +510,7 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
     <>
       <div className="flex flex-col gap-1">
         <Link
-          href={`/regions?initial=${pickerInitial}` as Route}
+          href={pickerHref}
           className="inline-flex w-fit items-center gap-0.5 rounded-md p-2 outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           onClick={() =>
             trackRegionEvent("select_region", {
@@ -680,7 +692,7 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
                   </span>
                 </button>
                 <Link
-                  href={`/regions?initial=${pickerInitial}` as Route}
+                  href={pickerHref}
                   prefetch={false}
                   className="flex h-12 shrink-0 items-center justify-center whitespace-nowrap rounded-[8px] bg-[#171717] px-4 py-2 text-[16px] font-semibold leading-normal tracking-[-0.3px] text-[#d4fe1c] shadow-[0px_0px_1px_rgba(0,0,0,0.08),0px_4px_6px_rgba(0,0,0,0.16)] outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                   onClick={() =>
@@ -732,7 +744,7 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
                     type="button"
                     aria-label="뒤로"
                     className="flex size-12 shrink-0 items-center justify-center rounded-none border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
-                    onClick={() => router.back()}
+                    onClick={() => router.push(pickerHref)}
                   >
                     <img src="/Img/Icon/back_32.svg" alt="" width={32} height={32} />
                   </button>

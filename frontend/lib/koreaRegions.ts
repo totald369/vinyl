@@ -658,6 +658,34 @@ export function regionHrefFromSegments(slugs: string[]): string {
   return `/regions/${slugs.map((s) => encodeURIComponent(s)).join("/")}`;
 }
 
+/** `sessionStorage` — 리스트에서 브라우저 뒤로가기 시 picker 선택 복원 */
+export const LAST_REGION_PATH_STORAGE_KEY = "vinyl:regionPickerLastPath";
+
+/**
+ * 지역 picker 로 돌아갈 때 선택 상태를 복원하는 href.
+ * `encodeURIComponent(regionPath)` 를 쿼리에 직접 넣으면 `/` 가 경로로 잘리거나 이중 인코딩될 수 있음.
+ */
+export function regionPickerHref(regionPath: string): string {
+  return `/regions?${new URLSearchParams({ initial: regionPath }).toString()}`;
+}
+
+/** `?initial=` 값 정규화 (이중 인코딩·잔여 `%` 대비) */
+export function parseRegionPickerInitial(raw: string | null | undefined): string | null {
+  if (raw == null) return null;
+  let s = raw.trim();
+  if (!s) return null;
+  for (let i = 0; i < 3; i++) {
+    try {
+      const next = decodeURIComponent(s);
+      if (next === s) break;
+      s = next;
+    } catch {
+      break;
+    }
+  }
+  return s;
+}
+
 export function slugPathStringFromSegments(segments: string[]): string {
   return segments.map((s) => encodeURIComponent(s)).join("/");
 }

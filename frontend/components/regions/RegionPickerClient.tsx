@@ -7,9 +7,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { trackRegionEvent } from "@/lib/analytics";
 import {
+  LAST_REGION_PATH_STORAGE_KEY,
   PROVINCES_ORDERED,
   QUICK_REGION_LINKS,
   type ProvinceDef,
+  parseRegionPickerInitial,
   regionHrefFromSegments,
   resolveRegionLeafFromSlugPath
 } from "@/lib/koreaRegions";
@@ -26,18 +28,20 @@ const QUICK_REGION_CHIP_IMAGE_BY_SLUG: Partial<Record<string, string>> = {
   yeongdeungpo: "/Img/image/chip-young.png"
 };
 
-function applyInitialSelection(
-  provinces: ProvinceDef[],
-  initialPath: string | null
-): {
+export type RegionPickerSelection = {
   provinceSlug: string;
   expandedCitySlug: string | null;
   selectedDistrictKey: string | null;
-} | null {
+};
+
+export function applyInitialSelection(
+  provinces: ProvinceDef[],
+  initialPath: string | null
+): RegionPickerSelection | null {
   if (!initialPath?.trim()) return null;
   const segs = initialPath
     .split("/")
-    .map((s) => decodeURIComponent(s.trim()))
+    .map((s) => s.trim())
     .filter(Boolean);
   if (!segs.length) return null;
   const leaf = resolveRegionLeafFromSlugPath(segs);
@@ -46,19 +50,24 @@ function applyInitialSelection(
   const p = provinces.find((x) => x.slug === provinceSlug);
   if (!p) return null;
   if (p.directDistricts?.length) {
+    const distSeg = segs[1];
+    if (!distSeg) return null;
     return {
       provinceSlug,
       expandedCitySlug: null,
-      selectedDistrictKey: `${provinceSlug}/${leaf.districtSlug ?? ""}`
+      selectedDistrictKey: `${provinceSlug}/${distSeg}`
     };
   }
   if (leaf.citySlug && p.cities) {
     const city = p.cities.find((c) => c.slug === leaf.citySlug);
     if (city?.districts?.length && leaf.districtSlug) {
+      const citySeg = segs[1];
+      const distSeg = segs[2];
+      if (!citySeg || !distSeg) return null;
       return {
         provinceSlug,
-        expandedCitySlug: leaf.citySlug,
-        selectedDistrictKey: `${provinceSlug}/${leaf.citySlug}/${leaf.districtSlug}`
+        expandedCitySlug: citySeg,
+        selectedDistrictKey: `${provinceSlug}/${citySeg}/${distSeg}`
       };
     }
     if (
@@ -67,21 +76,38 @@ function applyInitialSelection(
       leaf.citySlug &&
       !leaf.districtSlug
     ) {
+      const citySeg = segs[1];
+      if (!citySeg) return null;
       return {
         provinceSlug,
-        expandedCitySlug: leaf.citySlug,
-        selectedDistrictKey: `${provinceSlug}/${leaf.citySlug}`
+        expandedCitySlug: citySeg,
+        selectedDistrictKey: `${provinceSlug}/${citySeg}`
       };
     }
     if (city?.cityOnlyNeedles) {
+      const citySeg = segs[1];
+      if (!citySeg) return null;
       return {
         provinceSlug,
         expandedCitySlug: null,
-        selectedDistrictKey: `${provinceSlug}/${leaf.citySlug}`
+        selectedDistrictKey: `${provinceSlug}/${citySeg}`
       };
     }
   }
   return { provinceSlug, expandedCitySlug: null, selectedDistrictKey: null };
+}
+
+function readPickerSelection(searchParams: URLSearchParams): RegionPickerSelection | null {
+  const fromQuery = parseRegionPickerInitial(searchParams.get("initial"));
+  if (fromQuery) return applyInitialSelection(PROVINCES_ORDERED, fromQuery);
+
+  if (typeof window === "undefined") return null;
+  const nav = performance.getEntriesByType("navigation")[0] as
+    | PerformanceNavigationTiming
+    | undefined;
+  if (nav?.type !== "back_forward") return null;
+  const stored = sessionStorage.getItem(LAST_REGION_PATH_STORAGE_KEY);
+  return stored ? applyInitialSelection(PROVINCES_ORDERED, stored) : null;
 }
 
 export default function RegionPickerClient() {
@@ -89,9 +115,17 @@ export default function RegionPickerClient() {
   const searchParams = useSearchParams();
   const trackedRef = useRef(false);
 
-  const [provinceSlug, setProvinceSlug] = useState(PROVINCES_ORDERED[0].slug);
-  const [expandedCitySlug, setExpandedCitySlug] = useState<string | null>(null);
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const bootSel = useMemo(() => readPickerSelection(searchParams), [searchParams]);
+
+  const [provinceSlug, setProvinceSlug] = useState(
+    () => bootSel?.provinceSlug ?? PROVINCES_ORDERED[0].slug
+  );
+  const [expandedCitySlug, setExpandedCitySlug] = useState<string | null>(
+    () => bootSel?.expandedCitySlug ?? null
+  );
+  const [selectedKey, setSelectedKey] = useState<string | null>(
+    () => bootSel?.selectedDistrictKey ?? null
+  );
 
   const activeProvince = useMemo(
     () => PROVINCES_ORDERED.find((p) => p.slug === provinceSlug) ?? PROVINCES_ORDERED[0],
@@ -99,12 +133,19 @@ export default function RegionPickerClient() {
   );
 
   useEffect(() => {
-    const initial = searchParams.get("initial")?.trim() ?? null;
-    const sel = applyInitialSelection(PROVINCES_ORDERED, initial);
-    if (!sel) return;
-    setProvinceSlug(sel.provinceSlug);
-    setExpandedCitySlug(sel.expandedCitySlug);
-    setSelectedKey(sel.selectedDistrictKey);
+    const sel = readPickerSelection(searchParams);
+    const fromQuery = parseRegionPickerInitial(searchParams.get("initial"));
+    if (sel) {
+      setProvinceSlug(sel.provinceSlug);
+      setExpandedCitySlug(sel.expandedCitySlug);
+      setSelectedKey(sel.selectedDistrictKey);
+      if (fromQuery && typeof window !== "undefined") {
+        sessionStorage.setItem(LAST_REGION_PATH_STORAGE_KEY, fromQuery);
+      }
+      return;
+    }
+    setSelectedKey(null);
+    setExpandedCitySlug(null);
   }, [searchParams]);
 
   useEffect(() => {
@@ -294,6 +335,7 @@ export default function RegionPickerClient() {
             };
 
             const cityOnlyKey = `${activeProvince.slug}/${city.slug}`;
+            const isCityOnlySel = !expandable && selectedKey === cityOnlyKey;
 
             return (
               <div key={city.slug}>
@@ -326,10 +368,19 @@ export default function RegionPickerClient() {
                       setSelectedKey(cityOnlyKey);
                       trackSelectSegments(citySegments);
                     }}
-                    className="flex h-11 min-h-[44px] w-full items-center gap-2 pl-8 pr-4 outline-none focus-visible:bg-[#f7f7f7] focus-visible:ring-2 focus-visible:ring-brand-500"
+                    className={districtRowClass(isCityOnlySel)}
                   >
-                    <span className="min-w-0 flex-1 text-left text-[14px] tracking-[0.1px] text-[#171717]">
+                    <span
+                      className={
+                        isCityOnlySel
+                          ? "inline-flex items-center gap-0.5 border-b-[8px] border-[#d4fe1c] pb-px"
+                          : ""
+                      }
+                    >
                       {city.nameKo}
+                      {isCityOnlySel ? (
+                        <img src="/Img/Icon/check_16.svg" alt="" width={16} height={16} />
+                      ) : null}
                     </span>
                   </Link>
                 )}
