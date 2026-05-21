@@ -1,8 +1,9 @@
 "use client";
 
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import MapMarkerPickList from "@/components/map/MapMarkerPickList";
 import { StoreData, StoreListFilter } from "@/hooks/useStores";
-import type { KakaoMap, KakaoMapPoint, KakaoMarker } from "@/lib/kakao";
+import type { KakaoMap, KakaoMarker } from "@/lib/kakao";
 import {
   createKakaoMap,
   notifyKakaoMapReady,
@@ -11,6 +12,7 @@ import {
   relayoutKakaoMap,
   runKakaoMapsLoad
 } from "@/lib/kakao/createKakaoMap";
+import { pickStoresNearMapPoint } from "@/lib/kakao/pickStoresNearMapPoint";
 import { syncMarkersWithClusterer, type MarkerClustererLike } from "@/lib/kakao/markerCluster";
 import {
   getStoreMarkerImages,
@@ -39,22 +41,12 @@ type Props = {
 const USER_MARKER_SRC = "/Img/Icon/User_marker.svg";
 const USER_MARKER_SIZE = 64;
 
-const STORE_PICK_MAX_DISTANCE_PX = 58;
-
 /** Before first bounds, cap markers so tiles + LCP stay ahead */
 const PRIORITIZE_BEFORE_BOUNDS = 40;
 /** Hard cap on markers per rebuild */
 const MAX_MAP_MARKERS = 240;
 
 type MapBoundsBox = { swLat: number; swLng: number; neLat: number; neLng: number };
-
-function mapPointToXY(pt: KakaoMapPoint | { x: number; y: number }): { x: number; y: number } {
-  if ("getX" in pt && typeof pt.getX === "function" && typeof pt.getY === "function") {
-    return { x: pt.getX(), y: pt.getY() };
-  }
-  const p = pt as { x: number; y: number };
-  return { x: p.x, y: p.y };
-}
 
 function pickStoresForMapMarkers(
   stores: StoreData[],
@@ -168,6 +160,33 @@ function MapViewInner({
 
   const pickListenerAttachedRef = useRef(false);
   const mapFirstIdleMeasuredRef = useRef(false);
+  const [ambiguousPick, setAmbiguousPick] = useState<StoreData[] | null>(null);
+  const handlePickAtLatLngRef = useRef<(lat: number, lng: number) => void>(() => undefined);
+
+  const handlePickAtLatLng = useCallback((lat: number, lng: number) => {
+    const map = mapRef.current;
+    if (!map || typeof window === "undefined" || !window.kakao?.maps) return;
+
+    const hits = pickStoresNearMapPoint(
+      map,
+      new window.kakao.maps.LatLng(lat, lng),
+      storesPickRef.current,
+      mapSizeRef.current
+    );
+
+    if (hits.length === 0) {
+      setAmbiguousPick(null);
+      return;
+    }
+    if (hits.length === 1) {
+      setAmbiguousPick(null);
+      onSelectStoreRef.current(hits[0]!);
+      return;
+    }
+    setAmbiguousPick(hits);
+  }, []);
+
+  handlePickAtLatLngRef.current = handlePickAtLatLng;
 
   useEffect(() => {
     const el = containerRef.current;
@@ -270,54 +289,10 @@ function MapViewInner({
       const onMapClick = (...args: unknown[]) => {
         const mouseEvent = args[0] as { latLng: { getLat: () => number; getLng: () => number } };
         if (!mouseEvent?.latLng) return;
-
-        const list = storesPickRef.current;
-        if (!list.length) return;
-
-        const proj = map.getProjection();
-        if (!proj?.pointFromCoords) return;
-
-        const clickLat = mouseEvent.latLng.getLat();
-        const clickLng = mouseEvent.latLng.getLng();
-        const clickXY = mapPointToXY(proj.pointFromCoords(mouseEvent.latLng));
-
-        let latRadius = 0.005;
-        let lngRadius = 0.005;
-        try {
-          const b = map.getBounds();
-          const sw = b.getSouthWest();
-          const ne = b.getNorthEast();
-          const mapWidthPx = mapSizeRef.current.w;
-          const mapHeightPx = mapSizeRef.current.h;
-          const pxPerLat = mapHeightPx / Math.max(1e-6, ne.getLat() - sw.getLat());
-          const pxPerLng = mapWidthPx / Math.max(1e-6, ne.getLng() - sw.getLng());
-          latRadius = (STORE_PICK_MAX_DISTANCE_PX / pxPerLat) * 1.2;
-          lngRadius = (STORE_PICK_MAX_DISTANCE_PX / pxPerLng) * 1.2;
-        } catch {
-          /* bounds not ready */
-        }
-
-        let best: StoreData | null = null;
-        let bestDist = Infinity;
-
-        for (const store of list) {
-          const lat = Number(store.lat);
-          const lng = Number(store.lng);
-          if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-          if (Math.abs(lat - clickLat) > latRadius) continue;
-          if (Math.abs(lng - clickLng) > lngRadius) continue;
-
-          const mXY = mapPointToXY(proj.pointFromCoords(new kakao.LatLng(lat, lng)));
-          const d = Math.hypot(mXY.x - clickXY.x, mXY.y - clickXY.y);
-          if (d <= STORE_PICK_MAX_DISTANCE_PX && d < bestDist) {
-            bestDist = d;
-            best = store;
-          }
-        }
-
-        if (best) {
-          onSelectStoreRef.current(best);
-        }
+        handlePickAtLatLngRef.current(
+          mouseEvent.latLng.getLat(),
+          mouseEvent.latLng.getLng()
+        );
       };
 
       if (!pickListenerAttachedRef.current) {
@@ -463,12 +438,8 @@ function MapViewInner({
         });
         if (!markerClickBoundRef.current.has(store.id)) {
           markerClickBoundRef.current.add(store.id);
-          const storeId = store.id;
           kakao.event.addListener(marker, "click", () => {
-            const hit =
-              storesPickRef.current.find((s) => s.id === storeId) ??
-              stores.find((s) => s.id === storeId);
-            if (hit) onSelectStoreRef.current(hit);
+            handlePickAtLatLngRef.current(lat, lng);
           });
         }
         cur.set(store.id, marker);
@@ -548,8 +519,29 @@ function MapViewInner({
     }
   }, [userMarkerPosition, mapInstanceReady, markerSdkReady]);
 
+  useEffect(() => {
+    setAmbiguousPick(null);
+  }, [center.lat, center.lng, centerVersion]);
+
+  const handleAmbiguousPick = useCallback(
+    (store: StoreData) => {
+      setAmbiguousPick(null);
+      onSelectStoreRef.current(store);
+    },
+    []
+  );
+
   return (
-    <div ref={containerRef} className="kakao-map-root relative z-[1] h-full min-h-0 w-full" />
+    <div className="relative h-full min-h-0 w-full">
+      <div ref={containerRef} className="kakao-map-root relative z-[1] h-full min-h-0 w-full" />
+      {ambiguousPick && ambiguousPick.length > 1 ? (
+        <MapMarkerPickList
+          stores={ambiguousPick}
+          onPick={handleAmbiguousPick}
+          onDismiss={() => setAmbiguousPick(null)}
+        />
+      ) : null}
+    </div>
   );
 }
 
