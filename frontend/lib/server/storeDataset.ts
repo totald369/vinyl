@@ -149,6 +149,7 @@ function mergeFromSourcesFallback(): StoreData[] {
     "stores.chungbuk-jeungpyeong-trash.json"
   );
   const jeonbukWanjuTrashRows = readJsonArray<RawStoreRow>("stores.jeonbuk-wanju-trash.json");
+  const jeonbukGunsanTrashRows = readJsonArray<RawStoreRow>("stores.jeonbuk-gunsan-trash.json");
   const seoulYangcheonSpecialRows = readJsonArray<RawStoreRow>(
     "stores.seoul-yangcheon-special.json"
   );
@@ -202,6 +203,7 @@ function mergeFromSourcesFallback(): StoreData[] {
     chungbukCheongjuTrashRows,
     chungbukJeungpyeongTrashRows,
     jeonbukWanjuTrashRows,
+    jeonbukGunsanTrashRows,
     seoulYangcheonSpecialRows
   );
   return cached as StoreData[];
