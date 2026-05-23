@@ -73,11 +73,11 @@ export function seoMetaDescriptionForPath(pathname: string): string {
 
 /** OG 기본 이미지 (`app/opengraph-image.png` 정적 파일 → `/opengraph-image.png`) */
 export const DEFAULT_OG_IMAGE_PATH = "/opengraph-image.png";
-export const DEFAULT_OG_IMAGE_ALT = `${SITE_BRAND_KO} — 종량제 봉투 패턴 이미지`;
+export const DEFAULT_OG_IMAGE_ALT = `${SITE_BRAND_KO} — 지도에서 종량제 봉투·불연성마대 판매처 위치 확인`;
 
 export const defaultOpenGraphImage = {
   url: DEFAULT_OG_IMAGE_PATH,
   width: 1024,
-  height: 537,
+  height: 543,
   alt: DEFAULT_OG_IMAGE_ALT
 } as const;
