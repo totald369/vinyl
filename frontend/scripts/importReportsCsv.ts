@@ -2,6 +2,9 @@
  * Supabase 등에서 내보낸 reports_rows.csv 를 public/data/reports_rows.json 에 병합합니다.
  * 동일 id는 CSV 내용으로 덮어씁니다(upsert).
  *
+ * 승인(approved) 제보 activity 는 CSV import 시점이 아니라
+ * `npm run data:build-cache` 또는 merge-reports-into-stores 반영 시 자동 기록됩니다.
+ *
  * 사용 (frontend 디렉터리):
  *   npm run data:import-reports-csv -- /path/to/reports_rows.csv
  *   npx tsx scripts/importReportsCsv.ts   # 기본: ~/Downloads/reports_rows.csv

@@ -11,6 +11,7 @@ import {
   collectStoresWithinRadius,
   getStoreSearchIndexes
 } from "@/lib/server/storeIndex";
+import { readActivityItems } from "@/lib/server/activityFeed";
 import type { StoreData } from "@/lib/storeData";
 import { DEFAULT_REGION, type LatLng } from "@/lib/types";
 import { getDistanceKm } from "@/lib/utils";
@@ -75,6 +76,7 @@ export default async function HomePage() {
   const initialStores = isDefaultRegion(center)
     ? await getInitialStoresCached()
     : buildInitialStoresAt(center);
+  const initialActivities = readActivityItems();
   return (
     <>
       <p className="sr-only">
@@ -82,7 +84,7 @@ export default async function HomePage() {
         수 있습니다.
       </p>
       <Suspense fallback={<HomePageSkeleton />}>
-        <HomeClient initialStores={initialStores} />
+        <HomeClient initialStores={initialStores} initialActivities={initialActivities} />
       </Suspense>
     </>
   );

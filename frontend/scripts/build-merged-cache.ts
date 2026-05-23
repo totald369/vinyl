@@ -15,6 +15,7 @@ import path from "path";
 import type { RawStoreRow } from "../lib/storeData";
 import { mergeStoreSources } from "../lib/storeData";
 import type { RawReportRow } from "../lib/reportStores";
+import { syncReportActivitiesFromRows } from "../lib/activityFeedWriter";
 
 const DATA_DIR = path.join(process.cwd(), "public", "data");
 const OUT_FILE = path.join(DATA_DIR, "_merged_cache.json");
@@ -99,6 +100,8 @@ function main() {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
   fs.writeFileSync(OUT_FILE, JSON.stringify(merged), "utf8");
+
+  syncReportActivitiesFromRows(readJsonArray<RawReportRow>("reports_rows.json"));
 
   const stat = fs.statSync(OUT_FILE);
   const elapsedMs = Date.now() - startedAt;

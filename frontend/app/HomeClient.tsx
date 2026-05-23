@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BottomSheetList from "@/components/BottomSheetList";
+import ActivityFeedPanel from "@/components/ActivityFeedPanel";
 import HomeMapStage from "@/components/home/HomeMapStage";
 import LocationRequestingOverlay from "@/components/LocationRequestingOverlay";
 import type { StoreListFilter } from "@/hooks/useStores";
@@ -23,6 +24,7 @@ import { prefetchStoreDetail } from "@/lib/storeDetailClient";
 import { KAKAO_MAP_FIRST_IDLE_EVENT } from "@/lib/kakao/createKakaoMap";
 import { perfTimeEnd, perfTimeStart } from "@/lib/perfMarks";
 import { DEFAULT_REGION, type LatLng } from "@/lib/types";
+import { selectVisibleActivities, type ActivityItem } from "@/lib/activityFeed";
 
 /*
  * [항목 8·성능] 상태: useSheetController / useMapCenterController / useDeepLinkResolver 분리,
@@ -44,12 +46,19 @@ export type HomeClientProps = {
    * 변경 후: 첫 페인트에 즉시 표시 → 빈 화면 지속 시간 단축.
    */
   initialStores?: StoreData[];
+  initialActivities?: ActivityItem[];
 };
 
 export default function HomeClient({
   initialShortCode = null,
-  initialStores
+  initialStores,
+  initialActivities = []
 }: HomeClientProps) {
+  const visibleActivities = useMemo(
+    () => selectVisibleActivities(initialActivities),
+    [initialActivities]
+  );
+
   const router = useRouter();
   const searchParams = useSearchParams();
   /** layout preload + maps.load 즉시 — 지도 타일이 LCP 이므로 idle 지연 제거 */
@@ -459,22 +468,42 @@ export default function HomeClient({
                 지역으로 보기
               </Link>
             </div>
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={handleMoveToLocation}
-                className="pointer-events-auto flex shrink-0 items-center justify-center border-0 bg-transparent p-0 shadow-none outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                aria-label="내 위치"
-              >
-                <img
-                  src="/Img/Icon/my_location_88.svg"
-                  alt=""
-                  width={88}
-                  height={88}
-                  className="h-[88px] w-[88px]"
-                />
-              </button>
-            </div>
+            {visibleActivities.length > 0 ? (
+              <div className="flex items-start justify-between gap-2">
+                <ActivityFeedPanel items={initialActivities} />
+                <button
+                  type="button"
+                  onClick={handleMoveToLocation}
+                  className="pointer-events-auto flex shrink-0 items-center justify-center border-0 bg-transparent p-0 shadow-none outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                  aria-label="내 위치"
+                >
+                  <img
+                    src="/Img/Icon/my_location_88.svg"
+                    alt=""
+                    width={88}
+                    height={88}
+                    className="h-[88px] w-[88px]"
+                  />
+                </button>
+              </div>
+            ) : (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleMoveToLocation}
+                  className="pointer-events-auto flex shrink-0 items-center justify-center border-0 bg-transparent p-0 shadow-none outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                  aria-label="내 위치"
+                >
+                  <img
+                    src="/Img/Icon/my_location_88.svg"
+                    alt=""
+                    width={88}
+                    height={88}
+                    className="h-[88px] w-[88px]"
+                  />
+                </button>
+              </div>
+            )}
           </section>
 
           {SHOW_HOME_REPORT_BUTTON && bottomSheetSnap === "collapsed" && sheetView === "list" ? (

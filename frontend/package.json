@@ -13,6 +13,7 @@
     "lint": "next lint",
     "shortcodes:assign": "tsx scripts/assignShortCodes.ts",
     "data:import-reports-csv": "tsx scripts/importReportsCsv.ts",
+    "data:append-activity": "tsx scripts/appendActivityCli.ts",
     "data:import-guro-nc": "python3 scripts/importGuroNoncombustFromXlsx.py",
     "data:import-chungnam-trash": "python3 scripts/import_chungnam_trash_from_xlsx.py",
     "data:import-chungnam-gongju-trash": "python3 scripts/import_chungnam_gongju_trash_from_xlsx.py",

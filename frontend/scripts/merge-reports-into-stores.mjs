@@ -17,6 +17,7 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { spawnSync } from "child_process";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -218,6 +219,55 @@ function isApprovedReport(row) {
   return String(row?.status ?? "").toLowerCase() === "approved";
 }
 
+function extractRegionLabel(address) {
+  const s = String(address ?? "").trim();
+  if (!s) return null;
+  const gu = s.match(/([가-힣]{2,8}구)(?:\s|$|[0-9])/);
+  if (gu) return gu[1];
+  const si = s.match(/([가-힣]{2,8}시)(?:\s|$|[0-9])/);
+  if (si) return si[1];
+  const gun = s.match(/([가-힣]{2,8}군)(?:\s|$|[0-9])/);
+  if (gun) return gun[1];
+  return null;
+}
+
+function extractRegionFromReport(row) {
+  return (
+    extractRegionLabel(row.road_address) ??
+    extractRegionLabel(row.detail_address) ??
+    extractRegionLabel(row.name)
+  );
+}
+
+function recordMergeActivities(result) {
+  const tmp = path.join(os.tmpdir(), `merge-activity-${Date.now()}.json`);
+  fs.writeFileSync(tmp, `${JSON.stringify(result)}\n`, "utf8");
+  const run = spawnSync("npx", ["tsx", "scripts/syncActivitiesFromMerge.ts", tmp], {
+    cwd: ROOT,
+    stdio: "inherit"
+  });
+  try {
+    fs.unlinkSync(tmp);
+  } catch {
+    /* ignore */
+  }
+  if (run.status !== 0) {
+    console.error("[activity] merge activity sync failed");
+  }
+}
+
+function trackApprovedReportActivity(mergeActivity, row) {
+  if (!isApprovedReport(row)) return;
+  const reportType = String(row.report_type ?? "new_store").trim();
+  if (reportType === "edit_request") {
+    mergeActivity.editRequestReportIds.push(String(row.id));
+    const region = extractRegionFromReport(row);
+    if (region) mergeActivity.editRegions.push(region);
+    return;
+  }
+  mergeActivity.newStoreReportIds.push(String(row.id));
+}
+
 function normalizeNameLoose(name) {
   return String(name ?? "")
     .trim()
@@ -289,6 +339,11 @@ async function main() {
   let updated = 0;
   let added = 0;
   let skipped = 0;
+  const mergeActivity = {
+    newStoreReportIds: [],
+    editRequestReportIds: [],
+    editRegions: []
+  };
 
   for (const row of incoming) {
     if (!row || !row.id) continue;
@@ -303,6 +358,7 @@ async function main() {
       const store = stores.find((s) => String(s.id) === sid);
       if (store) {
         mergeFlagsIntoStore(store, row, datePart);
+        trackApprovedReportActivity(mergeActivity, row);
         updated++;
         console.error(`[id매칭] ${sid} ${store.name} ← 제보 ${row.id}`);
       } else {
@@ -327,6 +383,7 @@ async function main() {
 
     if (match) {
       mergeFlagsIntoStore(match, row, datePart);
+      trackApprovedReportActivity(mergeActivity, row);
       updated++;
       console.error(`[주소매칭] ${match.id} ${match.name} ← 제보 ${row.name} (${row.id})`);
     } else if (isDuplicateStoreEntry(stores, coords, row.name, row.id)) {
@@ -350,6 +407,7 @@ async function main() {
         dataReferenceDate: datePart || "2026-04-02"
       };
       stores.push(newRow);
+      trackApprovedReportActivity(mergeActivity, row);
       added++;
       console.error(`[신규] report:${row.id} ${newRow.name}`);
     }
@@ -360,6 +418,13 @@ async function main() {
   saveCache(cache);
   fs.writeFileSync(REPORTS_OUT, `${JSON.stringify(mergedReports, null, 2)}\n`, "utf8");
   fs.writeFileSync(STORES_PATH, `${JSON.stringify(stores, null, 2)}\n`, "utf8");
+
+  if (
+    mergeActivity.newStoreReportIds.length > 0 ||
+    mergeActivity.editRequestReportIds.length > 0
+  ) {
+    recordMergeActivities(mergeActivity);
+  }
 
   console.error(
     `완료: 기존 매장 갱신 ${updated}건, 신규 추가 ${added}건, 스킵/경고 ${skipped}건 → ${REPORTS_OUT}, ${STORES_PATH}`

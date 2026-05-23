@@ -470,6 +470,12 @@ def main() -> None:
     OUT_JSON.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"wrote {len(out)} → {OUT_JSON} (ref_date={path_ref}, api≈{geo_n}, miss={misses})")
 
+    if out:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from append_activity import record_region_data_added
+
+        record_region_data_added(["정읍시"])
+
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,14 @@
+[
+  {
+    "type": "REGION_DATA_ADDED",
+    "createdAt": "2026-05-23",
+    "affectedRegions": [
+      "부안군",
+      "정읍시",
+      "여수시",
+      "순천시",
+      "화순군"
+    ],
+    "id": "act-2026-05-23-region-data-added-bcib1y"
+  }
+]

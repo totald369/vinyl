@@ -10,6 +10,7 @@ import HomeMapStage from "@/components/home/HomeMapStage";
 import LocationRequestingOverlay from "@/components/LocationRequestingOverlay";
 import { STORE_SHEET_VIRTUAL_ROW_EST_PX, StoreSheetVirtualRow } from "@/components/BottomSheetList";
 import { RegionStoreListRowSkeletons } from "@/components/regions/RegionStoreListSkeleton";
+import StoreListInfoNotice from "@/components/StoreListInfoNotice";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
 import type { StoreListFilter } from "@/hooks/useStores";
 import { useStoreDetailAugment } from "@/hooks/useStoreDetailAugment";
@@ -759,6 +760,7 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
                 </header>
                 <div className="flex min-h-0 flex-1 flex-col px-4 pt-[4px]">
                   <div className="shrink-0">{filterRowReplacement}</div>
+                  <StoreListInfoNotice className="shrink-0" />
                   <div
                     ref={listScrollRef}
                     role="region"

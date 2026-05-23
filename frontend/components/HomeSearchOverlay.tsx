@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { StoreProductChips } from "@/components/StoreProductChips";
+import StoreListInfoNotice from "@/components/StoreListInfoNotice";
 import type { StoreData, StoreListFilter } from "@/hooks/useStores";
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
 import { shortRegion } from "@/lib/shortAddress";
@@ -162,6 +163,8 @@ export default function HomeSearchOverlay({
               <span className="whitespace-nowrap">폐기물 스티커</span>
             </button>
           </div>
+
+          <StoreListInfoNotice className="shrink-0 px-4" />
 
           {/**
            * [CLS] 결과 카운트 줄은 query/loading 토글마다 추가/제거되며 아래 ul 을 밀어냈음.

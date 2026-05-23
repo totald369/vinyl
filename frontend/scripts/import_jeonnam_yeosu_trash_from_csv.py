@@ -172,6 +172,12 @@ def main() -> None:
         f"(ref_date={path_ref}, 스티커 {stickers}, skip={skipped})"
     )
 
+    if out:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from append_activity import record_region_data_added
+
+        record_region_data_added(["여수시"])
+
 
 if __name__ == "__main__":
     main()
