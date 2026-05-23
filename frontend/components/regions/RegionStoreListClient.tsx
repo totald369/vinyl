@@ -56,19 +56,22 @@ const REGION_SEARCH_BATCH = 100;
  * 변경 후: 항상 lat/lng 미지정으로 호출 → URL 이 (regionPath, filter, offset, limit) 만으로 결정 →
  *          CDN/Edge cache hit 율 ~100%. 거리 정렬·distance 표시는 클라이언트의 sortedStores 가 채움.
  */
-async function fetchRegionStores(opts: {
-  regionPath: string;
-  category: RegionSeoCategory;
-  offset: number;
-  limit: number;
-}) {
+async function fetchRegionStores(
+  opts: {
+    regionPath: string;
+    category: RegionSeoCategory;
+    offset: number;
+    limit: number;
+  },
+  signal?: AbortSignal
+) {
   const qs = new URLSearchParams({
     regionPath: opts.regionPath,
     filter: opts.category === "largeSticker" ? "largeSticker" : opts.category,
     offset: String(opts.offset),
     limit: String(opts.limit)
   });
-  const res = await fetch(`/api/stores?${qs.toString()}`, { credentials: "same-origin" });
+  const res = await fetch(`/api/stores?${qs.toString()}`, { credentials: "same-origin", signal });
   if (!res.ok) throw new Error(`region_fetch_${res.status}`);
   return res.json() as Promise<{
     mode: string;
@@ -119,6 +122,14 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
       /* private mode */
     }
   }, [regionPath]);
+
+  useEffect(() => {
+    try {
+      router.prefetch("/" as Route);
+    } catch {
+      /* dev 또는 미지원 환경 */
+    }
+  }, [router]);
   const inlineSeoLandings = useMemo(() => {
     const mine = seoLandingsSharingRegion(leaf);
     return mine.length ? mine.slice(0, 4) : sampleSeoLandingsExclusiveOf(undefined).slice(0, 4);
@@ -145,6 +156,9 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
   const [showGeoProgressUi, setShowGeoProgressUi] = useState(false);
 
   const [sheetView, setSheetView] = useState<"list" | "detail">("list");
+  /** 홈/피커로 나갈 때 RSC 전환 동안 풀스크린 리스트·스켈레톤이 남지 않도록 즉시 숨김 */
+  const [routeExitPending, setRouteExitPending] = useState(false);
+  const regionFetchAbortRef = useRef<AbortController | null>(null);
   const [selectedStore, setSelectedStore] = useState<StoreData | null>(null);
   const [manualCenter, setManualCenter] = useState<LatLng>(() => ({
     lat: DEFAULT_REGION.lat,
@@ -296,18 +310,27 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
         setOffset(0);
         setErrorMsg(null);
       }
+
+      regionFetchAbortRef.current?.abort();
+      const ac = new AbortController();
+      regionFetchAbortRef.current = ac;
+
       try {
         /**
          * lat/lng 미전송 — 서버는 name 정렬·distance 미포함 응답으로 통일.
          * 거리 정렬·distance 표시는 sortedStores 가 사용자 위치 기준으로 클라이언트에서 수행.
          * 이로써 (regionPath, filter, offset, limit) 만이 캐시 키 → s-maxage=600 CDN hit ~100%.
          */
-        const data = await fetchRegionStores({
-          regionPath,
-          category,
-          offset: startOffset,
-          limit: REGION_LIST_PAGE_SIZE
-        });
+        const data = await fetchRegionStores(
+          {
+            regionPath,
+            category,
+            offset: startOffset,
+            limit: REGION_LIST_PAGE_SIZE
+          },
+          ac.signal
+        );
+        if (ac.signal.aborted) return;
         setTotal(data.total ?? 0);
         setHasMore(data.hasMore === true);
         const added = data.stores?.length ?? 0;
@@ -321,10 +344,12 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
             setCenterVersion((v) => v + 1);
           }
         }
-      } catch {
+      } catch (e) {
+        if ((e as Error)?.name === "AbortError") return;
         setErrorMsg("판매처를 불러오지 못했습니다.");
         if (!append) setStores([]);
       } finally {
+        if (ac.signal.aborted) return;
         if (append) appendFetchLockRef.current = false;
         setLoading(false);
         setLoadingMore(false);
@@ -342,6 +367,13 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
   useEffect(() => {
     void runReload(0, false);
   }, [runReload]);
+
+  useEffect(() => () => regionFetchAbortRef.current?.abort(), []);
+
+  const beginRouteExit = useCallback(() => {
+    regionFetchAbortRef.current?.abort();
+    setRouteExitPending(true);
+  }, []);
 
   useEffect(() => {
     if (trackedOpenRef.current) return;
@@ -735,9 +767,9 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
            */}
           <div
             className={`pointer-events-auto fixed inset-0 z-[60] flex justify-center bg-white ${
-              sheetView !== "list" ? "pointer-events-none invisible" : ""
+              sheetView !== "list" || routeExitPending ? "pointer-events-none invisible" : ""
             }`}
-            aria-hidden={sheetView !== "list"}
+            aria-hidden={sheetView !== "list" || routeExitPending}
           >
             <div className="relative flex h-[100dvh] w-full max-w-md flex-col bg-white pt-[env(safe-area-inset-top,0px)]">
                 <header className="flex shrink-0 items-center gap-1 pr-2">
@@ -745,15 +777,20 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
                     type="button"
                     aria-label="뒤로"
                     className="flex size-12 shrink-0 items-center justify-center rounded-none border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
-                    onClick={() => router.push(pickerHref)}
+                    onClick={() => {
+                      beginRouteExit();
+                      router.push(pickerHref);
+                    }}
                   >
                     <img src="/Img/Icon/back_32.svg" alt="" width={32} height={32} />
                   </button>
                   <span className="min-w-0 flex-1" aria-hidden />
                   <Link
                     href="/"
+                    prefetch
                     className="flex size-12 shrink-0 items-center justify-center rounded-none border-0 bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
                     aria-label="홈으로 닫기"
+                    onClick={beginRouteExit}
                   >
                     <img src="/Img/Icon/close_32.svg" alt="" width={32} height={32} />
                   </Link>
