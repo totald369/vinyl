@@ -13,7 +13,7 @@
 import type { ResolvedRegionLeaf } from "@/lib/koreaRegions";
 import { leafToRegionPath } from "@/lib/koreaRegions";
 import type { StoreData } from "@/lib/storeData";
-import { getStoreSearchIndexes } from "@/lib/server/storeIndex";
+import { getRegionPathBucket, getStoreSearchIndexes } from "@/lib/server/storeIndex";
 import {
   matchesProductFilter,
   toListStore,
@@ -36,15 +36,6 @@ export type RegionInitialPayload = {
   /** name 정렬된 첫 페이지. 거리 정렬은 클라이언트에서 사용자 위치 기준으로 수행. */
   stores: ListStoreShape[];
 };
-
-function matchesAllNeedles(blobLower: string, needles: readonly string[]): boolean {
-  for (const n of needles) {
-    const t = (n ?? "").trim().toLowerCase();
-    if (!t) continue;
-    if (!blobLower.includes(t)) return false;
-  }
-  return true;
-}
 
 /**
  * 거리 정렬 없이 (lat/lng 미지정) name 정렬된 region 첫 페이지를 만든다.
@@ -70,23 +61,12 @@ export function buildRegionInitialPayload(
   }
 
   const regionPathKey = leafToRegionPath(leaf);
-  const pathBucket = idx.byRegionPath.get(regionPathKey);
+  const pathBucket = getRegionPathBucket(idx, regionPathKey, leaf.needles);
 
-  let candidates: StoreData[];
-  if (pathBucket !== undefined) {
-    candidates = [];
-    for (const s of pathBucket) {
-      if (!matchesProductFilter(s, category)) continue;
-      candidates.push(s);
-    }
-  } else {
-    candidates = [];
-    for (const s of idx.byId.values()) {
-      if (!matchesProductFilter(s, category)) continue;
-      const blob = idx.addressBlobLowerById.get(s.id) ?? "";
-      if (!matchesAllNeedles(blob, leaf.needles)) continue;
-      candidates.push(s);
-    }
+  const candidates: StoreData[] = [];
+  for (const s of pathBucket) {
+    if (!matchesProductFilter(s, category)) continue;
+    candidates.push(s);
   }
 
   candidates.sort((a, b) =>

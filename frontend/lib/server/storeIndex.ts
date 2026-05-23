@@ -10,7 +10,6 @@
  */
 import type { StoreData } from "@/lib/storeData";
 import { expandProvinceAliasesForSearch } from "@/lib/koreaProvinceAliases";
-import { enumerateRegionIndexEntries } from "@/lib/koreaRegions";
 import { getMergedStores } from "@/lib/server/storeDataset";
 import { isValidShortCode } from "@/lib/shortLink";
 
@@ -90,29 +89,40 @@ function buildIndexes(): StoreSearchIndexes {
     addressBlobLowerById.set(s.id, expandProvinceAliasesForSearch(norm(`${road} ${addr}`)));
   }
 
-  const byRegionPath = new Map<string, StoreData[]>();
-  for (const { pathKey, needles } of enumerateRegionIndexEntries()) {
-    const bucket: StoreData[] = [];
-    for (const s of all) {
-      const blob = addressBlobLowerById.get(s.id) ?? "";
-      if (matchesAllNeedles(blob, needles)) bucket.push(s);
-    }
-    byRegionPath.set(pathKey, bucket);
-  }
-
   return {
     byId,
     byShortCode,
     grid,
     searchBlobLowerById,
     addressBlobLowerById,
-    byRegionPath
+    byRegionPath: new Map<string, StoreData[]>()
   };
+}
+
+/**
+ * regionPath 버킷은 첫 조회 시에만 O(n) 구축 — 홈·반경 SSR/API는 byRegionPath를 건드리지 않음.
+ * 변경 전: cold start마다 전 지역 × 전 매장 선형 스캔(수천만 회)으로 TTFB·리스트 API 지연.
+ */
+export function getRegionPathBucket(
+  idx: StoreSearchIndexes,
+  pathKey: string,
+  needles: readonly string[]
+): StoreData[] {
+  const existing = idx.byRegionPath.get(pathKey);
+  if (existing !== undefined) return existing;
+
+  const bucket: StoreData[] = [];
+  for (const s of idx.byId.values()) {
+    const blob = idx.addressBlobLowerById.get(s.id) ?? "";
+    if (matchesAllNeedles(blob, needles)) bucket.push(s);
+  }
+  idx.byRegionPath.set(pathKey, bucket);
+  return bucket;
 }
 
 export function getStoreSearchIndexes(): StoreSearchIndexes {
   const g = globalThis as GlobalWithStoreIdx;
-  if (process.env.NODE_ENV === "development" && g.__storeSearchIndexes) {
+  if (g.__storeSearchIndexes) {
     cached = g.__storeSearchIndexes;
     return cached;
   }
@@ -120,9 +130,7 @@ export function getStoreSearchIndexes(): StoreSearchIndexes {
 
   const built = buildIndexes();
   cached = built;
-  if (process.env.NODE_ENV === "development") {
-    g.__storeSearchIndexes = built;
-  }
+  g.__storeSearchIndexes = built;
   return cached;
 }
 

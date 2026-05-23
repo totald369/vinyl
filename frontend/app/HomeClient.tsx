@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BottomSheetList from "@/components/BottomSheetList";
-import ActivityFeedPanel from "@/components/ActivityFeedPanel";
 import HomeMapStage from "@/components/home/HomeMapStage";
 import LocationRequestingOverlay from "@/components/LocationRequestingOverlay";
 import type { StoreListFilter } from "@/hooks/useStores";
@@ -32,6 +31,7 @@ import { selectVisibleActivities, type ActivityItem } from "@/lib/activityFeed";
  * [LCP] 조건부 UI는 dynamic import로 초기 번들에서 분리.
  */
 const HomeSearchOverlay = dynamic(() => import("@/components/HomeSearchOverlay"), { ssr: false });
+const ActivityFeedPanel = dynamic(() => import("@/components/ActivityFeedPanel"));
 const StoreDetailSheet = dynamic(() => import("@/components/StoreDetailSheet"), { ssr: false });
 const LocationPermissionModal = dynamic(() => import("@/components/LocationPermissionModal"), { ssr: false });
 const LayoutShiftObserver = dynamic(() => import("@/components/LayoutShiftObserver"), { ssr: false });
@@ -46,12 +46,15 @@ export type HomeClientProps = {
    * 변경 후: 첫 페인트에 즉시 표시 → 빈 화면 지속 시간 단축.
    */
   initialStores?: StoreData[];
+  /** SSR prefetch 기준 좌표(geo 쿠키·기본 지역). 클라이언트 첫 fetch와 맞춰 불필요한 재요청 방지. */
+  initialListCenter?: LatLng;
   initialActivities?: ActivityItem[];
 };
 
 export default function HomeClient({
   initialShortCode = null,
   initialStores,
+  initialListCenter,
   initialActivities = []
 }: HomeClientProps) {
   const visibleActivities = useMemo(
@@ -110,7 +113,8 @@ export default function HomeClient({
     activeFilter,
     listReference: exploreAnchor,
     searchQuery: searchOpen ? searchQuery : "",
-    initialStores
+    initialStores,
+    initialListCenter
   });
 
   const searchOverlayResults = useMemo(() => {
@@ -120,7 +124,9 @@ export default function HomeClient({
 
   const storesById = useMemo(() => new Map(stores.map((s) => [s.id, s])), [stores]);
 
-  const [manualCenter, setManualCenter] = useState<LatLng>(DEFAULT_REGION);
+  const [manualCenter, setManualCenter] = useState<LatLng>(
+    () => initialListCenter ?? DEFAULT_REGION
+  );
   const [centerVersion, setCenterVersion] = useState(0);
   const sortedStoreIdSet = useMemo(() => new Set(sortedStores.map((s) => s.id)), [sortedStores]);
   const mapStores = useMemo(() => {

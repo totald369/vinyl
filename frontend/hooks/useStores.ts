@@ -117,13 +117,16 @@ export function useStores(
     districtSlug?: string;
     searchQuery?: string;
     /**
-     * 서버 prefetch 결과(DEFAULT_REGION 기준). 첫 렌더 시 빈 배열 대신 사용해
+     * 서버 prefetch 결과(DEFAULT_REGION·geo 쿠키 기준). 첫 렌더 시 빈 배열 대신 사용해
      * 빈 화면 지속 시간을 줄임. 사용자 위치가 잡히는 즉시 useStores 가 자체 fetch 로 갱신.
      */
     initialStores?: StoreData[];
+    /** SSR 과 동일한 반경 검색 중심 — userLocation·exploreAnchor 확정 전 fetch 좌표 정렬 */
+    initialListCenter?: LatLng | null;
   }
 ) {
   const initialStoresProp = options?.initialStores;
+  const initialListCenter = options?.initialListCenter ?? null;
   const initialFromServer = useMemo(
     () => (Array.isArray(initialStoresProp) ? initialStoresProp : []),
     [initialStoresProp]
@@ -155,7 +158,8 @@ export function useStores(
     }
     return (
       listRef ??
-      userLocation ?? {
+      userLocation ??
+      initialListCenter ?? {
         lat: DEFAULT_REGION.lat,
         lng: DEFAULT_REGION.lng
       }
@@ -166,7 +170,9 @@ export function useStores(
     listRef?.lat,
     listRef?.lng,
     userLocation?.lat,
-    userLocation?.lng
+    userLocation?.lng,
+    initialListCenter?.lat,
+    initialListCenter?.lng
   ]);
 
   const isRadiusMode = !districtSlug && !debouncedSearch;

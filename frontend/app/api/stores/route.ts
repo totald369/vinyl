@@ -19,6 +19,7 @@ import {
 import {
   collectGridBucketStores,
   collectStoresWithinRadius,
+  getRegionPathBucket,
   getStoreSearchIndexes
 } from "@/lib/server/storeIndex";
 import {
@@ -103,15 +104,6 @@ function parseRegionOffsetLimit(searchParams: URLSearchParams): { offset: number
   limit = Math.min(Math.max(Math.floor(limit), 1), REGION_PAGE_MAX);
   offset = Math.max(0, Math.floor(offset));
   return { offset, limit };
-}
-
-function matchesAllNeedles(blobLower: string, needles: string[]): boolean {
-  for (const n of needles) {
-    const t = (n ?? "").trim().toLowerCase();
-    if (!t) continue;
-    if (!blobLower.includes(t)) return false;
-  }
-  return true;
 }
 
 function parseSearchOffsetLimit(searchParams: URLSearchParams): { offset: number; limit: number } {
@@ -233,22 +225,11 @@ export async function GET(request: NextRequest) {
       return jsonCached(lruHit, "public");
     }
 
-    const pathBucket = idx.byRegionPath.get(regionPathKey);
-    let candidates: StoreData[];
-    if (pathBucket !== undefined) {
-      candidates = [];
-      for (const s of pathBucket) {
-        if (!matchesProductFilter(s, productFilter)) continue;
-        candidates.push(s);
-      }
-    } else {
-      candidates = [];
-      for (const s of idx.byId.values()) {
-        if (!matchesProductFilter(s, productFilter)) continue;
-        const blob = idx.addressBlobLowerById.get(s.id) ?? "";
-        if (!matchesAllNeedles(blob, leaf.needles)) continue;
-        candidates.push(s);
-      }
+    const pathBucket = getRegionPathBucket(idx, regionPathKey, leaf.needles);
+    const candidates: StoreData[] = [];
+    for (const s of pathBucket) {
+      if (!matchesProductFilter(s, productFilter)) continue;
+      candidates.push(s);
     }
 
     type SortRow = { store: StoreData; d: number };

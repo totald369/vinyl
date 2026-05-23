@@ -59,6 +59,13 @@ const getInitialStoresCached = unstable_cache(
   { revalidate: 3600 }
 );
 
+const getInitialStoresForCenter = unstable_cache(
+  async (latKey: string, lngKey: string) =>
+    buildInitialStoresAt({ lat: Number(latKey), lng: Number(lngKey) }),
+  ["home-initial-stores-geo-v1"],
+  { revalidate: 3600 }
+);
+
 function isDefaultRegion(center: LatLng): boolean {
   return (
     Math.abs(center.lat - DEFAULT_REGION.lat) < 1e-4 &&
@@ -75,8 +82,8 @@ export default async function HomePage() {
   const center = resolveInitialCenter();
   const initialStores = isDefaultRegion(center)
     ? await getInitialStoresCached()
-    : buildInitialStoresAt(center);
-  const initialActivities = readActivityItems();
+    : await getInitialStoresForCenter(center.lat.toFixed(3), center.lng.toFixed(3));
+  const initialActivities = await readActivityItems();
   return (
     <>
       <p className="sr-only">
@@ -84,7 +91,11 @@ export default async function HomePage() {
         수 있습니다.
       </p>
       <Suspense fallback={<HomePageSkeleton />}>
-        <HomeClient initialStores={initialStores} initialActivities={initialActivities} />
+        <HomeClient
+          initialStores={initialStores}
+          initialListCenter={center}
+          initialActivities={initialActivities}
+        />
       </Suspense>
     </>
   );
