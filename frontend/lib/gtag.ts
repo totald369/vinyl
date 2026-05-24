@@ -69,6 +69,9 @@ export type GtagCustomEventName =
   | "share_store_copy"
   | "share_store_kakao"
   | "share_store_error"
+  | "share_region_open"
+  | "share_region_kakao"
+  | "copy_region_link"
   | "purchase_feedback_submit";
 
 declare global {

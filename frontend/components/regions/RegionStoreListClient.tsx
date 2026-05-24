@@ -15,7 +15,7 @@ import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
 import type { StoreListFilter } from "@/hooks/useStores";
 import { useStoreDetailAugment } from "@/hooks/useStoreDetailAugment";
 import { useUserLocation } from "@/hooks/useUserLocation";
-import { trackRegionEvent } from "@/lib/analytics";
+import { trackRegionEvent, trackRegionShareEvent, type RegionShareAnalyticsParams } from "@/lib/analytics";
 import type { ResolvedRegionLeaf } from "@/lib/koreaRegions";
 import {
   LAST_REGION_PATH_STORAGE_KEY,
@@ -32,10 +32,12 @@ import { sendGtagEvent } from "@/lib/gtag";
 import { prefetchStoreDetail } from "@/lib/storeDetailClient";
 import { filterStoresForSearchAsync } from "@/lib/storeSearchWorker";
 import {
-  parseRegionCategoryParam,
-  regionCategoryKo,
-  type RegionSeoCategory
-} from "@/lib/regionPageMetadata";
+  parseRegionCategoryFromSearchParams,
+  buildRegionShareUrl,
+  getRegionShareCopy,
+  regionShareTypeFromCategory
+} from "@/lib/regionShare";
+import { regionCategoryKo, type RegionSeoCategory } from "@/lib/regionPageMetadata";
 import type { StoreData } from "@/lib/storeData";
 import { REGION_LIST_PAGE_SIZE } from "@/lib/regionListConfig";
 import { DEFAULT_REGION, type LatLng } from "@/lib/types";
@@ -44,6 +46,9 @@ import { getDistanceKm } from "@/lib/utils";
 const StoreDetailSheet = dynamic(() => import("@/components/StoreDetailSheet"), { ssr: false });
 const HomeSearchOverlay = dynamic(() => import("@/components/HomeSearchOverlay"), { ssr: false });
 const LocationPermissionModal = dynamic(() => import("@/components/LocationPermissionModal"), {
+  ssr: false
+});
+const RegionShareSheet = dynamic(() => import("@/components/regions/RegionShareSheet"), {
   ssr: false
 });
 
@@ -135,9 +140,20 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
     return mine.length ? mine.slice(0, 4) : sampleSeoLandingsExclusiveOf(undefined).slice(0, 4);
   }, [leaf]);
 
-  const [category, setCategory] = useState<RegionSeoCategory>(() =>
-    parseRegionCategoryParam(searchParams.get("filter") ?? undefined)
+  const categoryFromUrl = useMemo(
+    () => parseRegionCategoryFromSearchParams(searchParams),
+    [searchParams]
   );
+  /** 필터 탭 직후 URL 반영 전까지 UI·fetch에 즉시 반영 */
+  const [categoryOverride, setCategoryOverride] = useState<RegionSeoCategory | null>(null);
+  const category = categoryOverride ?? categoryFromUrl;
+
+  useEffect(() => {
+    setCategoryOverride(null);
+  }, [categoryFromUrl]);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareToast, setShareToast] = useState<string | null>(null);
+  const shareToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [stores, setStores] = useState<StoreData[]>([]);
   const [total, setTotal] = useState(0);
@@ -281,16 +297,52 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
     (c: RegionSeoCategory) => {
       const path = `/regions/${slugSegments.map((s) => encodeURIComponent(s)).join("/")}`;
       const qs = new URLSearchParams();
-      if (c !== "payBag") qs.set("filter", c);
-      router.replace((qs.size ? `${path}?${qs}` : path) as Route, { scroll: false });
+      qs.set("type", regionShareTypeFromCategory(c));
+      router.replace(`${path}?${qs.toString()}` as Route, { scroll: false });
     },
     [router, slugSegments]
   );
 
-  useEffect(() => {
-    const fromUrl = parseRegionCategoryParam(searchParams.get("filter") ?? undefined);
-    setCategory((prev) => (prev === fromUrl ? prev : fromUrl));
-  }, [searchParams]);
+  useEffect(
+    () => () => {
+      if (shareToastTimerRef.current) clearTimeout(shareToastTimerRef.current);
+    },
+    []
+  );
+
+  const shareUrl = useMemo(
+    () => buildRegionShareUrl(slugSegments, category),
+    [slugSegments, category]
+  );
+  const shareCopy = useMemo(
+    () => getRegionShareCopy(leaf.headingLabelKo, category, shareUrl),
+    [leaf.headingLabelKo, category, shareUrl]
+  );
+  const shareAnalytics = useMemo(
+    (): RegionShareAnalyticsParams => ({
+      region: leaf.headingLabelKo,
+      city: leaf.cityNameKo ?? "",
+      district: leaf.districtNameKo ?? "",
+      product_type: regionShareTypeFromCategory(category),
+      result_count: total,
+      share_location: "header"
+    }),
+    [leaf.headingLabelKo, leaf.cityNameKo, leaf.districtNameKo, category, total]
+  );
+
+  const showShareToast = useCallback((message: string) => {
+    setShareToast(message);
+    if (shareToastTimerRef.current) clearTimeout(shareToastTimerRef.current);
+    shareToastTimerRef.current = setTimeout(() => {
+      setShareToast(null);
+      shareToastTimerRef.current = null;
+    }, 2200);
+  }, []);
+
+  const handleOpenShare = useCallback(() => {
+    trackRegionShareEvent("share_region_open", shareAnalytics);
+    setShareOpen(true);
+  }, [shareAnalytics]);
 
   const appendFetchLockRef = useRef(false);
   const hasMoreRef = useRef(hasMore);
@@ -520,7 +572,7 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
 
   const handleFilterChange = useCallback(
     (f: StoreListFilter) => {
-      setCategory(f);
+      setCategoryOverride(f);
       syncCategoryUrl(f);
       setMapCenterOverride(null);
       trackRegionEvent("select_store_category", {
@@ -785,6 +837,14 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
                     <img src="/Img/Icon/back_32.svg" alt="" width={32} height={32} />
                   </button>
                   <span className="min-w-0 flex-1" aria-hidden />
+                  <button
+                    type="button"
+                    aria-label="공유하기"
+                    className="flex size-12 shrink-0 items-center justify-center rounded-none border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+                    onClick={handleOpenShare}
+                  >
+                    <img src="/Img/Icon/share_24.svg" alt="" width={24} height={24} />
+                  </button>
                   <Link
                     href="/"
                     prefetch
@@ -890,6 +950,26 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
             onClose={() => setLocationModalOpen(false)}
             onAllow={handleLocationPermissionAllow}
           />
+
+          <RegionShareSheet
+            open={shareOpen}
+            onClose={() => setShareOpen(false)}
+            shareCopy={shareCopy}
+            shareUrl={shareUrl}
+            analytics={shareAnalytics}
+            onCopied={() => showShareToast("링크가 복사되었습니다")}
+          />
+
+          {shareToast ? (
+            <div
+              className="pointer-events-none fixed bottom-[max(100px,calc(18dvh+env(safe-area-inset-bottom,0px)))] left-1/2 z-toast max-w-[min(90vw,320px)] -translate-x-1/2"
+              role="status"
+            >
+              <p className="rounded-[8px] bg-[#171717] px-4 py-3 text-center text-[14px] font-medium leading-normal text-white shadow-[0px_4px_12px_rgba(0,0,0,0.16)]">
+                {shareToast}
+              </p>
+            </div>
+          ) : null}
 
           {searchOpen ? (
             <div className="pointer-events-auto fixed inset-0 z-[70] flex justify-center">

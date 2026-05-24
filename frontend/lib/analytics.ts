@@ -50,6 +50,20 @@ export type RegionAnalyticsEventName =
   | "select_store_category"
   | "click_region_store";
 
+export type RegionShareAnalyticsEventName =
+  | "share_region_open"
+  | "share_region_kakao"
+  | "copy_region_link";
+
+export type RegionShareAnalyticsParams = {
+  region: string;
+  city?: string;
+  district?: string;
+  product_type: string;
+  result_count: number;
+  share_location: "header";
+};
+
 export type RegionAnalyticsParams = {
   province?: string;
   city?: string;
@@ -80,6 +94,30 @@ export function trackRegionEvent(
     for (const [key, value] of Object.entries(cleaned)) {
       window.clarity("set", key, String(value));
     }
+  }
+}
+
+function cleanRegionShareParams(params: RegionShareAnalyticsParams) {
+  return Object.fromEntries(
+    Object.entries(params).filter(([, value]) => value !== undefined && value !== "")
+  ) as Record<string, string | number>;
+}
+
+export function trackRegionShareEvent(
+  eventName: RegionShareAnalyticsEventName,
+  params: RegionShareAnalyticsParams
+): void {
+  if (typeof window === "undefined") return;
+  const cleaned = cleanRegionShareParams(params);
+  sendGtagEvent(eventName, cleaned);
+  if (typeof window.clarity === "function") {
+    window.clarity("event", eventName);
+    for (const [key, value] of Object.entries(cleaned)) {
+      window.clarity("set", key, String(value));
+    }
+  }
+  if (process.env.NODE_ENV !== "production") {
+    console.debug("[region-share-analytics]", eventName, cleaned);
   }
 }
 
