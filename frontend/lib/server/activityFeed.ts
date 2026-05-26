@@ -1,13 +1,7 @@
-import { unstable_cache } from "next/cache";
 import type { ActivityItem } from "@/lib/activityFeed";
 import { readActivitiesFromDisk } from "@/lib/activityFeedWriter";
 
-const getCachedActivityItems = unstable_cache(
-  async () => readActivitiesFromDisk(process.cwd()),
-  ["activity-feed-items-v1"],
-  { revalidate: 600 }
-);
-
+/** activities.json 은 수 KB — 요청마다 디스크에서 읽어 배포 직후에도 패널이 즉시 반영되게 한다. */
 export function readActivityItems(): Promise<ActivityItem[]> {
-  return getCachedActivityItems();
+  return Promise.resolve(readActivitiesFromDisk(process.cwd()));
 }

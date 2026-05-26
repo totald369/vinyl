@@ -24,6 +24,15 @@ export function formatActivityPanelDate(isoDate: string): string {
   return `(${y}.${m}.${d})`;
 }
 
+/** `YYYY-MM-DD` 를 로컬 자정으로 파싱 — `new Date("YYYY-MM-DD")` UTC 해석으로 인한 필터 오차 방지 */
+export function parseActivityLocalDate(isoDate: string): Date | null {
+  const [y, m, d] = isoDate.slice(0, 10).split("-").map((part) => Number(part));
+  if (!y || !m || !d) return null;
+  const date = new Date(y, m - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+  return date;
+}
+
 export function buildActivityMessageParts(item: ActivityItem): ActivityMessagePart[] {
   switch (item.type) {
     case "USER_REPORT_REFLECTED": {
@@ -58,6 +67,12 @@ export function buildActivityMessageParts(item: ActivityItem): ActivityMessagePa
     }
     case "REGION_DATA_ADDED": {
       const regions = item.affectedRegions ?? [];
+      if (regions.length === 2) {
+        return [
+          { text: `${regions[0]}·${regions[1]}`, bold: true },
+          { text: " 판매 데이터가 추가되었어요." }
+        ];
+      }
       if (regions.length <= 1) {
         const region = regions[0] ?? "신규 지역";
         return [
@@ -97,10 +112,14 @@ export function selectVisibleActivities(items: ActivityItem[], now = new Date())
 
   return items
     .filter((item) => {
-      const d = new Date(item.createdAt.slice(0, 10));
-      return !Number.isNaN(d.getTime()) && d >= cutoff;
+      const d = parseActivityLocalDate(item.createdAt);
+      return d != null && d >= cutoff;
     })
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .sort((a, b) => {
+      const da = parseActivityLocalDate(a.createdAt)?.getTime() ?? 0;
+      const db = parseActivityLocalDate(b.createdAt)?.getTime() ?? 0;
+      return db - da;
+    })
     .slice(0, MAX_VISIBLE);
 }
 

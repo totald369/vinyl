@@ -476,7 +476,7 @@ export default function HomeClient({
             </div>
             {visibleActivities.length > 0 ? (
               <div className="flex items-start justify-between gap-2">
-                <ActivityFeedPanel items={initialActivities} />
+                <ActivityFeedPanel items={visibleActivities} />
                 <button
                   type="button"
                   onClick={handleMoveToLocation}

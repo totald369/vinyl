@@ -6,7 +6,6 @@ import {
   formatActivityPanelDate,
   getActivityIconSrc,
   getPanelReferenceDate,
-  selectVisibleActivities,
   type ActivityItem
 } from "@/lib/activityFeed";
 
@@ -33,10 +32,9 @@ function ActivityMessage({ item }: { item: ActivityItem }) {
 
 export default function ActivityFeedPanel({ items }: ActivityFeedPanelProps) {
   const [expanded, setExpanded] = useState(true);
-  const visibleItems = useMemo(() => selectVisibleActivities(items), [items]);
-  const referenceDate = useMemo(() => getPanelReferenceDate(visibleItems), [visibleItems]);
+  const referenceDate = useMemo(() => getPanelReferenceDate(items), [items]);
 
-  if (visibleItems.length === 0) return null;
+  if (items.length === 0) return null;
 
   return (
     <button
@@ -62,7 +60,7 @@ export default function ActivityFeedPanel({ items }: ActivityFeedPanelProps) {
         }`}
       >
         <ul className="flex min-h-0 flex-col gap-1 overflow-hidden">
-          {visibleItems.map((item) => (
+          {items.map((item) => (
             <li key={item.id} className="flex items-start gap-1">
               <img
                 src={getActivityIconSrc(item.type)}
