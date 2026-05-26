@@ -1,5 +1,21 @@
 [
   {
+    "id": "act-2026-05-26-region-data-added-2ycs72",
+    "type": "REGION_DATA_ADDED",
+    "createdAt": "2026-05-26",
+    "affectedRegions": [
+      "서귀포시"
+    ]
+  },
+  {
+    "id": "act-2026-05-26-region-data-added-ytv3ki",
+    "type": "REGION_DATA_ADDED",
+    "createdAt": "2026-05-26",
+    "affectedRegions": [
+      "완도군"
+    ]
+  },
+  {
     "type": "REGION_DATA_ADDED",
     "createdAt": "2026-05-23",
     "affectedRegions": [
