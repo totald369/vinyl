@@ -67,12 +67,6 @@ export function buildActivityMessageParts(item: ActivityItem): ActivityMessagePa
     }
     case "REGION_DATA_ADDED": {
       const regions = item.affectedRegions ?? [];
-      if (regions.length === 2) {
-        return [
-          { text: `${regions[0]}·${regions[1]}`, bold: true },
-          { text: " 판매 데이터가 추가되었어요." }
-        ];
-      }
       if (regions.length <= 1) {
         const region = regions[0] ?? "신규 지역";
         return [
@@ -83,8 +77,8 @@ export function buildActivityMessageParts(item: ActivityItem): ActivityMessagePa
       const first = regions[0];
       const other = regions.length - 1;
       return [
-        { text: `${first} 외 ${other}지역 `, bold: true },
-        { text: "데이터가 추가되었어요." }
+        { text: first, bold: true },
+        { text: ` 외 ${other}지역 데이터가 추가되었어요.` }
       ];
     }
     default:
@@ -105,12 +99,62 @@ export function getActivityIconSrc(type: ActivityType): string {
   }
 }
 
+export function consolidateRegionDataActivities(items: ActivityItem[]): ActivityItem[] {
+  const mergedByDate = new Map<string, ActivityItem>();
+
+  for (const item of items) {
+    if (item.type !== "REGION_DATA_ADDED") continue;
+    const date = item.createdAt.slice(0, 10);
+    const prev = mergedByDate.get(date);
+    if (!prev) {
+      mergedByDate.set(date, {
+        ...item,
+        affectedRegions: uniqueActivityRegions(item.affectedRegions ?? [])
+      });
+      continue;
+    }
+    mergedByDate.set(date, {
+      ...prev,
+      affectedRegions: uniqueActivityRegions([
+        ...(prev.affectedRegions ?? []),
+        ...(item.affectedRegions ?? [])
+      ])
+    });
+  }
+
+  const emittedDates = new Set<string>();
+  const out: ActivityItem[] = [];
+  for (const item of items) {
+    if (item.type !== "REGION_DATA_ADDED") {
+      out.push(item);
+      continue;
+    }
+    const date = item.createdAt.slice(0, 10);
+    if (emittedDates.has(date)) continue;
+    emittedDates.add(date);
+    out.push(mergedByDate.get(date) ?? item);
+  }
+  return out;
+}
+
+function uniqueActivityRegions(regions: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const region of regions) {
+    const trimmed = region.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push(trimmed);
+  }
+  return out;
+}
+
 export function selectVisibleActivities(items: ActivityItem[], now = new Date()): ActivityItem[] {
   const cutoff = new Date(now);
   cutoff.setDate(cutoff.getDate() - ACTIVITY_VISIBLE_DAYS);
   cutoff.setHours(0, 0, 0, 0);
 
-  return items
+  return consolidateRegionDataActivities(items)
     .filter((item) => {
       const d = parseActivityLocalDate(item.createdAt);
       return d != null && d >= cutoff;

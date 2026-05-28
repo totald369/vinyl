@@ -68,18 +68,32 @@ def _new_id(activity_type: str, created_at: str) -> str:
 
 
 def record_region_data_added(regions: Iterable[str], created_at: str | None = None) -> dict | None:
-    unique = _unique_regions(regions)
-    if not unique:
+    unique_new = _unique_regions(regions)
+    if not unique_new:
         return None
     created = (created_at or _today())[:10]
+    existing = _read_activities()
+
+    for i, item in enumerate(existing):
+        if item.get("type") != "REGION_DATA_ADDED":
+            continue
+        if str(item.get("createdAt", ""))[:10] != created:
+            continue
+        merged_regions = _unique_regions([*(item.get("affectedRegions") or []), *unique_new])
+        updated = {**item, "affectedRegions": merged_regions}
+        rest = [row for j, row in enumerate(existing) if j != i]
+        _write_activities([updated, *rest])
+        print(f"[activity] REGION_DATA_ADDED merged ({', '.join(merged_regions)})")
+        return updated
+
     item = {
         "id": _new_id("REGION_DATA_ADDED", created),
         "type": "REGION_DATA_ADDED",
         "createdAt": created,
-        "affectedRegions": unique,
+        "affectedRegions": unique_new,
     }
     _prepend(item)
-    print(f"[activity] REGION_DATA_ADDED ({', '.join(unique)})")
+    print(f"[activity] REGION_DATA_ADDED ({', '.join(unique_new)})")
     return item
 
 

@@ -318,6 +318,7 @@ export function mergeStoreSources(
   jeonnamSuncheonTrashRows: RawStoreRow[],
   jeonnamHwasunTrashRows: RawStoreRow[],
   jeonnamWandoTrashRows: RawStoreRow[],
+  jeonnamYeongamTrashRows: RawStoreRow[],
   jejuSeogwipoTrashRows: RawStoreRow[],
   seoulYangcheonSpecialRows: RawStoreRow[]
 ): StoreData[] {
@@ -385,6 +386,7 @@ export function mergeStoreSources(
     ...jeonnamSuncheonTrashRows,
     ...jeonnamHwasunTrashRows,
     ...jeonnamWandoTrashRows,
+    ...jeonnamYeongamTrashRows,
     ...jejuSeogwipoTrashRows,
     ...seoulYangcheonSpecialRows
   ]

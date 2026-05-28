@@ -210,13 +210,28 @@ export function recordRegionDataAdded(
   createdAt = todayIsoDate(),
   root = process.cwd()
 ): ActivityItem | null {
-  const unique = uniqueRegions(regions);
-  if (unique.length === 0) return null;
+  const uniqueNew = uniqueRegions(regions);
+  if (uniqueNew.length === 0) return null;
+  const created = createdAt.slice(0, 10);
+  const existing = readActivitiesFromDisk(root);
+
+  for (let i = 0; i < existing.length; i += 1) {
+    const item = existing[i];
+    if (item.type !== "REGION_DATA_ADDED") continue;
+    if (item.createdAt.slice(0, 10) !== created) continue;
+    const mergedRegions = uniqueRegions([...(item.affectedRegions ?? []), ...uniqueNew]);
+    const updated: ActivityItem = { ...item, affectedRegions: mergedRegions };
+    const rest = existing.filter((_, index) => index !== i);
+    writeActivitiesToDisk([updated, ...rest], root);
+    console.log(`[activity] REGION_DATA_ADDED merged (${mergedRegions.join(", ")})`);
+    return updated;
+  }
+
   return prependActivity(
     {
       type: "REGION_DATA_ADDED",
       createdAt,
-      affectedRegions: unique
+      affectedRegions: uniqueNew
     },
     root
   );
