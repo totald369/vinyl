@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-전라남도 완도군 종량제봉투·불연성마대 판매소 xlsx → stores.jeonnam-wando-trash.json
+전라남도 완도군 종량제봉투·불연성마대·대형폐기물스티커 판매소 xlsx → stores.jeonnam-wando-trash.json
 
-입력: 시군구 조사양식 (판매소 명칭, 주소, 종량제봉투 취급, 불연성마대)
+입력: 시군구 조사양식 (판매소 명칭, 주소, 종량제봉투 취급, 불연성마대, 기타)
 
   python3 scripts/import_jeonnam_wando_trash_from_xlsx.py \\
-    --input ~/Downloads/완도군\\(붙임\\)\\ 종량제봉투\\ 판매소\\ 위치정보\\ 등_조사양식.xlsx
+    --input ~/Downloads/\\(붙임\\)\\ 종량제봉투\\ 판매소\\ 위치정보\\ 등_조사양식.xlsx
 
 KAKAO_REST_API_KEY: frontend/.env.local
 """
@@ -22,6 +22,7 @@ import time
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -31,8 +32,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 OUT_JSON = FRONTEND / "public" / "data" / "stores.jeonnam-wando-trash.json"
 CACHE_PATH = SCRIPT_DIR / "geocode-cache-jeonnam-wando-trash.json"
 DL = Path.home() / "Downloads"
-DEFAULT_INPUT = DL / "완도군(붙임) 종량제봉투 판매소 위치정보 등_조사양식.xlsx"
-REF_DATE = "2026-05-21"
+DEFAULT_INPUT = DL / "(붙임) 종량제봉투 판매소 위치정보 등_조사양식.xlsx"
+REF_DATE = date.today().isoformat()
 CACHE_VERSION = "v1-wando"
 
 GEOCODE_URL = "https://dapi.kakao.com/v2/local/search/address.json"
@@ -193,6 +194,74 @@ def wando_tail(full: str) -> str:
     if full.startswith("전라남도"):
         return collapse(full.replace("전라남도", "", 1))
     return full
+
+
+# 조사양식 행정리-only 주소 → 법정리 (수동 좌표 보정 근거)
+_ADMIN_RI_LEGAL: dict[str, tuple[str, str]] = {
+    "동망리": ("완도읍", "군내리"),
+    "관중리": ("약산면", "관산리"),
+    "청별리": ("보길면", "부황리"),
+}
+
+_MANUAL_WANDO: tuple[tuple[str, str, float, float, str, str], ...] = (
+    (
+        "원일수퍼",
+        "동망리 362",
+        34.3115975,
+        126.7588461,
+        "전라남도 완도군 완도읍 청해진남로23번길 30",
+        "전라남도 완도군 완도읍 군내리 362",
+    ),
+    (
+        "조씨상회",
+        "대야1구 721-1",
+        34.36491,
+        126.7269745,
+        "전라남도 완도군 완도읍 대야일구길 4",
+        "전라남도 완도군 완도읍 대야리 721-1",
+    ),
+    (
+        "갑홍상회",
+        "관중리 739",
+        34.383646,
+        126.8906585,
+        "전라남도 완도군 약산면 관산리 739",
+        "전라남도 완도군 약산면 관산리 739",
+    ),
+    (
+        "관광슈퍼",
+        "청별리 1-16",
+        34.1695294,
+        126.5688623,
+        "전라남도 완도군 보길면 청별길 38",
+        "전라남도 완도군 보길면 부황리 1-16",
+    ),
+)
+
+
+def resolve_wando_admin_addr(addr_raw: str) -> str | None:
+    """행정리-only 주소를 Kakao가 찾을 수 있는 법정리 주소로 변환."""
+    tail = wando_tail(normalize_addr(addr_raw))
+    m = re.match(r"^대야1구\s+(.+)$", tail)
+    if m:
+        return format_display_addr(f"완도읍 대야리 {m.group(1)}")
+    for admin_ri, (eup_myeon, legal_ri) in _ADMIN_RI_LEGAL.items():
+        if tail.startswith(f"{admin_ri} "):
+            lot = collapse(tail[len(admin_ri) :])
+            if lot:
+                return format_display_addr(f"{eup_myeon} {legal_ri} {lot}")
+    return None
+
+
+def lookup_manual_wando(name: str, addr_raw: str) -> GeoHit | None:
+    addr_key = collapse(addr_raw)
+    rows = sorted(_MANUAL_WANDO, key=lambda x: len(x[0]) + len(x[1]), reverse=True)
+    for mn, frag, lat, lng, road, jibeon in rows:
+        if mn != name:
+            continue
+        if frag in addr_key or addr_key.endswith(frag):
+            return GeoHit(lat=lat, lng=lng, road=road, jibeon=jibeon)
+    return None
 
 
 def geocode_query_variants(addr_full: str, name: str) -> list[str]:
@@ -410,11 +479,11 @@ def iter_rows(path: Path) -> list[WandoRow]:
         if not addr_raw:
             continue
         has_trash = any(yn_cell(ws.cell(r, c).value) for c in range(10, 19))
-        if not has_trash:
-            continue
         has_special = yn_cell(ws.cell(r, 20).value)
         other = str(ws.cell(r, 19).value or "")
         has_sticker = "대형폐기물스티커" in other or "대형폐기물" in other
+        if not has_trash and not has_special and not has_sticker:
+            continue
         out.append(
             WandoRow(
                 name=name,
@@ -432,6 +501,7 @@ def main() -> None:
     ap.add_argument("--input", type=Path, default=DEFAULT_INPUT)
     ap.add_argument("--skip-kakao", action="store_true")
     ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--skip-activity", action="store_true", help="activities.json 기록 생략")
     args = ap.parse_args()
     inp = args.input.expanduser()
     if not inp.is_file():
@@ -463,6 +533,7 @@ def main() -> None:
 
         ck = cache_key(name, display_road)
         hit: GeoHit | None = None
+        geocode_addr = resolve_wando_admin_addr(addr_raw) or addr_raw
 
         if not args.refresh and ck in cache:
             raw = cache[ck]
@@ -477,7 +548,11 @@ def main() -> None:
                 hit = GeoHit(lat=lat, lng=lng, road=road, jibeon=jib)
 
         if hit is None and allow:
-            hit = resolve_geocode(addr_raw, name, key, display_road)
+            hit = lookup_manual_wando(name, addr_raw)
+            if hit:
+                print(f"[manual coord] {name}\t{hit.road}", file=sys.stderr)
+            else:
+                hit = resolve_geocode(geocode_addr, name, key, display_road)
             if hit is None:
                 misses += 1
                 print(f"[geocode 실패] {name}\t{display_road}", file=sys.stderr)
@@ -520,7 +595,6 @@ def main() -> None:
                 "hasTrashBag": row.has_trash,
                 "hasSpecialBag": row.has_special,
                 "hasLargeWasteSticker": row.has_sticker,
-                "adminVerified": True,
                 "dataReferenceDate": path_ref,
             }
         )
@@ -531,7 +605,7 @@ def main() -> None:
     OUT_JSON.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"wrote {len(out)} → {OUT_JSON} (ref_date={path_ref}, api≈{geo_n}, miss={misses})")
 
-    if out:
+    if out and not args.skip_activity:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         from append_activity import record_region_data_added
 

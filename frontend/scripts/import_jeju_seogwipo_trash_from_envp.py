@@ -204,7 +204,6 @@ def row_to_store(place: dict, ref_date: str) -> dict | None:
         "hasTrashBag": has_trash,
         "hasSpecialBag": has_special,
         "hasLargeWasteSticker": False,
-        "adminVerified": True,
         "dataReferenceDate": ref_date,
     }
 

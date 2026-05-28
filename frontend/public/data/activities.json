@@ -1,18 +1,18 @@
 [
   {
+    "id": "act-2026-05-28-region-data-added-wando",
+    "type": "REGION_DATA_ADDED",
+    "createdAt": "2026-05-28",
+    "affectedRegions": [
+      "완도군"
+    ]
+  },
+  {
     "id": "act-2026-05-26-region-data-added-seogwipo",
     "type": "REGION_DATA_ADDED",
     "createdAt": "2026-05-26",
     "affectedRegions": [
       "서귀포시"
-    ]
-  },
-  {
-    "id": "act-2026-05-26-region-data-added-wando",
-    "type": "REGION_DATA_ADDED",
-    "createdAt": "2026-05-26",
-    "affectedRegions": [
-      "완도군"
     ]
   },
   {
