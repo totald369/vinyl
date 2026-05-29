@@ -1,5 +1,13 @@
 [
   {
+    "id": "act-2026-05-29-region-data-added-rt3wmz",
+    "type": "REGION_DATA_ADDED",
+    "createdAt": "2026-05-29",
+    "affectedRegions": [
+      "담양군"
+    ]
+  },
+  {
     "id": "act-2026-05-28-region-data-added-wando",
     "type": "REGION_DATA_ADDED",
     "createdAt": "2026-05-28",

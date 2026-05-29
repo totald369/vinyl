@@ -1,0 +1,30 @@
+---
+description: 지역 판매처 데이터 import 시 activities 패널 반영 정책
+globs: frontend/scripts/import_*.{py,ts}
+alwaysApply: false
+---
+
+# 지역 데이터 import 정책
+
+신규·갱신 지역 판매처 JSON을 추가할 때 반드시 아래를 따른다.
+
+## activities 패널 (필수)
+
+- import 스크립트 마지막에 `record_region_data_added([...])` 호출
+- `--skip-activity` 옵션은 디버그용으로만 제공; 기본 실행 경로에서는 패널을 갱신한다
+- 같은 날 여러 지역을 추가하면 `append_activity.py`가 `activities.json`에 병합한다
+- import만 하고 패널을 빼면 작업 미완료로 본다
+
+## 데이터 필드
+
+- `adminVerified` 부여 금지 (신규 import)
+- `hasTrashBag` / `hasSpecialBag` / `hasLargeWasteSticker`는 원본 자료 플래그에 맞게 설정
+- `storeDataset.ts`와 `build-merged-cache.ts`에 JSON 소스 연결
+- import 후 `npm run data:build-cache` 실행
+
+## 체크리스트
+
+1. `stores.{region}-*.json` 생성
+2. import 스크립트 + geocode 캐시
+3. `storeDataset.ts`, `build-merged-cache.ts` 연결
+4. `activities.json` 패널 반영 (`record_region_data_added`)
