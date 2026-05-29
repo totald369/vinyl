@@ -20,6 +20,7 @@ alwaysApply: false
 - `adminVerified` 부여 금지 (신규 import)
 - `hasTrashBag` / `hasSpecialBag` / `hasLargeWasteSticker`는 원본 자료 플래그에 맞게 설정
 - `storeDataset.ts`와 `build-merged-cache.ts`에 JSON 소스 연결
+- 신규 JSON 파일은 `lib/storeDataSourceFiles.ts`의 `STORE_DATA_JSON_FILES`에 추가
 - import 후 `npm run data:build-cache` 실행
 
 ## 체크리스트

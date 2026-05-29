@@ -14,6 +14,7 @@ import path from "path";
 
 import type { RawStoreRow } from "../lib/storeData";
 import { mergeStoreSources } from "../lib/storeData";
+import { STORE_DATA_JSON_FILES } from "../lib/storeDataSourceFiles";
 import type { RawReportRow } from "../lib/reportStores";
 import { syncReportActivitiesFromRows } from "../lib/activityFeedWriter";
 
@@ -34,81 +35,18 @@ function readJsonArray<T>(file: string): T[] {
 function main() {
   const startedAt = Date.now();
 
-  const merged = mergeStoreSources(
-    readJsonArray<RawStoreRow>("stores.sample.json"),
-    readJsonArray<RawStoreRow>("stores.gunpo.json"),
-    readJsonArray<RawStoreRow>("stores.goyang.json"),
-    readJsonArray<RawStoreRow>("stores.goyang-sticker.json"),
-    readJsonArray<RawReportRow>("reports_rows.json"),
-    readJsonArray<RawStoreRow>("stores.guro-noncombust.json"),
-    readJsonArray<RawStoreRow>("stores.gwanak-noncombust.json"),
-    readJsonArray<RawStoreRow>("stores.dobong-noncombust.json"),
-    readJsonArray<RawStoreRow>("stores.bucheon-gbms.json"),
-    readJsonArray<RawStoreRow>("stores.busan-namgu-trash.json"),
-    readJsonArray<RawStoreRow>("stores.busan-junggu-trash.json"),
-    readJsonArray<RawStoreRow>("stores.busan-junggu-pp.json"),
-    readJsonArray<RawStoreRow>("stores.busan-donggu-trash.json"),
-    readJsonArray<RawStoreRow>("stores.busan-dongnae-trash.json"),
-    readJsonArray<RawStoreRow>("stores.busan-geumjeong-trash.json"),
-    readJsonArray<RawStoreRow>("stores.busan-geumjeong-special.json"),
-    readJsonArray<RawStoreRow>("stores.busan-bukgu-trash.json"),
-    readJsonArray<RawStoreRow>("stores.busan-bukgu-special.json"),
-    readJsonArray<RawStoreRow>("stores.busan-sasang-trash.json"),
-    readJsonArray<RawStoreRow>("stores.busan-sasang-special.json"),
-    readJsonArray<RawStoreRow>("stores.busan-haeundae-trash.json"),
-    readJsonArray<RawStoreRow>("stores.busan-yeongdo-trash.json"),
-    readJsonArray<RawStoreRow>("stores.gyeonggi-gwangju-findstore.json"),
-    readJsonArray<RawStoreRow>("stores.gwangju-trash-lifeinsights.json"),
-    readJsonArray<RawStoreRow>("stores.daegu-buk-dalseo-trash.json"),
-    readJsonArray<RawStoreRow>("stores.incheon-michuhol-trash.json"),
-    readJsonArray<RawStoreRow>("stores.incheon-yeonsu-trash-sticker.json"),
-    readJsonArray<RawStoreRow>("stores.incheon-namdong-trash.json"),
-    readJsonArray<RawStoreRow>("stores.incheon-bupyeong-trash-sticker-special.json"),
-    readJsonArray<RawStoreRow>("stores.incheon-gyeyang-gbms.json"),
-    readJsonArray<RawStoreRow>("stores.gyeonggi-siheung-trash.json"),
-    readJsonArray<RawStoreRow>("stores.daejeon-donggu-trash.json"),
-    readJsonArray<RawStoreRow>("stores.daejeon-yuseong-trash.json"),
-    readJsonArray<RawStoreRow>("stores.daejeon-daedeok-trash.json"),
-    readJsonArray<RawStoreRow>("stores.gangwon-wonju-trash.json"),
-    readJsonArray<RawStoreRow>("stores.gangwon-taebaek-trash.json"),
-    readJsonArray<RawStoreRow>("stores.ulsan-donggu-trash.json"),
-    readJsonArray<RawStoreRow>("stores.ulsan-bukgu-trash.json"),
-    readJsonArray<RawStoreRow>("stores.ulsan-bukgu-special.json"),
-    readJsonArray<RawStoreRow>("stores.ulsan-junggu-trash.json"),
-    readJsonArray<RawStoreRow>("stores.ulsan-junggu-special.json"),
-    readJsonArray<RawStoreRow>("stores.chungbuk-chungju-trash.json"),
-    readJsonArray<RawStoreRow>("stores.chungnam-trash.json"),
-    readJsonArray<RawStoreRow>("stores.chungnam-gongju-trash.json"),
-    readJsonArray<RawStoreRow>("stores.chungnam-gongju-special.json"),
-    readJsonArray<RawStoreRow>("stores.chungbuk-cheongju-trash.json"),
-    readJsonArray<RawStoreRow>("stores.chungbuk-jeungpyeong-trash.json"),
-    readJsonArray<RawStoreRow>("stores.jeonbuk-wanju-trash.json"),
-    readJsonArray<RawStoreRow>("stores.jeonbuk-gunsan-trash.json"),
-    readJsonArray<RawStoreRow>("stores.jeonbuk-buan-trash.json"),
-    readJsonArray<RawStoreRow>("stores.jeonbuk-jeongeup-trash.json"),
-    readJsonArray<RawStoreRow>("stores.jeonbuk-gimje-trash.json"),
-    readJsonArray<RawStoreRow>("stores.jeonbuk-imsil-trash.json"),
-    readJsonArray<RawStoreRow>("stores.gyeongbuk-gyeongju-trash.json"),
-    readJsonArray<RawStoreRow>("stores.gyeongnam-changwon-trash.json"),
-    readJsonArray<RawStoreRow>("stores.gyeongnam-tongyeong-trash.json"),
-    readJsonArray<RawStoreRow>("stores.gyeongnam-gimhae-trash.json"),
-    readJsonArray<RawStoreRow>("stores.gyeongnam-miryang-trash.json"),
-    readJsonArray<RawStoreRow>("stores.jeonnam-yeosu-trash.json"),
-    readJsonArray<RawStoreRow>("stores.jeonnam-suncheon-trash.json"),
-    readJsonArray<RawStoreRow>("stores.jeonnam-hwasun-trash.json"),
-    readJsonArray<RawStoreRow>("stores.jeonnam-wando-trash.json"),
-    readJsonArray<RawStoreRow>("stores.jeonnam-yeongam-trash.json"),
-    readJsonArray<RawStoreRow>("stores.jeonnam-damyang-trash.json"),
-    readJsonArray<RawStoreRow>("stores.jeju-seogwipo-trash.json"),
-    readJsonArray<RawStoreRow>("stores.seoul-yangcheon-special.json")
+  const reportRows = readJsonArray<RawReportRow>("reports_rows.json");
+  const storeSources = STORE_DATA_JSON_FILES.map((file) =>
+    readJsonArray<RawStoreRow>(file)
   );
+  const merged = mergeStoreSources(reportRows, ...storeSources);
 
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
   fs.writeFileSync(OUT_FILE, JSON.stringify(merged), "utf8");
 
-  syncReportActivitiesFromRows(readJsonArray<RawReportRow>("reports_rows.json"));
+  syncReportActivitiesFromRows(reportRows);
 
   const stat = fs.statSync(OUT_FILE);
   const elapsedMs = Date.now() - startedAt;
