@@ -1,5 +1,13 @@
 [
   {
+    "id": "act-2026-05-31-region-data-added-es1tm0",
+    "type": "REGION_DATA_ADDED",
+    "createdAt": "2026-05-31",
+    "affectedRegions": [
+      "거창군"
+    ]
+  },
+  {
     "id": "act-2026-05-29-region-data-added-rt3wmz",
     "type": "REGION_DATA_ADDED",
     "createdAt": "2026-05-29",
