@@ -1,5 +1,13 @@
 [
   {
+    "id": "act-2026-06-01-region-data-added-tcyo1o",
+    "type": "REGION_DATA_ADDED",
+    "createdAt": "2026-06-01",
+    "affectedRegions": [
+      "여수시"
+    ]
+  },
+  {
     "id": "act-2026-05-31-region-data-added-es1tm0",
     "type": "REGION_DATA_ADDED",
     "createdAt": "2026-05-31",

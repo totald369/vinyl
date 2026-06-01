@@ -2,6 +2,8 @@
 """
 전라남도 여수시 종량제봉투 판매업체 CSV → stores.jeonnam-yeosu-trash.json
 
+(2026년 공개청구 xls는 import_jeonnam_yeosu_trash_from_xls.py 사용)
+
 입력: 판매 업체 상호 명, 도로명/지번 주소, 위·경도, 종량제봉투·대형폐기물 스티커 판매 여부
 
   python3 scripts/import_jeonnam_yeosu_trash_from_csv.py \\
