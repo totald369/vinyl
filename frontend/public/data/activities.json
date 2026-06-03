@@ -1,5 +1,16 @@
 [
   {
+    "id": "act-2026-06-03-region-data-added-tt5a4t",
+    "type": "REGION_DATA_ADDED",
+    "createdAt": "2026-06-03",
+    "affectedRegions": [
+      "진도군",
+      "강진군",
+      "장수군",
+      "동해시"
+    ]
+  },
+  {
     "id": "act-2026-06-01-region-data-added-tcyo1o",
     "type": "REGION_DATA_ADDED",
     "createdAt": "2026-06-01",
