@@ -1,5 +1,13 @@
 [
   {
+    "id": "act-2026-06-04-region-data-added-mlmgha",
+    "type": "REGION_DATA_ADDED",
+    "createdAt": "2026-06-04",
+    "affectedRegions": [
+      "장흥군"
+    ]
+  },
+  {
     "id": "act-2026-06-03-region-data-added-tt5a4t",
     "type": "REGION_DATA_ADDED",
     "createdAt": "2026-06-03",
