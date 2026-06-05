@@ -1,20 +1,12 @@
 import type { StoreListFilter } from "@/hooks/useStores";
 
 export const STORE_MARKER_DISPLAY_PX = 80;
+export const STORE_MARKER_SELECTED_SCALE = 1.6;
 
-const FILTER_MARKER_SRC: Record<StoreListFilter, { src: string; selectedSrc: string }> = {
-  payBag: {
-    src: "/Img/Icon/trash_bag_80.svg",
-    selectedSrc: "/Img/Icon/trash_bag_80_selected.svg"
-  },
-  nonBurnable: {
-    src: "/Img/Icon/non-fire_80.svg",
-    selectedSrc: "/Img/Icon/non-fire_80_selected.svg"
-  },
-  largeSticker: {
-    src: "/Img/Icon/sticker_80.svg",
-    selectedSrc: "/Img/Icon/sticker_80_selected.svg"
-  }
+const FILTER_MARKER_SRC: Record<StoreListFilter, string> = {
+  payBag: "/Img/Icon/trash_bag_80.svg",
+  nonBurnable: "/Img/Icon/non-fire_80.svg",
+  largeSticker: "/Img/Icon/sticker_80.svg"
 };
 
 type MarkerImagePair = { normal: unknown; selected: unknown };
@@ -33,7 +25,7 @@ export function isKakaoMapsConstructorsReady(): boolean {
   );
 }
 
-/** 필터별 MarkerImage 2종(일반·선택) — 마커마다 재생성하지 않음 */
+/** 필터별 MarkerImage 2종(일반·선택 160%) — 마커마다 재생성하지 않음 */
 export function getStoreMarkerImages(
   filter: StoreListFilter
 ): MarkerImagePair {
@@ -44,14 +36,19 @@ export function getStoreMarkerImages(
   }
 
   const maps = window.kakao!.maps;
-  const px = STORE_MARKER_DISPLAY_PX;
-  const size = new maps.Size(px, px);
-  const offset = new maps.Point(px / 2, px / 2);
-  const meta = FILTER_MARKER_SRC[filter];
+  const src = FILTER_MARKER_SRC[filter];
+  const normalPx = STORE_MARKER_DISPLAY_PX;
+  const selectedPx = Math.round(normalPx * STORE_MARKER_SELECTED_SCALE);
+  const normalSize = new maps.Size(normalPx, normalPx);
+  const selectedSize = new maps.Size(selectedPx, selectedPx);
 
   const pair: MarkerImagePair = {
-    normal: new maps.MarkerImage(meta.src, size, { offset }),
-    selected: new maps.MarkerImage(meta.selectedSrc, size, { offset })
+    normal: new maps.MarkerImage(src, normalSize, {
+      offset: new maps.Point(normalPx / 2, normalPx / 2)
+    }),
+    selected: new maps.MarkerImage(src, selectedSize, {
+      offset: new maps.Point(selectedPx / 2, selectedPx / 2)
+    })
   };
 
   if (!cached) cached = {};
