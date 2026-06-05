@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-전라남도 순천시 종량제봉투·특수마대(불연성) 판매처 xlsx → stores.jeonnam-suncheon-trash.json
+경상남도 창녕군 종량제봉투·불연성마대(특수마대) 판매소 xlsx → stores.gyeongnam-changnyeong-trash.json
 
-시트 Sheet1 (3행~): 구분 | 상호명 | 주소 | 연락처 | 종량제봉투 판매 여부 | 특수마대 판매 여부 | 기타
-  1행 제목에서 기준일(예: 2026.5.31.) 추출
+시트 `지정판매소` (4행~):
+  상호 | 도로명 주소 | … | 일반용 용량별 Y | col13 마대(불연성) | 재사용 용량별 | col19 마대(불연성)
 
-  python3 scripts/import_jeonnam_suncheon_trash_from_xlsx.py \\
-    --input ~/Downloads/\\(순천시\\)정보공개청구\\ 요청자료.xlsx
+  pip install openpyxl
+  python3 scripts/import_gyeongnam_changnyeong_trash_from_xlsx.py \\
+    --input ~/Downloads/창녕군_정보공개청구\\ 답변\\(종량제봉투\\ 및\\ 특수마대\\ 판매처\\).xlsx
 
 KAKAO_REST_API_KEY: frontend/.env.local
 """
@@ -23,20 +24,25 @@ import time
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from openpyxl import load_workbook
 
 FRONTEND = Path(__file__).resolve().parent.parent
 SCRIPT_DIR = Path(__file__).resolve().parent
-OUT_JSON = FRONTEND / "public" / "data" / "stores.jeonnam-suncheon-trash.json"
-CACHE_PATH = SCRIPT_DIR / "geocode-cache-jeonnam-suncheon-trash.json"
+OUT_JSON = FRONTEND / "public" / "data" / "stores.gyeongnam-changnyeong-trash.json"
+CACHE_PATH = SCRIPT_DIR / "geocode-cache-gyeongnam-changnyeong-trash.json"
 DL = Path.home() / "Downloads"
-DEFAULT_INPUT = DL / "(순천시)정보공개청구 요청자료.xlsx"
-REF_DATE = "2026-05-31"
-CACHE_VERSION = "v2-suncheon-2026"
-HEADER_ROW = 2
-DATA_START_ROW = 3
+DEFAULT_INPUT = DL / "창녕군_정보공개청구 답변(종량제봉투 및 특수마대 판매처).xlsx"
+SHEET_NAME = "지정판매소"
+DATA_START_ROW = 4
+REF_DATE = "2026-06-05"
+CACHE_VERSION = "v1-changnyeong"
+
+# 일반용 1~75ℓ(4~12), 재사용 3~30ℓ(14~18) — 마대 열(13,19) 제외
+TRASH_BAG_COLS = tuple(range(4, 13)) + tuple(range(14, 19))
+SPECIAL_BAG_COLS = (13, 19)
 
 GEOCODE_URL = "https://dapi.kakao.com/v2/local/search/address.json"
 KEYWORD_URL = "https://dapi.kakao.com/v2/local/search/keyword.json"
@@ -44,10 +50,6 @@ COORD2_URL = "https://dapi.kakao.com/v2/local/geo/coord2address.json"
 GEOCODE_DELAY = 0.06
 
 WS_RE = re.compile(r"[ \t\r\n\v\f]+")
-LOT_RE = re.compile(r"^(?P<prefix>.*?)(?P<main>\d+)(?:-(?P<sub>\d+))?\s*$")
-ROAD_RE = re.compile(r"(로|길|대로)\s*(\d+)")
-_REF_FILENAME = re.compile(r"(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})")
-_REF_TITLE = re.compile(r"(\d{4})\.(\d{1,2})\.(\d{1,2})")
 
 
 def _load_dotenv_local() -> None:
@@ -68,7 +70,27 @@ _load_dotenv_local()
 
 
 def collapse(s: str) -> str:
-    return WS_RE.sub(" ", (s or "").replace("\xa0", " ")).strip()
+    return WS_RE.sub(" ", (str(s or "")).replace("\xa0", " ")).strip()
+
+
+def cell_str(v: object) -> str:
+    if v is None or v == "":
+        return ""
+    if isinstance(v, float) and v == int(v):
+        return str(int(v))
+    return str(v).strip()
+
+
+def flag_y(val: object) -> bool:
+    t = collapse(str(val or "")).upper()
+    return t in ("O", "○", "Y", "YES", "예", "여")
+
+
+def load_kakao_key() -> str | None:
+    return (
+        os.environ.get("KAKAO_REST_API_KEY", "").strip()
+        or os.environ.get("KAKAO_REST_KEY", "").strip()
+    )
 
 
 def parse_float(v: object) -> float | None:
@@ -79,102 +101,55 @@ def parse_float(v: object) -> float | None:
         return None
 
 
-def load_kakao_key() -> str | None:
-    return (
-        os.environ.get("KAKAO_REST_API_KEY", "").strip()
-        or os.environ.get("KAKAO_REST_KEY", "").strip()
-    )
-
-
-def flag_y(val: object) -> bool:
-    t = collapse(str(val or "")).upper()
-    return t in ("Y", "YES", "예", "여", "O", "○")
-
-
-def ref_date_from_workbook(ws) -> str:
-    title = collapse(str(ws.cell(1, 1).value or ""))
-    m = _REF_TITLE.search(title)
-    if m:
-        y, mo, d = m.groups()
-        return f"{y}-{int(mo):02d}-{int(d):02d}"
-    return REF_DATE
-
-
 def ref_date_from_path(p: Path) -> str:
-    m = _REF_FILENAME.search(p.name)
-    if m:
-        y, mo, d = m.groups()
-        return f"{y}-{int(mo):02d}-{int(d):02d}"
-    return REF_DATE
+    try:
+        return datetime.fromtimestamp(p.stat().st_mtime).date().isoformat()
+    except OSError:
+        return REF_DATE
 
 
-def in_suncheon_bbox(lat: float, lng: float) -> bool:
-    return 34.78 <= lat <= 35.12 and 127.30 <= lng <= 127.65
+def in_changnyeong_bbox(lat: float, lng: float) -> bool:
+    # 대합·이방·유어 면(서·북부) 포함
+    return 35.35 <= lat <= 35.65 and 128.33 <= lng <= 128.82
 
 
-def suncheon_in_text(blob: str) -> bool:
+def changnyeong_in_text(blob: str) -> bool:
     t = (blob or "").replace(" ", "")
-    if "순천향" in t or "아산" in t:
+    if "창녕향" in t:
         return False
-    return "순천" in t
+    return "창녕" in t
 
 
 def format_display_addr(raw: str) -> str:
     a = collapse(raw)
-    a = re.sub(r"^전남\s+", "전라남도 ", a)
+    a = re.sub(r"^경남\s+", "경상남도 ", a)
     if not a:
         return ""
-    if a.startswith("전라남도"):
+    if a.startswith("경상남도"):
         return a
-    if a.startswith("순천시"):
-        return f"전라남도 {a}"
-    return f"전라남도 순천시 {a}"
+    if a.startswith("창녕군"):
+        return f"경상남도 {a}"
+    return f"경상남도 창녕군 {a}"
 
 
-def extract_paren_hint(raw: str) -> tuple[str, str]:
-    a = collapse(raw)
-    hint = ""
-    m = re.search(r"\(([^)]+)\)", a)
-    if m:
-        parts = [collapse(p) for p in m.group(1).split(",") if collapse(p)]
-        for p in parts:
-            if re.search(r"(동|읍|면|리)$", p.replace(" ", "")):
-                hint = p
-                break
-        if not hint and parts:
-            hint = parts[0]
-        a = collapse(re.sub(r"\s*\([^)]*\)\s*", " ", a))
-    return a, hint
-
-
-def normalize_addr(addr_raw: str) -> str:
-    core, hint = extract_paren_hint(addr_raw)
-    a = collapse(core)
-    a = re.sub(r"\s*번지\s*", " ", a)
-    a = re.sub(r"\s+\d+\s*층\s*", " ", a)
-    a = re.sub(r"\s+\d+\s*호\s*", " ", a)
-    a = re.sub(r"\s*~\s*\d+\s*호\s*", " ", a)
-    a = re.sub(r",\s*.*$", "", a)
-    a = re.sub(r"\s+외\s+\d+\s*필지\s*", " ", a)
-    a = re.sub(r"(\d+)\s+(\d+)\s*$", r"\1-\2", a)
-    a = re.sub(r"([가-힣]+(?:리|동))(\d+)", r"\1 \2", a)
-    if a.startswith("순천시 "):
-        a = a[len("순천시 ") :]
-    if hint and hint not in a and not re.search(r"(읍|면)", a):
-        if is_likely_jibeon(a) and not re.match(r"^[가-힣]+동", a.replace(" ", "")):
-            a = f"{hint} {a}"
-        elif not is_likely_jibeon(a):
-            a = f"{hint} {a}"
+def normalize_changnyeong_addr(addr_raw: str) -> str:
+    a = collapse(addr_raw)
+    if not a:
+        return ""
+    a = re.sub(r"\s*\([^)]*\)\s*", " ", a)
+    if not a.startswith("창녕") and not a.startswith("경상"):
+        a = f"창녕군 {a}"
     return format_display_addr(a)
 
 
-def is_likely_jibeon(tail: str) -> bool:
-    if ROAD_RE.search(tail):
-        return False
-    return bool(re.search(r"\d", tail))
+def geocode_target(full: str) -> str:
+    a = collapse(full)
+    a = re.sub(r",\s*.*$", "", a)
+    a = re.sub(r"\s+\d+\s*호\s*$", "", a)
+    return a
 
 
-def lot_query_variants(tail: str) -> list[str]:
+def road_format_variants(addr: str) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
 
@@ -184,37 +159,29 @@ def lot_query_variants(tail: str) -> list[str]:
             seen.add(t)
             out.append(t)
 
-    push(tail)
-    m2 = LOT_RE.match(tail)
-    if m2:
-        prefix, main, sub = m2.group("prefix"), m2.group("main"), m2.group("sub")
-        subs: list[str | None] = [sub, "1", "2", "3", "4", "5"] if sub else [None]
-        for s in subs:
-            if s is None:
-                push(f"{prefix}{main}")
-            else:
-                push(f"{prefix}{main}-{s}")
+    push(addr)
+    compact = addr.replace(" ", "")
+    push(compact)
+    push(re.sub(r"(\d+번길)(\d+)$", r"\1 \2", compact))
+    push(re.sub(r"([가-힣]+리)(\d+길)", r"\1\2", compact))
+    push(re.sub(r"([가-힣]+로)(\d+)", r"\1 \2", compact))
     return out
 
 
-def suncheon_tail(full: str) -> str:
+def changnyeong_tail(full: str) -> str:
     for prefix in (
-        "전라남도 순천시 ",
-        "전라남도순천시",
-        "전라남도 ",
-        "전남 순천시 ",
-        "순천시 ",
+        "경상남도 창녕군 ",
+        "경상남도 ",
+        "경남 창녕군 ",
+        "창녕군 ",
     ):
         if full.startswith(prefix):
             return collapse(full[len(prefix) :])
-    if full.startswith("전라남도"):
-        return collapse(full.replace("전라남도", "", 1))
     return full
 
 
-def geocode_query_variants(addr_full: str, name: str) -> list[str]:
-    norm = normalize_addr(addr_full)
-    tail = suncheon_tail(norm)
+def geocode_query_variants(road_full: str, name: str) -> list[str]:
+    target = geocode_target(road_full)
     out: list[str] = []
     seen: set[str] = set()
 
@@ -224,27 +191,20 @@ def geocode_query_variants(addr_full: str, name: str) -> list[str]:
             seen.add(t)
             out.append(t)
 
-    if is_likely_jibeon(tail):
-        for tv in lot_query_variants(tail):
-            push(f"전남 순천시 {tv}")
-            push(f"전라남도 순천시 {tv}")
-    else:
-        push(f"전남 순천시 {tail}")
-        push(f"전라남도 순천시 {tail}")
-        push(norm)
-        if re.search(r"-\d+\s*$", tail):
-            rt = re.sub(r"-\d+\s*$", "", tail).strip()
-            push(f"전남 순천시 {rt}")
+    for base in road_format_variants(target):
+        tail = changnyeong_tail(base)
+        push(f"경남 창녕군 {tail}")
+        push(f"경상남도 창녕군 {tail}")
+        push(base)
         road_only = re.sub(r"\s+\d+(?:-\d+)?\s*$", "", tail).strip()
         if road_only and road_only != tail:
-            push(f"전남 순천시 {road_only}")
+            push(f"경남 창녕군 {road_only}")
+        m = re.match(r"^(.+?(?:동|읍|면))", tail.replace(" ", ""))
+        if m:
+            push(f"경남 창녕군 {collapse(m.group(1))}")
 
-    m = re.match(r"^(.+?(?:동|읍|면))", tail.replace(" ", ""))
-    if m:
-        push(f"전남 순천시 {collapse(m.group(1))}")
-
-    push(f"{name} 순천")
-    push(f"{name} 순천시")
+    push(f"{name} 창녕")
+    push(f"{name} 창녕군")
     return out
 
 
@@ -254,6 +214,14 @@ class GeoHit:
     lng: float
     road: str
     jibeon: str
+
+
+@dataclass
+class ChangnyeongRow:
+    name: str
+    addr_raw: str
+    has_trash: bool
+    has_special: bool
 
 
 def load_cache() -> dict[str, list]:
@@ -310,9 +278,9 @@ def coord2address(lng: float, lat: float, kakao_key: str) -> tuple[str, str]:
 def parse_address_doc(d: dict, kakao_key: str) -> GeoHit | None:
     lat = parse_float(d.get("y"))
     lng = parse_float(d.get("x"))
-    if lat is None or lng is None or not in_suncheon_bbox(lat, lng):
+    if lat is None or lng is None or not in_changnyeong_bbox(lat, lng):
         return None
-    if not suncheon_in_text(_doc_blob(d)):
+    if not changnyeong_in_text(_doc_blob(d)):
         return None
     jibeon = format_display_addr(str(d.get("address_name") or ""))
     ra = d.get("road_address")
@@ -332,9 +300,9 @@ def parse_address_doc(d: dict, kakao_key: str) -> GeoHit | None:
 def parse_keyword_doc(d: dict, kakao_key: str) -> GeoHit | None:
     lat = parse_float(d.get("y"))
     lng = parse_float(d.get("x"))
-    if lat is None or lng is None or not in_suncheon_bbox(lat, lng):
+    if lat is None or lng is None or not in_changnyeong_bbox(lat, lng):
         return None
-    if not suncheon_in_text(_doc_blob(d)):
+    if not changnyeong_in_text(_doc_blob(d)):
         return None
     jibeon = format_display_addr(str(d.get("address_name") or ""))
     road = format_display_addr(str(d.get("road_address_name") or ""))
@@ -360,27 +328,25 @@ def kakao_get(url: str, query: str, key: str) -> list[dict]:
     return data.get("documents") or []
 
 
-def area_fallback(addr_full: str, key: str, display: str) -> GeoHit | None:
-    tail = suncheon_tail(normalize_addr(addr_full))
+def area_fallback(road_full: str, key: str, display_road: str) -> GeoHit | None:
+    tail = changnyeong_tail(geocode_target(road_full))
     m = re.match(r"^(.+?(?:동|읍|면))", tail.replace(" ", ""))
     if not m:
         return None
     area = collapse(m.group(1))
-    for q in (f"전남 순천시 {area}", f"전라남도 순천시 {area}"):
+    for q in (f"경남 창녕군 {area}", f"경상남도 창녕군 {area}"):
         for d in kakao_get(GEOCODE_URL, q, key):
             hit = parse_address_doc(d, key)
             if hit:
-                hit.road = display if not is_likely_jibeon(suncheon_tail(display)) else hit.road
+                hit.road = display_road
                 cj, cr = coord2address(hit.lng, hit.lat, key)
-                hit.jibeon = cj or normalize_addr(addr_full)
-                if not hit.road or hit.road == hit.jibeon:
-                    hit.road = cr or display
+                hit.jibeon = cj or hit.jibeon
                 return hit
     return None
 
 
-def resolve_geocode(addr_raw: str, name: str, key: str, display: str) -> GeoHit | None:
-    for q in geocode_query_variants(addr_raw, name):
+def resolve_geocode(road_full: str, name: str, key: str, display_road: str) -> GeoHit | None:
+    for q in geocode_query_variants(road_full, name):
         for d in kakao_get(GEOCODE_URL, q, key):
             hit = parse_address_doc(d, key)
             if hit:
@@ -389,46 +355,40 @@ def resolve_geocode(addr_raw: str, name: str, key: str, display: str) -> GeoHit 
             hit = parse_keyword_doc(d, key)
             if hit:
                 return hit
-    return area_fallback(addr_raw, key, display)
+    return area_fallback(road_full, key, display_road)
 
 
-def display_addresses(addr_raw: str) -> tuple[str, str]:
-    norm = normalize_addr(addr_raw)
-    return norm, norm
+def cache_key(name: str, road: str) -> str:
+    return hashlib.sha1(f"{CACHE_VERSION}:{name}:{road}".encode()).hexdigest()[:28]
 
 
-def cache_key(name: str, addr: str) -> str:
-    return hashlib.sha1(f"{CACHE_VERSION}:{name}:{addr}".encode()).hexdigest()[:28]
+def row_flags(ws, r: int) -> tuple[bool, bool]:
+    has_trash = any(flag_y(ws.cell(r, c).value) for c in TRASH_BAG_COLS)
+    has_special = any(flag_y(ws.cell(r, c).value) for c in SPECIAL_BAG_COLS)
+    return has_trash, has_special
 
 
-@dataclass
-class SuncheonRow:
-    name: str
-    addr_raw: str
-    has_trash: bool
-    has_special: bool
-
-
-def iter_rows(path: Path) -> list[SuncheonRow]:
-    ws = load_workbook(path, data_only=True).active
-    out: list[SuncheonRow] = []
-    for r in range(DATA_START_ROW, ws.max_row + 1):
-        name = collapse(str(ws.cell(r, 2).value or ""))
-        addr = collapse(str(ws.cell(r, 3).value or ""))
-        if not name or not addr or name in ("상호명", "판매인지정소"):
+def iter_rows(path: Path) -> list[ChangnyeongRow]:
+    wb = load_workbook(path, read_only=True, data_only=True)
+    ws = wb[SHEET_NAME] if SHEET_NAME in wb.sheetnames else wb.active
+    out: list[ChangnyeongRow] = []
+    for r in range(DATA_START_ROW, (ws.max_row or 0) + 1):
+        name = cell_str(ws.cell(r, 1).value)
+        addr_raw = cell_str(ws.cell(r, 2).value)
+        if not name or not addr_raw or name in ("상호", "판매소명"):
             continue
-        has_trash = flag_y(ws.cell(r, 5).value)
-        has_special = flag_y(ws.cell(r, 6).value)
+        has_trash, has_special = row_flags(ws, r)
         if not has_trash and not has_special:
             continue
         out.append(
-            SuncheonRow(
+            ChangnyeongRow(
                 name=name,
-                addr_raw=addr,
+                addr_raw=addr_raw,
                 has_trash=has_trash,
                 has_special=has_special,
             )
         )
+    wb.close()
     return out
 
 
@@ -437,6 +397,7 @@ def main() -> None:
     ap.add_argument("--input", type=Path, default=DEFAULT_INPUT)
     ap.add_argument("--skip-kakao", action="store_true")
     ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--skip-activity", action="store_true")
     args = ap.parse_args()
     inp = args.input.expanduser()
     if not inp.is_file():
@@ -447,9 +408,7 @@ def main() -> None:
     if not args.skip_kakao and not key:
         raise SystemExit("KAKAO_REST_API_KEY 필요 (frontend/.env.local)")
 
-    wb = load_workbook(inp, data_only=True)
-    ws = wb.active
-    path_ref = ref_date_from_workbook(ws) or ref_date_from_path(inp)
+    ref_date = ref_date_from_path(inp)
     rows = iter_rows(inp)
     cache = {} if args.refresh else load_cache()
     out: list[dict] = []
@@ -458,17 +417,17 @@ def main() -> None:
     seen: set[str] = set()
 
     for row in rows:
-        name, addr_raw = row.name, row.addr_raw
-        display_road, _ = display_addresses(addr_raw)
-        if not display_road or "순천" not in display_road.replace(" ", ""):
+        full_norm = normalize_changnyeong_addr(row.addr_raw)
+        display_road = geocode_target(full_norm)
+        if not display_road or "창녕" not in display_road.replace(" ", ""):
             continue
 
-        dk = f"{name}|{display_road}"
+        dk = f"{row.name}|{display_road}"
         if dk in seen:
             continue
         seen.add(dk)
 
-        ck = cache_key(name, addr_raw)
+        ck = cache_key(row.name, display_road)
         hit: GeoHit | None = None
 
         if not args.refresh and ck in cache:
@@ -484,23 +443,17 @@ def main() -> None:
                 hit = GeoHit(lat=lat, lng=lng, road=road, jibeon=jib)
 
         if hit is None and allow:
-            hit = resolve_geocode(addr_raw, name, key, display_road)
+            hit = resolve_geocode(full_norm, row.name, key, display_road)
             if hit is None:
                 misses += 1
-                print(f"[geocode 실패] {name}\t{display_road}", file=sys.stderr)
+                print(f"[geocode 실패] {row.name}\t{display_road}", file=sys.stderr)
                 continue
             cj, cr = coord2address(hit.lng, hit.lat, key)
-            norm = normalize_addr(addr_raw)
-            tail = suncheon_tail(norm)
-            if is_likely_jibeon(tail):
-                hit.jibeon = norm
-                hit.road = cr or hit.road or norm
-            else:
-                hit.road = display_road
-                hit.jibeon = cj or hit.jibeon or display_road
+            hit.road = display_road
+            hit.jibeon = cj or hit.jibeon or display_road
             cache[ck] = [hit.lat, hit.lng, hit.road, hit.jibeon]
             geo_n += 1
-            if geo_n % 50 == 0:
+            if geo_n % 30 == 0:
                 save_cache(cache)
                 print(f"[geocode] {geo_n} …", file=sys.stderr)
             time.sleep(GEOCODE_DELAY)
@@ -508,21 +461,21 @@ def main() -> None:
             misses += 1
             continue
 
-        rid = hashlib.sha1(f"{name}\n{display_road}".encode()).hexdigest()[:20]
+        rid = hashlib.sha1(f"{row.name}\n{display_road}".encode()).hexdigest()[:20]
         out.append(
             {
-                "id": f"jeonnam-suncheon-trash-{rid}",
-                "name": name,
+                "id": f"gyeongnam-changnyeong-trash-{rid}",
+                "name": row.name,
                 "lat": round(float(hit.lat), 7),
                 "lng": round(float(hit.lng), 7),
-                "roadAddress": hit.road or display_road,
+                "roadAddress": display_road,
                 "address": hit.jibeon or display_road,
                 "businessStatus": "영업",
                 "hasTrashBag": row.has_trash,
                 "hasSpecialBag": row.has_special,
                 "hasLargeWasteSticker": False,
                 "adminVerified": True,
-                "dataReferenceDate": path_ref,
+                "dataReferenceDate": ref_date,
             }
         )
 
@@ -532,14 +485,14 @@ def main() -> None:
     OUT_JSON.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(
         f"wrote {len(out)} → {OUT_JSON} "
-        f"(ref={path_ref}, geo={geo_n}, miss={misses}, src={len(rows)})"
+        f"(ref={ref_date}, geo={geo_n}, miss={misses}, src={len(rows)})"
     )
 
-    if out:
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
+    if out and not args.skip_activity:
+        sys.path.insert(0, str(SCRIPT_DIR))
         from append_activity import record_region_data_added
 
-        record_region_data_added(["순천시"])
+        record_region_data_added(["창녕군"])
 
 
 if __name__ == "__main__":
