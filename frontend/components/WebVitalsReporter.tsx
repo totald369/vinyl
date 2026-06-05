@@ -1,6 +1,7 @@
 "use client";
 
 import { useReportWebVitals } from "next/web-vitals";
+import { shouldSendGa4Events } from "@/lib/analyticsEnvironment";
 
 /**
  * [Web Vitals 측정]
@@ -138,6 +139,8 @@ export default function WebVitalsReporter() {
      * → 직접 `window.dataLayer.push(['event', ...])` 로 폴백.
      * gtag 가 lazyOnload 후 로드되면 dataLayer 의 큐 이벤트를 자동 처리해 metric 손실 0.
      */
+    if (!shouldSendGa4Events()) return;
+
     if (typeof window.gtag === "function") {
       window.gtag("event", "web_vitals", params);
       return;

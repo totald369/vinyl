@@ -1,3 +1,4 @@
+import { appendStoreShareUtm } from "@/lib/shareUtm";
 import { SITE_URL } from "@/lib/site";
 
 /** 6 chars: A–Z a–z 0–9 (URL-safe, unreserved) */
@@ -89,13 +90,14 @@ export function getStoreByShortCode<T extends WithOptionalShortCode>(
   return stores.find((s) => s.shortCode === key);
 }
 
-/** Public share URL (uses SITE_URL; same on server and client bundle). */
+/** Public share URL (uses SITE_URL; same on server and client bundle). UTM은 중복 없이 1회만 추가. */
 export function getShortShareUrl(store: WithOptionalShortCode): string {
   const base = SITE_URL.replace(/\/$/, "");
   if (!isValidShortCode(store.shortCode)) {
     return `${base}/`;
   }
-  return `${base}/s/${store.shortCode}`;
+  const path = `${base}/s/${store.shortCode}`;
+  return appendStoreShareUtm(path, store.shortCode!);
 }
 
 export { getStoreDetailAddress, getStoreMetadata } from "@/lib/storeMetadata";

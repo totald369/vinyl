@@ -26,7 +26,7 @@ import {
   markPurchaseFeedbackSubmitted,
   type PurchaseFeedbackType
 } from "@/lib/purchaseFeedbackStorage";
-import { trackPurchaseFeedbackEvent } from "@/lib/analytics";
+import { trackEvent, trackPurchaseFeedbackEvent } from "@/lib/analytics";
 import { getShareButtonHint, shareStoreWithTracking } from "@/lib/storeShareClient";
 
 type Props = {
@@ -82,6 +82,10 @@ function StoreDetailSheetInner({
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    trackEvent("store_detail_open", { store_id: store.id });
+  }, [store.id]);
 
   const showToast = useCallback((message: string, variant: "default" | "purchase" = "default") => {
     setToast({ message, variant });
@@ -261,11 +265,12 @@ function StoreDetailSheetInner({
     };
     try {
       await write();
+      trackEvent("copy_address_click", { store_id: store.id });
       showToast("\uC8FC\uC18C\uAC00 \uBCF5\uC0AC\uB418\uC5C8\uC2B5\uB2C8\uB2E4");
     } catch {
       // clipboard denied or unavailable
     }
-  }, [addressLine, showToast]);
+  }, [addressLine, showToast, store.id]);
 
   const handleShareStore = useCallback(async () => {
     const result = await shareStoreWithTracking(store);
@@ -391,6 +396,7 @@ function StoreDetailSheetInner({
                     {phoneLine ? (
                       <a
                         href={telHref}
+                        onClick={() => trackEvent("call_click", { store_id: store.id })}
                         className="flex w-full items-center gap-1 rounded-lg py-0 outline-none transition-colors active:bg-[rgba(23,23,23,0.06)] focus-visible:ring-2 focus-visible:ring-brand-500"
                       >
                         <Image
@@ -429,6 +435,7 @@ function StoreDetailSheetInner({
                   {SHOW_STORE_EDIT_REQUEST_BUTTON ? (
                     <Link
                       href={`/edit-request?storeId=${encodeURIComponent(store.id)}&storeName=${encodeURIComponent(store.name)}&storeAddress=${encodeURIComponent(addressLine)}`}
+                      onClick={() => trackEvent("report_store_click", { store_id: store.id, surface: "store_detail" })}
                       className="text-[14px] font-semibold leading-normal tracking-[0.1px] text-[#111111] outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                     >
                       정보 수정요청
@@ -469,6 +476,7 @@ function StoreDetailSheetInner({
               href={directionsHref}
               target="_blank"
               rel="noreferrer"
+              onClick={() => trackEvent("kakao_map_click", { store_id: store.id })}
               className={`flex h-12 min-w-0 items-center justify-center rounded-[8px] bg-[#171717] px-4 py-2 text-center text-[16px] font-bold leading-[1.5] text-[#d4fe1c] ${
                 canShare ? "flex-1" : "w-full"
               }`}

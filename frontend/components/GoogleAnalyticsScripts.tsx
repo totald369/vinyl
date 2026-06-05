@@ -17,7 +17,7 @@ window.dataLayer = window.dataLayer || [];
 function gtag(){dataLayer.push(arguments);}
 window.gtag = gtag;
 gtag('js', new Date());
-gtag('config', '${id}');
+gtag('config', '${id}', { send_page_view: false });
 `.trim();
 
   return (

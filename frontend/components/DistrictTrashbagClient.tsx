@@ -12,7 +12,7 @@ import type { DistrictTrashbagConfig } from "@/lib/districtTrashbagSeo";
 import type { StoreListFilter } from "@/hooks/useStores";
 import type { BottomSheetSnap } from "@/lib/bottomSheetSnap";
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
-import { sendGtagEvent } from "@/lib/gtag";
+import { trackEvent } from "@/lib/analytics";
 import { expandProvinceAliasesForSearch } from "@/lib/koreaProvinceAliases";
 import { filterStoresForSearch } from "@/lib/storeSearch";
 import { parseSearchTokens, precomputeHangulTokens, textMatchesAllTokens } from "@/lib/searchTokens";
@@ -150,13 +150,13 @@ export default function DistrictTrashbagClient({ config }: Props) {
   );
 
   const handleFilterChange = useCallback((filter: StoreListFilter) => {
-    sendGtagEvent("filter_select", { filter, page: config.slug });
+    trackEvent("filter_select", { filter, page: config.slug });
     setActiveFilter(filter);
   }, [config.slug]);
 
   const handleMapMarkerSelect = (store: StoreData) => {
     const resolved = storesById.get(store.id) ?? store;
-    sendGtagEvent("click_marker", { store_id: resolved.id, page: config.slug });
+    trackEvent("click_marker", { store_id: resolved.id, page: config.slug });
     setSelectedStore(resolved);
     setSheetView("detail");
   };
@@ -185,7 +185,7 @@ export default function DistrictTrashbagClient({ config }: Props) {
   };
 
   const handleMoveToLocation = () => {
-    sendGtagEvent("click_my_location", { page: config.slug });
+    trackEvent("click_my_location", { page: config.slug });
     setSelectedStore(null);
     setSheetView("list");
     setExploreAnchor(null);
@@ -288,7 +288,7 @@ export default function DistrictTrashbagClient({ config }: Props) {
           {SHOW_HOME_REPORT_BUTTON && bottomSheetSnap === "collapsed" && sheetView === "list" ? (
             <Link
               href="/report"
-              onClick={() => sendGtagEvent("click_report", { page: config.slug })}
+              onClick={() => trackEvent("click_report", { page: config.slug })}
               className="absolute bottom-[43vh] right-[12px] z-[35] flex items-center gap-0.5 rounded-full bg-[#d4fe1c] px-3 py-2.5 text-[15px] font-bold text-[#171717] shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)] pointer-events-auto"
             >
               <img src="/Img/Icon/write_24.svg" alt="" width={22} height={22} className="shrink-0" />

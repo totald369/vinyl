@@ -9,7 +9,7 @@ import HomeMapStage from "@/components/home/HomeMapStage";
 import LocationRequestingOverlay from "@/components/LocationRequestingOverlay";
 import type { StoreListFilter } from "@/hooks/useStores";
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
-import { sendGtagEvent } from "@/lib/gtag";
+import { trackEvent } from "@/lib/analytics";
 import { DEEPLINK_SHORT_STORAGE_KEY, isValidShortCode } from "@/lib/shortLink";
 import { useDeepLinkResolver } from "@/hooks/useDeepLinkResolver";
 import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
@@ -171,7 +171,7 @@ export default function HomeClient({
   );
 
   const handleFilterChange = useCallback((filter: StoreListFilter) => {
-    sendGtagEvent("filter_select", { filter });
+    trackEvent("filter_select", { filter });
     setActiveFilter(filter);
   }, []);
 
@@ -181,7 +181,7 @@ export default function HomeClient({
     detailOpenInFlightRef.current = true;
     keepSelectedOutsideListRef.current = false;
     const resolved = storesById.get(store.id) ?? store;
-    sendGtagEvent("click_marker", { store_id: resolved.id });
+    trackEvent("click_marker", { store_id: resolved.id });
     setSelectedStore(resolved);
     setSheetView("detail");
   }, [storesById, setSelectedStore, setSheetView]);
@@ -304,7 +304,7 @@ export default function HomeClient({
 
   const handleMoveToLocation = useCallback(() => {
     keepSelectedOutsideListRef.current = false;
-    sendGtagEvent("click_my_location");
+    trackEvent("click_my_location");
     panMapToUserLocation();
     if (permission === "granted") {
       requestLocation({ silent: !!userLocation });
@@ -515,7 +515,7 @@ export default function HomeClient({
           {SHOW_HOME_REPORT_BUTTON && bottomSheetSnap === "collapsed" && sheetView === "list" ? (
             <Link
               href="/report"
-              onClick={() => sendGtagEvent("click_report")}
+              onClick={() => trackEvent("click_report")}
               className="absolute bottom-[43vh] right-[15px] z-[35] flex items-center gap-0.5 rounded-full bg-[#d4fe1c] px-4 py-3 text-[16px] font-bold leading-normal tracking-[0.1px] text-[#171717] shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)] pointer-events-auto"
             >
               <img src="/Img/Icon/write_24.svg" alt="" width={24} height={24} className="shrink-0" />

@@ -15,7 +15,12 @@ import { useKakaoMapLoader } from "@/hooks/useKakaoMapLoader";
 import type { StoreListFilter } from "@/hooks/useStores";
 import { useStoreDetailAugment } from "@/hooks/useStoreDetailAugment";
 import { useUserLocation } from "@/hooks/useUserLocation";
-import { trackRegionEvent, trackRegionShareEvent, type RegionShareAnalyticsParams } from "@/lib/analytics";
+import {
+  trackEvent,
+  trackRegionEvent,
+  trackRegionShareEvent,
+  type RegionShareAnalyticsParams
+} from "@/lib/analytics";
 import type { ResolvedRegionLeaf } from "@/lib/koreaRegions";
 import {
   LAST_REGION_PATH_STORAGE_KEY,
@@ -28,7 +33,6 @@ import {
   seoLandingsSharingRegion
 } from "@/lib/seoKeywordLandings";
 import { SHOW_HOME_REPORT_BUTTON } from "@/lib/featureFlags";
-import { sendGtagEvent } from "@/lib/gtag";
 import { prefetchStoreDetail } from "@/lib/storeDetailClient";
 import { filterStoresForSearchAsync } from "@/lib/storeSearchWorker";
 import {
@@ -480,7 +484,7 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
   const handleMapMarkerSelect = useCallback(
     (store: StoreData) => {
       const resolved = storesById.get(store.id) ?? store;
-      sendGtagEvent("click_marker", { store_id: resolved.id });
+      trackEvent("click_marker", { store_id: resolved.id });
       trackClickRegionStore(resolved.id);
       /** 마커만 선택 — 지도 중심/줌은 유지 (리스트·검색 탭은 handleSelect* 에서만 pan). */
       setSelectedStore(resolved);
@@ -529,7 +533,7 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
   }, [userLocation]);
 
   const handleMoveToLocation = useCallback(() => {
-    sendGtagEvent("click_my_location", { page: "region" });
+    trackEvent("click_my_location", { page: "region" });
     panMapToUserLocation();
     moveToUserAfterLocationRef.current = permission !== "granted";
     requestLocation();
@@ -735,7 +739,7 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
           </div>
           <Link
             href="/report"
-            onClick={() => sendGtagEvent("click_report", { surface: "region_empty_list" })}
+            onClick={() => trackEvent("click_report", { surface: "region_empty_list" })}
             className="flex h-12 w-[150px] shrink-0 items-center justify-center rounded-[8px] bg-[#171717] px-4 py-2 text-center text-[16px] font-bold leading-[1.5] text-[#d4fe1c] outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
             제보하기
@@ -934,7 +938,7 @@ export default function RegionStoreListClient({ leaf, slugSegments }: Props) {
                 {SHOW_HOME_REPORT_BUTTON && !(!loading && !errorMsg && total === 0) ? (
                   <Link
                     href="/report"
-                    onClick={() => sendGtagEvent("click_report")}
+                    onClick={() => trackEvent("click_report")}
                     className="pointer-events-auto absolute bottom-[calc(28px+env(safe-area-inset-bottom,0px))] right-[15px] z-10 flex items-center gap-0.5 rounded-full bg-[#d4fe1c] px-4 py-3 text-[16px] font-bold leading-normal tracking-[0.1px] text-[#171717] shadow-[0px_0px_2px_0px_rgba(0,0,0,0.08),0px_4px_12px_0px_rgba(0,0,0,0.16)]"
                   >
                     <img src="/Img/Icon/write_24.svg" alt="" width={24} height={24} className="shrink-0" />

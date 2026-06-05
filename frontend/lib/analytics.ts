@@ -1,6 +1,6 @@
 "use client";
 
-import { sendGtagEvent } from "@/lib/gtag";
+import { sendGtagEvent, type GtagCustomEventName } from "@/lib/gtag";
 import type { PurchaseFeedbackType } from "@/lib/purchaseFeedbackStorage";
 
 export type ShareAnalyticsEventName =
@@ -30,19 +30,39 @@ declare global {
   }
 }
 
-function cleanParams(params: ShareAnalyticsParams) {
+function cleanParams<T extends Record<string, unknown>>(params: T) {
   return Object.fromEntries(
     Object.entries(params).filter(([, value]) => value !== undefined && value !== "")
-  ) as Record<string, string>;
+  ) as Record<string, string | number | boolean>;
+}
+
+/**
+ * GA4·Clarity 공통 이벤트 진입점. session attribution 파라미터가 자동 병합된다.
+ *
+ * GA4 Admin > 맞춤 정의 > 맞춤 측정기준(이벤트 범위) 등록 권장:
+ * - detected_source, detected_medium, landing_path, device_type, traffic_debug_reason, has_utm
+ *
+ * DebugView 확인 이벤트: traffic_attribution_detected, share_store_success, copy_address_click,
+ * kakao_map_click, purchase_success_click, purchase_fail_click
+ */
+export function trackEvent(
+  eventName: GtagCustomEventName | string,
+  params?: Record<string, string | number | boolean | undefined>
+): void {
+  if (typeof window === "undefined") return;
+  sendGtagEvent(eventName, params);
+}
+
+function trackClarity(eventName: string, params: Record<string, string | number | boolean>) {
+  if (typeof window.clarity !== "function") return;
+  window.clarity("event", eventName);
+  for (const [key, value] of Object.entries(params)) {
+    window.clarity("set", key, String(value));
+  }
 }
 
 /**
  * Share analytics single entry point.
- *
- * 테스트 방법:
- * - GA4: 실시간 보고서 > 이벤트에서 `share_store_success` 확인
- * - Clarity: 세션 상세 또는 필터에서 `share_store_success` 확인
- * - 브라우저 콘솔에서 `[share-analytics]` 디버그 로그 확인
  */
 export type RegionAnalyticsEventName =
   | "open_region_view"
@@ -73,34 +93,14 @@ export type RegionAnalyticsParams = {
   store_id?: string;
 };
 
-function cleanRegionParams(params: RegionAnalyticsParams) {
-  return Object.fromEntries(
-    Object.entries(params).filter(([, value]) => value !== undefined && value !== "")
-  ) as Record<string, string>;
-}
-
-/**
- * 지역으로 보기 플로우 (GA4 + Clarity). sendGtagEvent와 동일하게 prod·GA ID 있을 때만 GA 전송.
- */
 export function trackRegionEvent(
   eventName: RegionAnalyticsEventName,
   params: RegionAnalyticsParams
 ): void {
   if (typeof window === "undefined") return;
-  const cleaned = cleanRegionParams(params);
-  sendGtagEvent(eventName, cleaned);
-  if (typeof window.clarity === "function") {
-    window.clarity("event", eventName);
-    for (const [key, value] of Object.entries(cleaned)) {
-      window.clarity("set", key, String(value));
-    }
-  }
-}
-
-function cleanRegionShareParams(params: RegionShareAnalyticsParams) {
-  return Object.fromEntries(
-    Object.entries(params).filter(([, value]) => value !== undefined && value !== "")
-  ) as Record<string, string | number>;
+  const cleaned = cleanParams(params);
+  trackEvent(eventName, cleaned);
+  trackClarity(eventName, cleaned);
 }
 
 export function trackRegionShareEvent(
@@ -108,14 +108,9 @@ export function trackRegionShareEvent(
   params: RegionShareAnalyticsParams
 ): void {
   if (typeof window === "undefined") return;
-  const cleaned = cleanRegionShareParams(params);
-  sendGtagEvent(eventName, cleaned);
-  if (typeof window.clarity === "function") {
-    window.clarity("event", eventName);
-    for (const [key, value] of Object.entries(cleaned)) {
-      window.clarity("set", key, String(value));
-    }
-  }
+  const cleaned = cleanParams(params);
+  trackEvent(eventName, cleaned);
+  trackClarity(eventName, cleaned);
   if (process.env.NODE_ENV !== "production") {
     console.debug("[region-share-analytics]", eventName, cleaned);
   }
@@ -125,24 +120,19 @@ export function trackShareEvent(eventName: ShareAnalyticsEventName, params: Shar
   if (typeof window === "undefined") return;
 
   const cleaned = cleanParams(params);
-
-  // GA4 (guarded in sendGtagEvent if gtag / measurement id is unavailable)
-  sendGtagEvent(eventName, cleaned);
-
-  // Microsoft Clarity (no-op when not loaded)
-  if (typeof window.clarity === "function") {
-    window.clarity("event", eventName);
-    for (const [key, value] of Object.entries(cleaned)) {
-      window.clarity("set", key, String(value));
-    }
+  trackEvent(eventName, cleaned);
+  if (eventName === "share_store_success") {
+    trackEvent("share_store_click", cleaned);
   }
+  trackClarity(eventName, cleaned);
 
-  console.debug("[share-analytics]", eventName, cleaned);
+  if (process.env.NODE_ENV !== "production") {
+    console.debug("[share-analytics]", eventName, cleaned);
+  }
 }
 
 const PURCHASE_FEEDBACK_STORE_NAME_MAX = 120;
 
-/** GA4/Clarity에 넣지 않을 수 있는 문자열(전화·URL·이메일 등)을 걸러 짧은 라벨만 허용 */
 function sanitizePurchaseFeedbackErrorMessage(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
   const t = raw.trim().replace(/\s+/g, " ").slice(0, 120);
@@ -173,11 +163,6 @@ export type TrackPurchaseFeedbackParams = {
   errorMessage?: string;
 };
 
-/**
- * 구매 여부 피드백 (GA4 + Clarity). `sendGtagEvent`와 동일하게 프로덕션·GA ID 있을 때만 GA 전송.
- * Clarity는 스크립트가 로드된 경우에만 동작(루트 layout에서 프로덕션 로드).
- * 개발 환경에서는 `console.debug`로 페이로드만 확인(운영 콘솔 스팸 없음).
- */
 export function trackPurchaseFeedbackEvent(params: TrackPurchaseFeedbackParams): void {
   if (typeof window === "undefined") return;
 
@@ -202,17 +187,17 @@ export function trackPurchaseFeedbackEvent(params: TrackPurchaseFeedbackParams):
     gtagPayload.error_message = safeErr;
   }
 
-  sendGtagEvent("purchase_feedback_submit", gtagPayload);
+  trackEvent("purchase_feedback_submit", gtagPayload);
 
-  if (typeof window.clarity === "function") {
-    window.clarity("event", "purchase_feedback_submit");
-    window.clarity("set", "purchase_feedback_type", params.feedbackType);
-    window.clarity("set", "purchase_feedback_result", params.result);
-    window.clarity("set", "purchase_feedback_store_id", params.storeId);
+  if (params.feedbackType === "success" && params.result === "success") {
+    trackEvent("purchase_success_click", gtagPayload);
+  } else if (params.feedbackType === "failure" || params.result === "error") {
+    trackEvent("purchase_fail_click", gtagPayload);
   }
+
+  trackClarity("purchase_feedback_submit", gtagPayload);
 
   if (process.env.NODE_ENV !== "production") {
     console.debug("[purchase-feedback-analytics]", "purchase_feedback_submit", gtagPayload);
   }
 }
-

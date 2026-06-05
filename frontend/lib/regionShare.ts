@@ -1,5 +1,6 @@
 import type { RegionSeoCategory } from "@/lib/regionPageMetadata";
 import { regionCategoryKo } from "@/lib/regionPageMetadata";
+import { appendRegionShareUtm } from "@/lib/shareUtm";
 import { SITE_URL } from "@/lib/site";
 
 /** 공유 URL query — SEO canonical 과 분리된 UX 전용 파라미터 */
@@ -53,7 +54,9 @@ export function buildRegionSharePath(slugSegments: string[], category: RegionSeo
 }
 
 export function buildRegionShareUrl(slugSegments: string[], category: RegionSeoCategory): string {
-  return `${SITE_URL}${buildRegionSharePath(slugSegments, category)}`;
+  const slug = slugSegments.join("/");
+  const path = buildRegionSharePath(slugSegments, category);
+  return appendRegionShareUtm(`${SITE_URL}${path}`, slug);
 }
 
 export function getRegionShareCopy(

@@ -4,16 +4,13 @@ import dynamic from "next/dynamic";
 import { pretendard } from "@/app/pretendard";
 import ChunkLoadRecovery from "@/components/ChunkLoadRecovery";
 import ConditionalKakaoMapSdk from "@/components/ConditionalKakaoMapSdk";
-import { DelayedAnalyticsScripts } from "@/components/DelayedAnalyticsScripts";
+import { ClientProductionAnalytics } from "@/components/ClientProductionAnalytics";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import GlobalSeoNav from "@/components/GlobalSeoNav";
-import { GtagRouteTracker } from "@/components/GtagRouteTracker";
-import { CLARITY_PROJECT_ID } from "@/lib/clarity";
 
 const WebVitalsReporter = dynamic(() => import("@/components/WebVitalsReporter"), {
   ssr: false
 });
-import { GA_MEASUREMENT_ID, GA_ROUTE_TRACKER_ENABLED } from "@/lib/gtag";
 import { SITE_URL } from "@/lib/site";
 import {
   DEFAULT_OG_IMAGE_ALT,
@@ -104,11 +101,8 @@ export default function RootLayout({
       <body className={`${pretendard.className} font-sans antialiased`} suppressHydrationWarning>
         <ChunkLoadRecovery />
         <WebVitalsReporter />
-        {isProd && GA_MEASUREMENT_ID && GA_ROUTE_TRACKER_ENABLED ? <GtagRouteTracker /> : null}
         <ConditionalKakaoMapSdk appKey={kakaoAppKey} />
-        {isProd && (GA_MEASUREMENT_ID || CLARITY_PROJECT_ID) ? (
-          <DelayedAnalyticsScripts />
-        ) : null}
+        <ClientProductionAnalytics loadScripts={isProd} />
         {children}
         <GlobalSeoNav />
         {isProd ? <ServiceWorkerRegister /> : null}

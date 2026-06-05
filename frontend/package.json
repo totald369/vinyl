@@ -28,7 +28,9 @@
     "data:import-gangwon-donghae-trash": "python3 scripts/import_gangwon_donghae_trash_from_xlsx.py",
     "data:import-jeonnam-jangheung-trash": "python3 scripts/import_jeonnam_jangheung_trash_from_xlsx.py",
     "data:import-gangwon-hongcheon-trash": "python3 scripts/import_gangwon_hongcheon_trash_from_xlsx.py",
-    "data:import-gyeongnam-yangsan-trash": "python3 scripts/import_gyeongnam_yangsan_trash_from_xlsx.py"
+    "data:import-gyeongnam-yangsan-trash": "python3 scripts/import_gyeongnam_yangsan_trash_from_xlsx.py",
+    "data:import-jeonnam-gwangyang-trash": "python3 scripts/import_jeonnam_gwangyang_trash_from_xlsx.py",
+    "data:import-gyeongnam-goseong-trash": "python3 scripts/import_gyeongnam_goseong_trash_from_xls.py"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
