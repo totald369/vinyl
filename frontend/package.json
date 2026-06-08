@@ -34,6 +34,7 @@
     "data:import-jeonnam-suncheon-trash": "python3 scripts/import_jeonnam_suncheon_trash_from_xlsx.py",
     "data:import-gyeongnam-changnyeong-trash": "python3 scripts/import_gyeongnam_changnyeong_trash_from_xlsx.py",
     "data:import-gyeongnam-hadong-trash": "python3 scripts/import_gyeongnam_hadong_trash_from_xlsx.py",
+    "data:import-incheon-namdong-special": "python3 scripts/import_incheon_namdong_special_from_xlsx.py",
     "data:import-jeonbuk-iksan-trash": "python3 scripts/import_jeonbuk_iksan_trash_from_xlsx.py",
     "data:import-jeonnam-boseong-trash": "python3 scripts/import_jeonnam_boseong_trash_from_xlsx.py",
     "data:import-jeju-si-trash": "python3 scripts/import_jeju_si_trash_from_xlsx.py",
