@@ -1,5 +1,13 @@
 [
   {
+    "id": "act-2026-06-08-region-data-added-k495h1",
+    "type": "REGION_DATA_ADDED",
+    "createdAt": "2026-06-08",
+    "affectedRegions": [
+      "하동군"
+    ]
+  },
+  {
     "id": "act-2026-06-05-region-data-added-oz6z3s",
     "type": "REGION_DATA_ADDED",
     "createdAt": "2026-06-05",
