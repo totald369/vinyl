@@ -1,61 +1,13 @@
 import fs from "fs";
 import path from "path";
 import { generateShortCode, isValidShortCode } from "@/lib/shortLink";
+import { STORE_DATA_JSON_FILES } from "@/lib/storeDataSourceFiles";
 
 type StoreRow = Record<string, unknown> & { shortCode?: string };
 
 const DATA_DIR = path.join(process.cwd(), "public", "data");
-const SOURCE_FILES = [
-  "stores.sample.json",
-  "stores.gunpo.json",
-  "stores.goyang.json",
-  "stores.goyang-sticker.json",
-  "stores.guro-noncombust.json",
-  "stores.gwanak-noncombust.json",
-  "stores.dobong-noncombust.json",
-  "stores.bucheon-gbms.json",
-  "stores.busan-namgu-trash.json",
-  "stores.busan-junggu-trash.json",
-  "stores.busan-junggu-pp.json",
-  "stores.busan-donggu-trash.json",
-  "stores.busan-dongnae-trash.json",
-  "stores.busan-geumjeong-trash.json",
-  "stores.busan-geumjeong-special.json",
-  "stores.busan-bukgu-trash.json",
-  "stores.busan-bukgu-special.json",
-  "stores.busan-sasang-trash.json",
-  "stores.busan-sasang-special.json",
-  "stores.busan-haeundae-trash.json",
-  "stores.busan-yeongdo-trash.json",
-  "stores.gyeonggi-gwangju-findstore.json",
-  "stores.gwangju-trash-lifeinsights.json",
-  "stores.daegu-buk-dalseo-trash.json",
-  "stores.incheon-michuhol-trash.json",
-  "stores.incheon-yeonsu-trash-sticker.json",
-  "stores.incheon-yeonsu-gbms.json",
-  "stores.incheon-namdong-trash.json",
-  "stores.incheon-bupyeong-trash-sticker-special.json",
-  "stores.incheon-gyeyang-gbms.json",
-  "stores.gyeonggi-siheung-trash.json",
-  "stores.daejeon-donggu-trash.json",
-  "stores.daejeon-yuseong-trash.json",
-  "stores.daejeon-daedeok-trash.json",
-  "stores.gangwon-wonju-trash.json",
-  "stores.gangwon-taebaek-trash.json",
-  "stores.gangwon-samcheok-trash.json",
-  "stores.ulsan-donggu-trash.json",
-  "stores.ulsan-bukgu-trash.json",
-  "stores.ulsan-bukgu-special.json",
-  "stores.ulsan-junggu-trash.json",
-  "stores.ulsan-junggu-special.json",
-  "stores.chungbuk-chungju-trash.json",
-  "stores.chungnam-trash.json",
-  "stores.chungnam-gongju-trash.json",
-  "stores.chungnam-gongju-special.json",
-  "stores.chungbuk-cheongju-trash.json",
-  "stores.chungbuk-jeungpyeong-trash.json",
-  "stores.seoul-yangcheon-special.json"
-] as const;
+// 단일 출처: 병합에 쓰는 데이터 소스 목록을 그대로 사용해 누락을 방지한다.
+const SOURCE_FILES = STORE_DATA_JSON_FILES;
 
 type LoadedFile = {
   name: string;
@@ -83,7 +35,9 @@ function main() {
   for (const name of SOURCE_FILES) {
     const fullPath = path.join(DATA_DIR, name);
     if (!fs.existsSync(fullPath)) {
-      throw new Error(`missing source file: ${name}`);
+      // 병합 빌드와 동일하게 디스크에 없는 소스는 건너뛴다.
+      console.warn(`skip missing source file: ${name}`);
+      continue;
     }
     const parsed = JSON.parse(fs.readFileSync(fullPath, "utf8")) as unknown;
     if (!Array.isArray(parsed)) {
