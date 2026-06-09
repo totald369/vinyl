@@ -48,7 +48,8 @@
     "data:import-jeonnam-hampyeong-trash": "python3 scripts/import_jeonnam_hampyeong_trash_from_xlsx.py",
     "data:import-jeonnam-muan-trash": "python3 scripts/import_jeonnam_muan_trash_from_xlsx.py",
     "data:import-jeonnam-haenam-trash": "python3 scripts/import_jeonnam_haenam_trash_from_xlsx.py",
-    "data:import-jeonnam-gokseong-trash": "python3 scripts/import_jeonnam_gokseong_trash_from_xlsx.py"
+    "data:import-jeonnam-gokseong-trash": "python3 scripts/import_jeonnam_gokseong_trash_from_xlsx.py",
+    "data:import-jeonnam-mokpo-trash": "python3 scripts/import_jeonnam_mokpo_trash_from_xlsx.py"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
