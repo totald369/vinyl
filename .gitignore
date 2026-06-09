@@ -91,6 +91,7 @@ frontend/scripts/geocode-cache-jeonnam-gurye-trash.json
 frontend/scripts/geocode-cache-seoul-gangseo-special.json
 frontend/scripts/geocode-cache-seoul-yongsan-special.json
 frontend/scripts/geocode-cache-gangwon-sokcho-trash.json
+frontend/scripts/geocode-cache-jeonnam-jangseong-trash.json
 
 # Import scratch
 frontend/scripts/_tmp*

@@ -43,7 +43,8 @@
     "data:import-seoul-yongsan-special": "python3 scripts/import_seoul_yongsan_special_from_xlsx.py",
     "data:import-gangwon-sokcho-trash": "python3 scripts/import_gangwon_sokcho_trash_from_xlsx.py",
     "data:import-jeonbuk-jeongeup-trash": "python3 scripts/import_jeonbuk_jeongeup_trash_from_xlsx.py",
-    "data:import-incheon-yeonsu-gbms": "python3 scripts/import_yeonsu_gbms_map.py"
+    "data:import-incheon-yeonsu-gbms": "python3 scripts/import_yeonsu_gbms_map.py",
+    "data:import-jeonnam-jangseong-trash": "python3 scripts/import_jeonnam_jangseong_trash_from_xlsx.py"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
