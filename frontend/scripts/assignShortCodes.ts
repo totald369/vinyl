@@ -32,6 +32,7 @@ const SOURCE_FILES = [
   "stores.daegu-buk-dalseo-trash.json",
   "stores.incheon-michuhol-trash.json",
   "stores.incheon-yeonsu-trash-sticker.json",
+  "stores.incheon-yeonsu-gbms.json",
   "stores.incheon-namdong-trash.json",
   "stores.incheon-bupyeong-trash-sticker-special.json",
   "stores.incheon-gyeyang-gbms.json",

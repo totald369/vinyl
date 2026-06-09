@@ -1,5 +1,13 @@
 [
   {
+    "id": "act-2026-06-09-region-data-added-yn4d2v",
+    "type": "REGION_DATA_ADDED",
+    "createdAt": "2026-06-09",
+    "affectedRegions": [
+      "연수구"
+    ]
+  },
+  {
     "id": "act-2026-06-08-region-data-added-k495h1",
     "type": "REGION_DATA_ADDED",
     "createdAt": "2026-06-08",
