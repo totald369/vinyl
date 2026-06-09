@@ -23,9 +23,18 @@ alwaysApply: false
 - 신규 JSON 파일은 `lib/storeDataSourceFiles.ts`의 `STORE_DATA_JSON_FILES`에 추가
 - import 후 `npm run data:build-cache` 실행
 
+## 숏코드 (필수 정책)
+
+- 판매처 데이터를 추가/갱신하면 **항상** `npm run shortcodes:assign`을 실행해 숏코드를 생성한다.
+- `assignShortCodes.ts`는 `lib/storeDataSourceFiles.ts`의 `STORE_DATA_JSON_FILES`를 단일 출처로 사용한다. 신규 JSON을 그 목록에 추가하기만 하면 숏코드 부여 대상이 된다.
+- 숏코드가 누락된 지역이 하나라도 있으면 전부 생성한다 (`data:build-cache` 로그의 `missing/invalid=0` 확인).
+- 실행 순서: import → `shortcodes:assign` → `data:build-cache`.
+
 ## 체크리스트
 
 1. `stores.{region}-*.json` 생성
 2. import 스크립트 + geocode 캐시
 3. `storeDataset.ts`, `build-merged-cache.ts` 연결
 4. `activities.json` 패널 반영 (`record_region_data_added`)
+5. `npm run shortcodes:assign`으로 숏코드 생성 (누락 0 확인)
+6. `npm run data:build-cache`로 머지 캐시 재생성
