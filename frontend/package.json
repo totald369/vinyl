@@ -53,7 +53,8 @@
     "data:import-jeonbuk-namwon-trash": "python3 scripts/import_jeonbuk_namwon_trash_from_xlsx.py",
     "data:import-jeonbuk-sunchang-trash": "python3 scripts/import_jeonbuk_sunchang_trash_from_xlsx.py",
     "data:import-gyeongnam-hapcheon-trash": "python3 scripts/import_gyeongnam_hapcheon_trash_from_xlsx.py",
-    "data:import-gyeongnam-hamyang-trash": "python3 scripts/import_gyeongnam_hamyang_trash_from_xlsx.py"
+    "data:import-gyeongnam-hamyang-trash": "python3 scripts/import_gyeongnam_hamyang_trash_from_xlsx.py",
+    "data:import-gyeongnam-sancheong-trash": "python3 scripts/import_gyeongnam_sancheong_trash_from_xlsx.py"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
