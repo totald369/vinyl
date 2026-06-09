@@ -75,6 +75,7 @@ export const STORE_DATA_JSON_FILES = [
   "stores.gyeongnam-hapcheon-trash.json",
   "stores.gyeongnam-hamyang-trash.json",
   "stores.gyeongnam-sancheong-trash.json",
+  "stores.gyeongnam-namhae-trash.json",
   "stores.jeonnam-yeosu-trash.json",
   "stores.jeonnam-suncheon-trash.json",
   "stores.jeonnam-hwasun-trash.json",
