@@ -464,7 +464,7 @@ def main() -> None:
                 "hasTrashBag": False,
                 "hasSpecialBag": True,
                 "hasLargeWasteSticker": False,
-                "adminVerified": True,
+                "adminVerified": False,
                 "dataReferenceDate": ref_date,
             }
         )

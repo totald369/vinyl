@@ -567,7 +567,7 @@ def main() -> None:
                 "hasTrashBag": row.has_trash,
                 "hasSpecialBag": row.has_special,
                 "hasLargeWasteSticker": False,
-                "adminVerified": True,
+                "adminVerified": False,
                 "dataReferenceDate": ref_date,
             }
         )

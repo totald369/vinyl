@@ -284,7 +284,7 @@ def main() -> None:
             "hasTrashBag": bool(r["hasTrashBag"]),
             "hasSpecialBag": bool(r["hasSpecialBag"]),
             "hasLargeWasteSticker": bool(r["hasLargeWasteSticker"]),
-            "adminVerified": True,
+            "adminVerified": False,
             "dataReferenceDate": existing_meta.get(sid, {}).get(
                 "dataReferenceDate", r.get("dataReferenceDate") or iso_today
             ),
