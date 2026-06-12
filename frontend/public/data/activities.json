@@ -1,5 +1,13 @@
 [
   {
+    "id": "act-2026-06-12-region-data-added-m8d78h",
+    "type": "REGION_DATA_ADDED",
+    "createdAt": "2026-06-12",
+    "affectedRegions": [
+      "미추홀구"
+    ]
+  },
+  {
     "id": "act-2026-06-10-region-data-added-d3otga",
     "type": "REGION_DATA_ADDED",
     "createdAt": "2026-06-10",
