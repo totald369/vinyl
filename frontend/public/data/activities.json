@@ -1,5 +1,13 @@
 [
   {
+    "id": "act-2026-06-14-region-data-added-sr2zqq",
+    "type": "REGION_DATA_ADDED",
+    "createdAt": "2026-06-14",
+    "affectedRegions": [
+      "시흥시"
+    ]
+  },
+  {
     "id": "act-2026-06-12-region-data-added-m8d78h",
     "type": "REGION_DATA_ADDED",
     "createdAt": "2026-06-12",
