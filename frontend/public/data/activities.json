@@ -1,5 +1,13 @@
 [
   {
+    "id": "act-2026-06-15-region-data-added-5b35q4",
+    "type": "REGION_DATA_ADDED",
+    "createdAt": "2026-06-15",
+    "affectedRegions": [
+      "수원시"
+    ]
+  },
+  {
     "id": "act-2026-06-14-region-data-added-sr2zqq",
     "type": "REGION_DATA_ADDED",
     "createdAt": "2026-06-14",
