@@ -20,6 +20,7 @@ export const STORE_DATA_JSON_FILES = [
   "stores.busan-sasang-trash.json",
   "stores.busan-sasang-special.json",
   "stores.busan-haeundae-trash.json",
+  "stores.busan-haeundae-special.json",
   "stores.busan-yeongdo-trash.json",
   "stores.gyeonggi-gwangju-findstore.json",
   "stores.gwangju-trash-lifeinsights.json",

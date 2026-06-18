@@ -1,5 +1,13 @@
 [
   {
+    "id": "act-2026-06-18-region-data-added-32opgd",
+    "type": "REGION_DATA_ADDED",
+    "createdAt": "2026-06-18",
+    "affectedRegions": [
+      "해운대구"
+    ]
+  },
+  {
     "id": "act-2026-06-15-region-data-added-5b35q4",
     "type": "REGION_DATA_ADDED",
     "createdAt": "2026-06-15",
