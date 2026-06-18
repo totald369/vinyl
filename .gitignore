@@ -97,6 +97,7 @@ frontend/scripts/geocode-cache-seoul-gangseo-special.json
 frontend/scripts/geocode-cache-seoul-yongsan-special.json
 frontend/scripts/geocode-cache-seoul-geumcheon-trash.json
 frontend/scripts/geocode-cache-seoul-mapo-special.json
+frontend/scripts/geocode-cache-seoul-jungnang-special.json
 frontend/scripts/geocode-cache-gangwon-sokcho-trash.json
 frontend/scripts/geocode-cache-jeonnam-jangseong-trash.json
 frontend/scripts/geocode-cache-jeonnam-hampyeong-trash.json
