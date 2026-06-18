@@ -44,7 +44,8 @@ const BLOCKED_DATA_FILES = new Set([
   "stores.chungbuk-jeungpyeong-trash.json",
   "stores.seoul-yangcheon-special.json",
   "reports_rows.json",
-  "_merged_cache.json"
+  "_merged_cache.json",
+  "_region_seo_summary.json"
 ]);
 
 export function middleware(request: NextRequest) {
@@ -93,5 +94,5 @@ export function middleware(request: NextRequest) {
  */
 export const config = {
   matcher:
-    "/((?!_next/static|_next/image|favicon.ico|robots\\.txt|sitemap\\.xml|img/|Img/).*)"
+    "/((?!_next/static|_next/image|favicon.ico|robots\\.txt|sitemap\\.xml|sitemap|manifest\\.webmanifest|opengraph-image|img/|Img/|static/).*)"
 };

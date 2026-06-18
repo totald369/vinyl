@@ -10,6 +10,9 @@ import { getMergedStoreById } from "@/lib/server/getMergedStoreById";
 import { SITE_BRAND_KO } from "@/lib/seoBrand";
 import { storeSeoMetadata } from "@/lib/storePageMetadata";
 
+/** 판매처 데이터는 배포 시점에만 갱신 — ISR로 봇·직접 방문 CPU 절감 */
+export const revalidate = 86400;
+
 type Props = {
   params: { id: string };
 };

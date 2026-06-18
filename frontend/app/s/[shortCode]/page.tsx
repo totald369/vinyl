@@ -3,10 +3,10 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import HomeClient from "@/app/HomeClient";
-import { getMergedStores } from "@/lib/server/storeDataset";
+import { getMergedStoreByShortCode } from "@/lib/server/getMergedStoreByShortCode";
 import { SITE_BRAND_KO } from "@/lib/seoBrand";
 import { getHomePageMetadata, storeShareLinkMetadata } from "@/lib/storePageMetadata";
-import { getStoreByShortCode, isValidShortCode } from "@/lib/shortLink";
+import { isValidShortCode } from "@/lib/shortLink";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return { ...getHomePageMetadata(), robots: { index: false, follow: true } };
   }
   try {
-    const store = getStoreByShortCode(getMergedStores(), raw);
+    const store = getMergedStoreByShortCode(raw);
     if (!store) {
       return { ...getHomePageMetadata(), robots: { index: false, follow: true } };
     }
@@ -37,7 +37,7 @@ export default async function ShortLinkPage({ params }: Props) {
   }
   let store = null;
   try {
-    store = getStoreByShortCode(getMergedStores(), raw) ?? null;
+    store = getMergedStoreByShortCode(raw) ?? null;
   } catch {
     store = null;
   }

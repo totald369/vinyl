@@ -8,6 +8,8 @@
  * dev HMR: globalThis에 인덱스 보관해 모듈 재평가 시 재구축 비용 제거.
  * 측정: /api/stores radius·search·region TTFB(서버 CPU 시간), cold path 대비 p95 Latency.
  */
+import "server-only";
+
 import type { StoreData } from "@/lib/storeData";
 import { expandProvinceAliasesForSearch } from "@/lib/koreaProvinceAliases";
 import { getMergedStores } from "@/lib/server/storeDataset";

@@ -121,6 +121,7 @@ frontend/scripts/_tmp*
 
 # Build-time merged store cache (regenerated each build)
 frontend/public/data/_merged_cache.json
+frontend/public/data/_region_seo_summary.json
 
 # TypeScript incremental
 **/tsconfig.tsbuildinfo

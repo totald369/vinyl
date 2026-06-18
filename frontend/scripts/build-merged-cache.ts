@@ -12,14 +12,17 @@
 import fs from "fs";
 import path from "path";
 
+import { buildRegionSeoSummaryFile } from "../lib/buildRegionSeoSummaries";
 import type { RawStoreRow } from "../lib/storeData";
 import { mergeStoreSources } from "../lib/storeData";
+import { REGION_SEO_SUMMARY_FILE } from "../lib/regionSeoSummary";
 import { STORE_DATA_JSON_FILES } from "../lib/storeDataSourceFiles";
 import type { RawReportRow } from "../lib/reportStores";
 import { syncReportActivitiesFromRows } from "../lib/activityFeedWriter";
 
 const DATA_DIR = path.join(process.cwd(), "public", "data");
 const OUT_FILE = path.join(DATA_DIR, "_merged_cache.json");
+const REGION_SUMMARY_FILE = path.join(DATA_DIR, REGION_SEO_SUMMARY_FILE);
 
 function readJsonArray<T>(file: string): T[] {
   const full = path.join(DATA_DIR, file);
@@ -46,13 +49,18 @@ function main() {
   }
   fs.writeFileSync(OUT_FILE, JSON.stringify(merged), "utf8");
 
+  const regionSummaries = buildRegionSeoSummaryFile(merged);
+  fs.writeFileSync(REGION_SUMMARY_FILE, JSON.stringify(regionSummaries), "utf8");
+
   syncReportActivitiesFromRows(reportRows);
 
   const stat = fs.statSync(OUT_FILE);
+  const summaryStat = fs.statSync(REGION_SUMMARY_FILE);
   const elapsedMs = Date.now() - startedAt;
   const sizeMb = (stat.size / (1024 * 1024)).toFixed(2);
+  const summaryKb = (summaryStat.size / 1024).toFixed(1);
   console.log(
-    `[build-merged-cache] wrote ${OUT_FILE} (${merged.length} stores, ${sizeMb} MB) in ${elapsedMs} ms`
+    `[build-merged-cache] wrote ${OUT_FILE} (${merged.length} stores, ${sizeMb} MB) and ${REGION_SUMMARY_FILE} (${summaryKb} KB) in ${elapsedMs} ms`
   );
 }
 

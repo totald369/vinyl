@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { unstable_cache } from "next/cache";
 import StoreList from "@/components/StoreList";
 import {
   DEFAULT_OG_IMAGE_ALT,
@@ -44,11 +45,25 @@ export const metadata: Metadata = {
   },
 };
 
-export default function StoresPage() {
-  const merged = getMergedStores();
-  const cap = storesListingCap();
-  const slice = sliceStoresStableForSeo(merged, cap);
-  const listStores = slice.map(mapStoreDataToStoreItem);
+/** 배포 단위 데이터 — 목록 페이지 ISR */
+export const revalidate = 3600;
+
+const getStoresListingPayload = unstable_cache(
+  async () => {
+    const merged = getMergedStores();
+    const cap = storesListingCap();
+    const slice = sliceStoresStableForSeo(merged, cap);
+    return {
+      mergedLength: merged.length,
+      listStores: slice.map(mapStoreDataToStoreItem)
+    };
+  },
+  ["stores-listing-page-v1"],
+  { revalidate: 3600 }
+);
+
+export default async function StoresPage() {
+  const { mergedLength, listStores } = await getStoresListingPayload();
 
   return (
     <main className="mx-auto max-w-md space-y-4 p-4 pb-8">
@@ -60,9 +75,9 @@ export default function StoresPage() {
           {" · "}
           <Link href="/gangnam">강남 종량제 봉투 안내</Link>
         </nav>
-        {merged.length > listStores.length ? (
+        {mergedLength > listStores.length ? (
           <p className="mt-2 text-xs text-slate-500">
-            매장 등록 {merged.length.toLocaleString("ko-KR")}곳 중 id 기준 표시 허브 {listStores.length}
+            매장 등록 {mergedLength.toLocaleString("ko-KR")}곳 중 id 기준 표시 허브 {listStores.length}
             곳까지 링크를 노출합니다. 그 외는 {SITE_BRAND_KO} 지도 검색과 지역별 페이지에서 확인하세요.
           </p>
         ) : null}

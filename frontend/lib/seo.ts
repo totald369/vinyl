@@ -262,6 +262,49 @@ export function buildDistrictSeoDescription(
   );
 }
 
+/** 사전 집계 요약 → RegionProductSummary */
+export function regionProductSummaryFromStored(stored: {
+  hasTrashBag: boolean;
+  hasSpecialBag: boolean;
+  hasLargeWasteSticker: boolean;
+}): RegionProductSummary {
+  const products: StoreProduct[] = [];
+  if (stored.hasTrashBag) products.push({ key: "trashBag", label: DESC_PRODUCT_LABELS.trashBag });
+  if (stored.hasSpecialBag) products.push({ key: "specialBag", label: DESC_PRODUCT_LABELS.specialBag });
+  if (stored.hasLargeWasteSticker) {
+    products.push({
+      key: "largeWasteSticker",
+      label: DESC_PRODUCT_LABELS.largeWasteSticker
+    });
+  }
+  return {
+    products,
+    hasTrashBag: stored.hasTrashBag,
+    hasSpecialBag: stored.hasSpecialBag,
+    hasLargeWasteSticker: stored.hasLargeWasteSticker
+  };
+}
+
+export function buildAreaMetadataFromSummary(
+  areaName: string,
+  summary: RegionProductSummary,
+  storeCount: number,
+  opts: { path: string; districtLevel?: boolean }
+): Metadata {
+  const title = buildAreaSeoTitle(areaName, summary, {
+    districtLevel: opts.districtLevel
+  });
+  const description = buildAreaSeoDescription(areaName, summary, storeCount, {
+    districtLevel: opts.districtLevel
+  });
+  return assemblePageMetadata({
+    title,
+    description,
+    path: opts.path,
+    openGraphType: "website"
+  });
+}
+
 function titleProductSegment(products: StoreProduct[]): string {
   if (products.length === 0) return "종량제봉투 판매 정보";
   if (products.length === 1) {
