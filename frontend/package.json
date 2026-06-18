@@ -67,7 +67,8 @@
     "data:import-busan-haeundae-special": "python3 scripts/import_busan_haeundae_special_from_xlsx.py",
     "data:import-gyeonggi-namyangju-special": "python3 scripts/import_gyeonggi_namyangju_special_from_xlsx.py",
     "data:import-seoul-jungnang-special": "python3 scripts/import_seoul_jungnang_special_from_xlsx.py",
-    "data:import-seoul-seongbuk-special": "python3 scripts/import_seoul_seongbuk_special_from_xlsx.py"
+    "data:import-seoul-seongbuk-special": "python3 scripts/import_seoul_seongbuk_special_from_xlsx.py",
+    "data:import-seoul-seocho-special": "python3 scripts/import_seoul_seocho_special_from_xlsx.py"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
