@@ -4,18 +4,15 @@ import {
   DISTRICT_TRASHBAG_PAGES,
   buildDistrictExtraIntro,
   districtIntroLeadParagraph,
-  districtSeoDescription,
   districtTrashbagH1,
   getDistrictTrashbagConfig,
   isDistrictTrashbagSlug,
   type DistrictTrashbagSlug
 } from "@/lib/districtTrashbagSeo";
 import { buildDistrictTrashbagJsonLd } from "@/lib/districtTrashbagJsonLd";
-import {
-  SITE_BRAND_KO,
-  defaultOpenGraphImage,
-  seoAbsoluteMetaTitleForPath
-} from "@/lib/seoBrand";
+import { buildDistrictMetadata } from "@/lib/seo";
+import { getStoresForDistrictKeyword } from "@/lib/server/regionSeoStores";
+import { SITE_BRAND_KO } from "@/lib/seoBrand";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -34,28 +31,8 @@ export function generateMetadata({ params }: PageProps): Metadata {
   }
   const cfg = getDistrictTrashbagConfig(params.slug)!;
   const path = `/${cfg.slug}`;
-  const title = seoAbsoluteMetaTitleForPath(path);
-  const description = districtSeoDescription(cfg);
-  return {
-    alternates: { canonical: path },
-    title: { absolute: title },
-    description,
-    openGraph: {
-      title,
-      description,
-      url: path,
-      locale: "ko_KR",
-      type: "website",
-      images: [defaultOpenGraphImage]
-    },
-    twitter: {
-      card: "summary_large_image",
-      title,
-      description,
-      images: [defaultOpenGraphImage.url]
-    },
-    robots: { index: true, follow: true }
-  };
+  const stores = getStoresForDistrictKeyword(cfg.addressKeyword);
+  return buildDistrictMetadata(cfg.labelGu, cfg.labelGu, stores, { path });
 }
 
 export default function DistrictTrashbagPage({ params }: PageProps) {

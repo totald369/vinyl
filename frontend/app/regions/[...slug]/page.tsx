@@ -5,7 +5,7 @@ import RegionSeoFooter from "@/components/regions/RegionSeoFooter";
 import RegionStoreListClient from "@/components/regions/RegionStoreListClient";
 import RegionStoreListSkeleton from "@/components/regions/RegionStoreListSkeleton";
 import { resolveRegionLeafFromSlugPath } from "@/lib/koreaRegions";
-import { buildRegionStoreMetadata } from "@/lib/regionPageMetadata";
+import { buildRegionStoreMetadata } from "@/lib/server/regionPageMetadata";
 import { SITE_BRAND_KO } from "@/lib/seoBrand";
 
 type PageProps = {
@@ -33,7 +33,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const pathname = `/regions/${(params.slug ?? []).map(encodeURIComponent).join("/")}`;
   return buildRegionStoreMetadata({
     headingLabelKo: leaf.headingLabelKo,
-    pathname
+    pathname,
+    leaf
   });
 }
 

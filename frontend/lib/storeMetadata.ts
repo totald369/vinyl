@@ -1,5 +1,9 @@
 import { normalizeProvinceAbbrevForDisplay } from "@/lib/koreaProvinceAliases";
-import { SITE_BRAND_KO } from "@/lib/seoBrand";
+import {
+  buildStoreSeoDescription,
+  buildStoreSeoTitle,
+  type StoreProductSource
+} from "@/lib/seo";
 
 /** Single-line address for OG description and share text. */
 export function getStoreDetailAddress(store: {
@@ -13,12 +17,10 @@ export function getStoreDetailAddress(store: {
   return line || (store.name?.trim() ?? "");
 }
 
-/** Page title + meta description (OG / Twitter). */
-export function getStoreMetadata(store: { name: string; roadAddress?: string; address?: string }) {
-  const addressLine = normalizeProvinceAbbrevForDisplay(
-    (store.roadAddress?.trim() || store.address?.trim() || "").trim()
-  );
-  const title = `${SITE_BRAND_KO} - ${store.name}`;
-  const description = addressLine || store.name;
-  return { title, description };
+/** Page title + meta description (OG / Twitter / 공유). */
+export function getStoreMetadata(store: StoreProductSource & { name: string }) {
+  return {
+    title: buildStoreSeoTitle(store),
+    description: buildStoreSeoDescription(store)
+  };
 }
