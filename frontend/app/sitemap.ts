@@ -1,14 +1,10 @@
 import type { MetadataRoute } from "next";
-import { unstable_cache } from "next/cache";
 import { DISTRICT_TRASHBAG_PAGES } from "@/lib/districtTrashbagSeo";
 import { enumerateRegionLeafPathnames } from "@/lib/koreaRegions";
 import { SEO_KEYWORD_LANDING_PAGES, seoKeywordLandingPublicPath } from "@/lib/seoKeywordLandings";
 import { SITE_URL } from "@/lib/site";
 import { getMergedStores } from "@/lib/server/storeDataset";
 import { sliceStoresStableForSeo } from "@/lib/seoStoreSlice";
-
-/** sitemap 재생성 주기 — 크롤러·봇 요청 시 origin CPU 절감 */
-export const revalidate = 86400;
 
 function sitemapStoreCap(): number {
   const raw = process.env.SITEMAP_STORE_CAP;
@@ -19,23 +15,7 @@ function sitemapStoreCap(): number {
   return 5000;
 }
 
-const getCachedStoreSitemapEntries = unstable_cache(
-  async () => {
-    const merged = getMergedStores();
-    const capped = sliceStoresStableForSeo(merged, sitemapStoreCap());
-    const now = new Date();
-    return capped.map((store) => ({
-      url: `${SITE_URL}/stores/${encodeURIComponent(store.id)}`,
-      lastModified: now,
-      changeFrequency: "weekly" as const,
-      priority: 0.6
-    }));
-  },
-  ["sitemap-store-entries-v1"],
-  { revalidate: 86400 }
-);
-
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
 
   const staticEntries: MetadataRoute.Sitemap = [
@@ -95,7 +75,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   ];
 
-  const storeEntries = await getCachedStoreSitemapEntries();
+  const merged = getMergedStores();
+  const capped = sliceStoresStableForSeo(merged, sitemapStoreCap());
+  const storeEntries: MetadataRoute.Sitemap = capped.map((store) => ({
+    url: `${SITE_URL}/stores/${encodeURIComponent(store.id)}`,
+    lastModified: now,
+    changeFrequency: "weekly" as const,
+    priority: 0.6
+  }));
 
   return [...staticEntries, ...storeEntries];
 }
