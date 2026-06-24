@@ -12,7 +12,7 @@ function sitemapStoreCap(): number {
     const n = Number(raw);
     if (Number.isFinite(n)) return Math.min(49000, Math.max(500, Math.floor(n)));
   }
-  return 5000;
+  return 10000;
 }
 
 export default function sitemap(): MetadataRoute.Sitemap {
