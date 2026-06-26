@@ -1,5 +1,13 @@
 [
   {
+    "id": "act-2026-06-26-region-data-added-v0o774",
+    "type": "REGION_DATA_ADDED",
+    "createdAt": "2026-06-26",
+    "affectedRegions": [
+      "포천시"
+    ]
+  },
+  {
     "id": "act-2026-06-18-region-data-added-32opgd",
     "type": "REGION_DATA_ADDED",
     "createdAt": "2026-06-18",

@@ -61,6 +61,7 @@ frontend/scripts/geocode-cache-siheung-trash.json
 frontend/scripts/geocode-cache-gyeonggi-siheung-special.json
 frontend/scripts/geocode-cache-gyeonggi-suwon-special.json
 frontend/scripts/geocode-cache-gyeonggi-namyangju-special.json
+frontend/scripts/geocode-cache-gyeonggi-pocheon-trash.json
 frontend/scripts/geocode-cache-daejeon-donggu-trash.json
 frontend/scripts/geocode-cache-daejeon-yuseong-trash.json
 frontend/scripts/geocode-cache-daejeon-daedeok-trash.json
