@@ -1,5 +1,11 @@
 [
   {
+    "type": "USER_REPORT_REFLECTED",
+    "createdAt": "2026-07-02",
+    "count": 1,
+    "id": "act-2026-07-02-user-report-reflected-qugf76"
+  },
+  {
     "id": "act-2026-06-26-region-data-added-v0o774",
     "type": "REGION_DATA_ADDED",
     "createdAt": "2026-06-26",
